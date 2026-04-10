@@ -5,15 +5,6 @@ const apiClient = axios.create({
   timeout: 60000,
 })
 
-/**
- * 统一解析后端响应。
- *
- * Args:
- *   response: Axios 原始响应对象。
- *
- * Returns:
- *   业务层可直接使用的数据对象。
- */
 function unwrapResponse(response) {
   const payload = response.data || {}
   if (payload.code !== 0) {
@@ -23,85 +14,72 @@ function unwrapResponse(response) {
 }
 
 /**
- * 查询任务列表。
+ * 解析 Axios 异常并提取可读错误信息。
  *
  * Args:
- *   params: 查询参数（page/page_size/status/task_type）。
+ *   error: Axios 抛出的异常对象。
  *
  * Returns:
- *   任务分页数据。
+ *   适合界面提示的错误字符串。
  */
+export function getApiErrorMessage(error) {
+  const responseData = error?.response?.data
+  if (responseData?.message) {
+    const detail = responseData?.data?.detail
+    if (detail) {
+      return `${responseData.message}: ${detail}`
+    }
+    const firstValidationError = responseData?.data?.errors?.[0]?.msg
+    if (firstValidationError) {
+      return `${responseData.message}: ${firstValidationError}`
+    }
+    return responseData.message
+  }
+  if (error?.message) {
+    return error.message
+  }
+  return '请求失败'
+}
+
 export async function listTasks(params) {
   const response = await apiClient.get('/tasks', { params })
   return unwrapResponse(response)
 }
 
-/**
- * 创建 GPC 任务。
- *
- * Args:
- *   payload: GPC 任务创建参数。
- *
- * Returns:
- *   任务基础信息。
- */
 export async function createGpcTask(payload) {
   const response = await apiClient.post('/tasks/gpc', payload)
   return unwrapResponse(response)
 }
 
-/**
- * 创建 NMR 任务。
- *
- * Args:
- *   payload: NMR 任务创建参数。
- *
- * Returns:
- *   任务基础信息。
- */
 export async function createNmrTask(payload) {
   const response = await apiClient.post('/tasks/nmr', payload)
   return unwrapResponse(response)
 }
 
-/**
- * 查询任务状态。
- *
- * Args:
- *   taskId: 任务 ID。
- *
- * Returns:
- *   任务状态对象。
- */
 export async function getTaskStatus(taskId) {
   const response = await apiClient.get(`/tasks/${taskId}`)
   return unwrapResponse(response)
 }
 
-/**
- * 查询任务结果。
- *
- * Args:
- *   taskId: 任务 ID。
- *
- * Returns:
- *   任务结果对象。
- */
 export async function getTaskResult(taskId) {
   const response = await apiClient.get(`/tasks/${taskId}/result`)
   return unwrapResponse(response)
 }
 
 /**
- * 上传文件。
+ * 查询任务产物列表。
  *
  * Args:
- *   file: 浏览器上传文件对象。
- *   bizType: 业务类型（gpc/nmr）。
+ *   taskId: 任务 ID。
  *
  * Returns:
- *   文件元数据。
+ *   任务产物对象。
  */
+export async function getTaskArtifacts(taskId) {
+  const response = await apiClient.get(`/tasks/${taskId}/artifacts`)
+  return unwrapResponse(response)
+}
+
 export async function uploadFile(file, bizType) {
   const formData = new FormData()
   formData.append('file', file)

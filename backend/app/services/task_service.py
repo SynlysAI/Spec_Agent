@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from app.core.config import settings
 from app.infra.mongo import get_files_collection, get_results_collection, get_tasks_collection
-from app.models.tasks import TaskKind, TaskResultData, TaskResultError, TaskStatusData
+from app.models.tasks import (
+    TaskArtifactItem,
+    TaskArtifactsData,
+    TaskKind,
+    TaskListData,
+    TaskListItem,
+    TaskResultData,
+    TaskResultError,
+    TaskStatus,
+    TaskStatusData,
+)
 from app.worker.tasks import execute_analysis_task
 
 
@@ -81,6 +93,43 @@ class TaskService:
         return TaskStatusData(**task)
 
     @staticmethod
+    def list_tasks(
+        page: int = 1,
+        page_size: int = 20,
+        status: TaskStatus | None = None,
+        task_type: TaskKind | None = None,
+    ) -> TaskListData:
+        """分页查询任务列表。
+
+        Args:
+            page: 页码，从 1 开始。
+            page_size: 每页数量。
+            status: 可选任务状态过滤条件。
+            task_type: 可选任务类型过滤条件。
+
+        Returns:
+            任务分页列表结果。
+        """
+        safe_page = max(page, 1)
+        safe_size = min(max(page_size, 1), 100)
+        query: dict[str, Any] = {}
+        if status:
+            query["status"] = status
+        if task_type:
+            query["task_type"] = task_type
+
+        collection = get_tasks_collection()
+        total = collection.count_documents(query)
+        cursor = (
+            collection.find(query, {"_id": 0})
+            .sort([("created_at", -1)])
+            .skip((safe_page - 1) * safe_size)
+            .limit(safe_size)
+        )
+        items = [TaskListItem(**doc) for doc in cursor]
+        return TaskListData(total=total, page=safe_page, page_size=safe_size, items=items)
+
+    @staticmethod
     def get_task_result(task_id: str) -> TaskResultData | None:
         """获取任务结果。
 
@@ -122,6 +171,45 @@ class TaskService:
             "metadata": result_doc.get("metadata", {}),
         }
         return TaskResultData(task_id=task_id, status=status, result=payload)
+
+    @staticmethod
+    def list_task_artifacts(task_id: str) -> TaskArtifactsData:
+        """查询任务输出产物列表。
+
+        Args:
+            task_id: 任务 ID。
+
+        Returns:
+            任务产物列表对象。
+        """
+        output_dir = settings.outputs_root / "tasks" / task_id
+        if not output_dir.exists() or not output_dir.is_dir():
+            return TaskArtifactsData(task_id=task_id, items=[])
+
+        items: list[TaskArtifactItem] = []
+        for file_path in sorted(output_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            suffix = file_path.suffix.lower()
+            if suffix in {".png", ".jpg", ".jpeg", ".svg"}:
+                file_type = "image"
+            elif suffix in {".txt", ".md", ".json", ".csv"}:
+                file_type = "text"
+            elif suffix in {".pdf"}:
+                file_type = "pdf"
+            else:
+                file_type = "other"
+
+            relative_path = file_path.relative_to(settings.outputs_root).as_posix()
+            items.append(
+                TaskArtifactItem(
+                    name=file_path.name,
+                    relative_path=relative_path,
+                    file_type=file_type,
+                    url=f"/static/outputs/{relative_path}",
+                )
+            )
+        return TaskArtifactsData(task_id=task_id, items=items)
 
     @staticmethod
     def _validate_input_source(input_data: dict[str, Any]) -> None:

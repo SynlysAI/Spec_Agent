@@ -6,15 +6,41 @@ from fastapi import APIRouter, HTTPException
 
 from app.models.common import ApiResponse
 from app.models.tasks import (
+    TaskArtifactsData,
     CreateGpcTaskRequest,
     CreateNmrTaskRequest,
     CreateTaskData,
+    TaskKind,
+    TaskListData,
+    TaskStatus,
     TaskResultData,
     TaskStatusData,
 )
 from app.services.task_service import task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+@router.get("", response_model=ApiResponse[TaskListData])
+def list_tasks(
+    page: int = 1,
+    page_size: int = 20,
+    status: TaskStatus | None = None,
+    task_type: TaskKind | None = None,
+) -> ApiResponse[TaskListData]:
+    """分页查询任务列表。
+
+    Args:
+        page: 页码，从 1 开始。
+        page_size: 每页数量，最大 100。
+        status: 可选任务状态过滤条件。
+        task_type: 可选任务类型过滤条件。
+
+    Returns:
+        任务分页列表响应。
+    """
+    data = task_service.list_tasks(page=page, page_size=page_size, status=status, task_type=task_type)
+    return ApiResponse(code=0, message="ok", data=data)
 
 
 @router.post("/gpc", response_model=ApiResponse[CreateTaskData])
@@ -85,3 +111,17 @@ def get_task_result(task_id: str) -> ApiResponse[TaskResultData]:
     if not payload:
         raise HTTPException(status_code=404, detail="任务不存在")
     return ApiResponse(code=0, message="ok", data=payload)
+
+
+@router.get("/{task_id}/artifacts", response_model=ApiResponse[TaskArtifactsData])
+def get_task_artifacts(task_id: str) -> ApiResponse[TaskArtifactsData]:
+    """查询任务输出产物列表。
+
+    Args:
+        task_id: 任务 ID。
+
+    Returns:
+        任务产物列表响应。
+    """
+    data = task_service.list_task_artifacts(task_id)
+    return ApiResponse(code=0, message="ok", data=data)

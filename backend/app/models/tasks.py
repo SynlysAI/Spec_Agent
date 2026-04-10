@@ -187,6 +187,72 @@ class TaskStatusData(BaseModel):
     updated_at: datetime
 
 
+class TaskListItem(BaseModel):
+    """任务列表项模型。
+
+    Args:
+        task_id: 任务 ID。
+        task_type: 任务类型。
+        status: 当前状态。
+        progress: 进度百分比。
+        message: 状态消息。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+    """
+
+    task_id: str
+    task_type: TaskKind
+    status: TaskStatus
+    progress: int
+    message: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskListData(BaseModel):
+    """任务列表响应模型。
+
+    Args:
+        total: 满足筛选条件的任务总数。
+        page: 当前页码（从 1 开始）。
+        page_size: 每页条数。
+        items: 当前页任务列表。
+    """
+
+    total: int
+    page: int
+    page_size: int
+    items: list[TaskListItem]
+
+
+class TaskArtifactItem(BaseModel):
+    """任务产物项模型。
+
+    Args:
+        name: 产物文件名。
+        relative_path: 相对 outputs 根目录路径。
+        file_type: 产物类型（image/text/pdf/other）。
+        url: 供前端访问的 URL。
+    """
+
+    name: str
+    relative_path: str
+    file_type: Literal["image", "text", "pdf", "other"]
+    url: str
+
+
+class TaskArtifactsData(BaseModel):
+    """任务产物列表响应模型。
+
+    Args:
+        task_id: 任务 ID。
+        items: 任务产物列表。
+    """
+
+    task_id: str
+    items: list[TaskArtifactItem]
+
+
 class TaskResultError(BaseModel):
     """任务失败信息模型。
 
@@ -217,4 +283,3 @@ class TaskResultData(BaseModel):
     status: TaskStatus
     result: Optional[dict[str, Any]] = None
     error: Optional[TaskResultError] = None
-

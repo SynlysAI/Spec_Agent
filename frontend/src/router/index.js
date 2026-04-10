@@ -1,14 +1,20 @@
 ﻿import { createRouter, createWebHistory } from 'vue-router'
 
 import DashboardView from '../views/DashboardView.vue'
-import TaskSubmitView from '../views/TaskSubmitView.vue'
+import TaskSubmitGpcView from '../views/TaskSubmitGpcView.vue'
+import TaskSubmitNmrView from '../views/TaskSubmitNmrView.vue'
 import TaskCenterView from '../views/TaskCenterView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
+import TaskSubmitPlaceholderView from '../views/TaskSubmitPlaceholderView.vue'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/dashboard', component: DashboardView },
-  { path: '/tasks/submit', component: TaskSubmitView },
+  { path: '/tasks/submit', redirect: '/tasks/submit/gpc' },
+  { path: '/tasks/submit/gpc', component: TaskSubmitGpcView },
+  { path: '/tasks/submit/nmr', component: TaskSubmitNmrView },
+  { path: '/tasks/submit/ir', component: TaskSubmitPlaceholderView, props: { type: 'IR' } },
+  { path: '/tasks/submit/raman', component: TaskSubmitPlaceholderView, props: { type: 'Raman' } },
   { path: '/tasks/center', component: TaskCenterView },
   { path: '/tasks/detail/:taskId', component: TaskDetailView, props: true },
 ]

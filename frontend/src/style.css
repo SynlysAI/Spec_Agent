@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
   color: #243248;
   background: #eef3fb;
@@ -30,6 +30,11 @@ body,
   position: sticky;
   top: 0;
   height: 100vh;
+  transition: width 0.22s ease;
+}
+
+.app-sidebar.collapsed .brand {
+  justify-content: center;
 }
 
 .brand {
@@ -73,6 +78,15 @@ body,
   height: 44px;
 }
 
+.sidebar-menu .el-sub-menu .el-menu-item {
+  margin-bottom: 4px;
+  height: 38px;
+}
+
+.sidebar-menu .el-sub-menu .el-menu-item.is-active {
+  background: rgba(43, 103, 219, 0.85) !important;
+}
+
 .sidebar-menu .el-menu-item.is-active {
   background: linear-gradient(90deg, rgba(56, 134, 255, 0.95), rgba(38, 90, 210, 0.95)) !important;
 }
@@ -94,6 +108,10 @@ body,
   gap: 10px;
   color: #395278;
   font-size: 14px;
+}
+
+.collapse-btn {
+  color: #2b4f82;
 }
 
 .header-date {
