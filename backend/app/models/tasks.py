@@ -1,0 +1,220 @@
+"""任务接口模型。"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Literal, Optional
+
+from pydantic import BaseModel, Field, model_validator
+
+
+TaskStatus = Literal["PENDING", "QUEUED", "RUNNING", "SUCCESS", "FAILED", "CANCELED"]
+TaskKind = Literal["gpc_analysis", "nmr_analysis"]
+
+
+class TaskInput(BaseModel):
+    """任务输入模型。
+
+    函数名称: TaskInput
+    参数说明:
+    - input_type: 输入类型，可为 file_path/file_id/folder_path。
+    - input_path: 输入路径。
+    - file_id: 已上传文件 ID。
+    """
+
+    input_type: Literal["file_path", "file_id", "folder_path"] = Field(description="输入类型")
+    input_path: Optional[str] = Field(default=None, description="输入路径")
+    file_id: Optional[str] = Field(default=None, description="上传文件ID")
+
+    @model_validator(mode="after")
+    def validate_input(self) -> "TaskInput":
+        """执行输入有效性校验。
+
+        函数名称: validate_input
+        参数说明:
+        - self: 当前模型实例。
+        """
+        if self.input_type in {"file_path", "folder_path"} and not self.input_path:
+            raise ValueError("input_path 为必填")
+        if self.input_type == "file_id" and not self.file_id:
+            raise ValueError("file_id 为必填")
+        return self
+
+
+class TaskOptions(BaseModel):
+    """任务可选参数模型。
+
+    函数名称: TaskOptions
+    参数说明:
+    - priority: 任务优先级，数值越小优先级越高。
+    - callback_url: 回调地址。
+    """
+
+    priority: int = Field(default=5, ge=1, le=10, description="任务优先级")
+    callback_url: Optional[str] = Field(default=None, description="回调地址")
+
+
+class GpcTaskParams(BaseModel):
+    """GPC 任务参数模型。
+
+    函数名称: GpcTaskParams
+    参数说明:
+    - detect_mode: 峰检测模式，auto/manual。
+    - manual_interval: 手动检测区间。
+    - three_color_arw_paths: 三色曲线路径列表。
+    - calibration_file_path: 校准文件路径。
+    - comparison_report_pdf_path: 对比 PDF 路径。
+    """
+
+    detect_mode: Literal["auto", "manual"] = Field(default="auto", description="峰检测模式")
+    manual_interval: Optional[list[float]] = Field(default=None, description="手动检测区间")
+    three_color_arw_paths: Optional[list[str]] = Field(default=None, description="三色曲线路径")
+    calibration_file_path: Optional[str] = Field(default=None, description="校准文件路径")
+    comparison_report_pdf_path: Optional[str] = Field(default=None, description="对比PDF路径")
+
+    @model_validator(mode="after")
+    def validate_params(self) -> "GpcTaskParams":
+        """执行 GPC 参数校验。
+
+        函数名称: validate_params
+        参数说明:
+        - self: 当前模型实例。
+        """
+        if self.detect_mode == "manual":
+            if not self.manual_interval or len(self.manual_interval) != 2:
+                raise ValueError("manual 模式下 manual_interval 必须为 [start, end]")
+        return self
+
+
+class NmrTaskParams(BaseModel):
+    """NMR 任务参数模型（单阶段）。
+
+    函数名称: NmrTaskParams
+    参数说明:
+    - nucleus: 核类型，1H/13C。
+    - threshold/min_distance/min_prominence: 峰检测核心参数。
+    - width_multiplier/baseline_degree/smooth_window: 处理参数。
+    - detection_range_mode/min/max: 检测范围参数。
+    - ppm_offset: ppm 偏移。
+    - integration_method: 积分方法。
+    - internal_standard_policy: 内标策略，固定为 auto。
+    - internal_standard_prefer: 默认内标优先级（溶剂峰/TMS）。
+    """
+
+    nucleus: Literal["1H", "13C"] = Field(default="1H", description="核类型")
+    threshold: float = Field(default=0.01, gt=0, description="峰检测阈值")
+    min_distance: float = Field(default=0.3, gt=0, description="最小峰距")
+    min_prominence: float = Field(default=0.01, gt=0, description="最小显著性")
+    width_multiplier: float = Field(default=1.0, gt=0, description="峰宽倍率")
+    baseline_degree: int = Field(default=3, ge=1, le=10, description="基线拟合阶数")
+    smooth_window: int = Field(default=5, ge=1, le=99, description="平滑窗口")
+    detection_range_mode: Literal["full", "custom"] = Field(default="full", description="检测范围模式")
+    detection_range_min: Optional[float] = Field(default=None, description="检测范围最小值")
+    detection_range_max: Optional[float] = Field(default=None, description="检测范围最大值")
+    ppm_offset: float = Field(default=0.0, description="ppm偏移")
+    integration_method: Literal["voigt", "trapezoid"] = Field(default="voigt", description="积分方法")
+    internal_standard_policy: Literal["auto"] = Field(default="auto", description="内标策略")
+    internal_standard_prefer: list[Literal["solvent", "tms"]] = Field(
+        default_factory=lambda: ["solvent", "tms"], description="内标优先级"
+    )
+
+
+class CreateGpcTaskRequest(BaseModel):
+    """创建 GPC 任务请求模型。
+
+    函数名称: CreateGpcTaskRequest
+    参数说明:
+    - input: 输入配置。
+    - params: GPC 参数。
+    - options: 可选参数。
+    """
+
+    input: TaskInput
+    params: GpcTaskParams = Field(default_factory=GpcTaskParams)
+    options: TaskOptions = Field(default_factory=TaskOptions)
+
+
+class CreateNmrTaskRequest(BaseModel):
+    """创建 NMR 任务请求模型。
+
+    函数名称: CreateNmrTaskRequest
+    参数说明:
+    - input: 输入配置。
+    - params: NMR 参数。
+    - options: 可选参数。
+    """
+
+    input: TaskInput
+    params: NmrTaskParams = Field(default_factory=NmrTaskParams)
+    options: TaskOptions = Field(default_factory=TaskOptions)
+
+
+class CreateTaskData(BaseModel):
+    """创建任务返回数据模型。
+
+    函数名称: CreateTaskData
+    参数说明:
+    - task_id: 任务ID。
+    - task_type: 任务类型。
+    - status: 任务状态。
+    """
+
+    task_id: str
+    task_type: TaskKind
+    status: TaskStatus
+
+
+class TaskStatusData(BaseModel):
+    """任务状态返回模型。
+
+    函数名称: TaskStatusData
+    参数说明:
+    - task_id: 任务ID。
+    - task_type: 任务类型。
+    - status: 当前状态。
+    - progress: 进度百分比。
+    - message: 状态消息。
+    - created_at: 创建时间。
+    - updated_at: 更新时间。
+    """
+
+    task_id: str
+    task_type: TaskKind
+    status: TaskStatus
+    progress: int
+    message: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskResultError(BaseModel):
+    """任务失败信息模型。
+
+    函数名称: TaskResultError
+    参数说明:
+    - error_code: 错误码。
+    - error_message: 错误消息。
+    - error_detail: 错误详情。
+    """
+
+    error_code: str
+    error_message: str
+    error_detail: str
+
+
+class TaskResultData(BaseModel):
+    """任务结果返回模型。
+
+    函数名称: TaskResultData
+    参数说明:
+    - task_id: 任务ID。
+    - status: 任务状态。
+    - result: 成功结果对象。
+    - error: 失败结果对象。
+    """
+
+    task_id: str
+    status: TaskStatus
+    result: Optional[dict[str, Any]] = None
+    error: Optional[TaskResultError] = None
+
