@@ -1,0 +1,190 @@
+:root {
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  color: #243248;
+  background: #eef3fb;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f3f7fd 0%, #ecf2fa 100%);
+}
+
+.app-sidebar {
+  background: linear-gradient(180deg, #0b2d63 0%, #0a2144 100%);
+  color: #eaf0ff;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #2e82ff, #3bd0ff);
+  color: #fff;
+  font-weight: 700;
+}
+
+.brand-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.brand-subtitle {
+  font-size: 12px;
+  color: #9fb7e6;
+}
+
+.sidebar-menu {
+  border-right: none !important;
+  padding: 8px;
+}
+
+.sidebar-menu .el-menu-item {
+  border-radius: 10px;
+  margin-bottom: 6px;
+  height: 44px;
+}
+
+.sidebar-menu .el-menu-item.is-active {
+  background: linear-gradient(90deg, rgba(56, 134, 255, 0.95), rgba(38, 90, 210, 0.95)) !important;
+}
+
+.app-header {
+  height: 58px;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid #dfe8f5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #395278;
+  font-size: 14px;
+}
+
+.header-date {
+  color: #8ba0bf;
+}
+
+.app-main {
+  padding: 16px;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #dfebfa;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(22, 59, 110, 0.06);
+}
+
+.panel-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid #edf2fa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2a3f62;
+}
+
+.panel-body {
+  padding: 16px 18px 18px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  border: 1px solid #dde9fb;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.stat-title {
+  color: #7e91ad;
+  font-size: 13px;
+}
+
+.stat-value {
+  margin-top: 8px;
+  color: #1e3c6c;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.json-block {
+  background: #0e1b2d;
+  color: #b9d4ff;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12px;
+  overflow: auto;
+  max-height: 420px;
+}
+
+@media (max-width: 1200px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .page-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-sidebar {
+    display: none;
+  }
+  .app-main {
+    padding: 10px;
+  }
+}
