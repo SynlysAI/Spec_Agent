@@ -4,12 +4,123 @@ from __future__ import annotations
 
 import importlib
 import sys
+import zipfile
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
 from app.infra.mongo import get_files_collection, get_results_collection, get_tasks_collection
 from app.worker.celery_app import celery_app
+
+
+def _to_basic(value: Any) -> Any:
+    """将复杂对象转换为可序列化基础类型。
+
+    Args:
+        value: 任意输入对象。
+
+    Returns:
+        可安全写入 MongoDB 的基础类型对象。
+    """
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _to_basic(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_basic(v) for v in value]
+
+    # numpy 标量
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+
+    # numpy array / pandas objects
+    if hasattr(value, "tolist"):
+        try:
+            data = value.tolist()
+            if isinstance(data, list) and len(data) > 2000:
+                return data[:2000]
+            return _to_basic(data)
+        except Exception:
+            pass
+    if hasattr(value, "to_dict"):
+        try:
+            return _to_basic(value.to_dict())
+        except Exception:
+            pass
+
+    # 可调用对象（函数等）转为字符串
+    if callable(value):
+        return str(value)
+
+    return str(value)
+
+
+def _sanitize_gpc_structured_data(structured_data: dict[str, Any]) -> dict[str, Any]:
+    """清洗 GPC 结构化数据，移除超大和不可序列化字段。
+
+    Args:
+        structured_data: 原始结构化数据。
+
+    Returns:
+        清洗后的结构化数据。
+    """
+    analysis_results = structured_data.get("analysis_results", [])
+    safe_results: list[dict[str, Any]] = []
+    for row in analysis_results if isinstance(analysis_results, list) else []:
+        if not isinstance(row, dict):
+            continue
+        safe_row = {
+            "curve_file": row.get("curve_file"),
+            "actual_curve_name": row.get("actual_curve_name"),
+            "simple_name": row.get("simple_name"),
+            "output_dir": row.get("output_dir"),
+            "molecular_parameters": _to_basic(row.get("molecular_parameters", {})),
+            "pdf_data": _to_basic(row.get("pdf_data", {})),
+            "errors": _to_basic(row.get("errors", [])),
+        }
+        # 只保留必要的 ROI 信息
+        roi = row.get("roi_result", {})
+        if isinstance(roi, dict):
+            safe_row["roi_result"] = {
+                "curve_name": roi.get("curve_name"),
+                "roi_start": _to_basic(roi.get("roi_start")),
+                "roi_end": _to_basic(roi.get("roi_end")),
+                "solvent_start": _to_basic(roi.get("solvent_start")),
+                "solvent_end": _to_basic(roi.get("solvent_end")),
+                "mw_start": _to_basic(roi.get("mw_start")),
+                "mw_end": _to_basic(roi.get("mw_end")),
+            }
+        safe_results.append(_to_basic(safe_row))
+    return {"analysis_results": safe_results, "llm_insights": _to_basic(structured_data.get("llm_insights", []))}
+
+
+def _sanitize_nmr_structured_data(structured_data: dict[str, Any]) -> dict[str, Any]:
+    """清洗 NMR 结构化数据，移除数组与大对象字段。
+
+    Args:
+        structured_data: 原始结构化数据。
+
+    Returns:
+        清洗后的结构化数据。
+    """
+    nmr_results = structured_data.get("nmr_results", [])
+    safe_results: list[dict[str, Any]] = []
+    for row in nmr_results if isinstance(nmr_results, list) else []:
+        if not isinstance(row, dict):
+            continue
+        safe_row = {
+            "sample_name": row.get("sample_name"),
+            "integration_results": _to_basic(row.get("integration_results", {})),
+            "normalized_results": _to_basic(row.get("normalized_results", {})),
+            "integration_regions": _to_basic(row.get("integration_regions", [])),
+            "metadata": _to_basic(row.get("metadata", {})),
+        }
+        safe_results.append(safe_row)
+    return {"nmr_results": safe_results, "summary_rows": _to_basic(structured_data.get("summary_rows", []))}
 
 
 def _update_task(task_id: str, **kwargs: Any) -> None:
@@ -124,9 +235,9 @@ def _execute_gpc(task_id: str, input_data: dict[str, Any], params: dict[str, Any
         output_dir=str(output_dir),
     )
     return {
-        "structured_data": result.get("structured_data", {}),
+        "structured_data": _sanitize_gpc_structured_data(result.get("structured_data", {})),
         "text_report": result.get("text_report", ""),
-        "metadata": result.get("metadata", {"spectrum_type": "gpc"}),
+        "metadata": _to_basic(result.get("metadata", {"spectrum_type": "gpc"})),
     }
 
 
@@ -145,6 +256,7 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     input_path = _resolve_input_path(input_data)
     output_dir = settings.outputs_root / "tasks" / task_id
     output_dir.mkdir(parents=True, exist_ok=True)
+    nmr_folder_path = _prepare_nmr_input_path(task_id=task_id, input_path=input_path)
 
     nmr_service = importlib.import_module("services.nmr_service")
     build_peak_detection_result = getattr(nmr_service, "build_peak_detection_result")
@@ -170,7 +282,7 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
         peak_detection_params.update({"threshold": 0.05, "min_distance": 1.0, "min_prominence": 0.03, "smooth_window": 11})
 
     peak_results = build_peak_detection_result(
-        folder_path=input_path,
+        folder_path=nmr_folder_path,
         integration_mode="自动模式",
         peak_detection_params=peak_detection_params,
         integration_regions_config=None,
@@ -198,14 +310,39 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
         ppm_offset=float(params.get("ppm_offset", 0.0) or 0.0),
     )
     return {
-        "structured_data": {"nmr_results": nmr_results, "summary_rows": summary_rows},
+        "structured_data": _sanitize_nmr_structured_data({"nmr_results": nmr_results, "summary_rows": summary_rows}),
         "text_report": text_report,
-        "metadata": {
+        "metadata": _to_basic({
             "spectrum_type": "nmr",
-            "input_path": input_path,
+            "input_path": nmr_folder_path,
             "internal_standard_idx": standard_idx,
-        },
+        }),
     }
+
+
+def _prepare_nmr_input_path(task_id: str, input_path: str) -> str:
+    """将 NMR 输入路径标准化为可分析的目录路径。
+
+    Args:
+        task_id: 任务 ID。
+        input_path: 原始输入路径（目录路径或 zip 路径）。
+
+    Returns:
+        可供 NMR 分析函数读取的目录路径。
+    """
+    source_path = Path(input_path)
+    if source_path.is_dir():
+        return str(source_path)
+    if source_path.is_file() and source_path.suffix.lower() == ".zip":
+        extract_root = settings.outputs_root / "tasks" / task_id / "inputs" / "nmr_zip_extract"
+        extract_root.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(source_path, "r") as zip_ref:
+            zip_ref.extractall(extract_root)
+        children = [item for item in extract_root.iterdir() if item.is_dir()]
+        if len(children) == 1:
+            return str(children[0])
+        return str(extract_root)
+    raise ValueError("NMR 输入必须是 Bruker 目录路径或 zip 压缩包路径")
 
 
 @celery_app.task(name="app.worker.tasks.execute_analysis_task")

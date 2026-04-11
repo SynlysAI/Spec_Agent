@@ -87,5 +87,9 @@ export async function uploadFile(file, bizType) {
     formData.append('biz_type', bizType)
   }
   const response = await apiClient.post('/files/upload', formData)
-  return unwrapResponse(response)
+  const data = unwrapResponse(response)
+  return {
+    ...data,
+    filename: data?.filename || data?.file_name || '',
+  }
 }

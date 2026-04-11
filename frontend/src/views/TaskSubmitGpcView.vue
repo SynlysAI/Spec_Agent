@@ -4,13 +4,13 @@ import { ElMessage } from 'element-plus'
 import { createGpcTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const submitting = ref(false)
-const uploading = ref(false)
+const selectedUploadFile = ref(null)
 const uploadedFileId = ref('')
 const uploadedFilename = ref('')
 const lastTaskId = ref('')
 
 const form = reactive({
-  inputMode: 'path',
+  inputMode: 'upload',
   inputPath: '',
   detectMode: 'auto',
   manualStart: null,
@@ -22,26 +22,19 @@ const form = reactive({
 })
 
 /**
- * 处理 GPC 文件上传。
+ * 处理 GPC 文件选择（仅缓存，不立即上传）。
  *
  * Args:
  *   file: 上传文件对象。
  *
  * Returns:
- *   Promise<boolean>
+ *   boolean
  */
 async function handleUpload(file) {
-  try {
-    uploading.value = true
-    const data = await uploadFile(file, 'gpc')
-    uploadedFileId.value = data.file_id
-    uploadedFilename.value = data.filename
-    ElMessage.success(`文件上传成功：${data.filename}`)
-  } catch (error) {
-    ElMessage.error(getApiErrorMessage(error))
-  } finally {
-    uploading.value = false
-  }
+  selectedUploadFile.value = file
+  uploadedFileId.value = ''
+  uploadedFilename.value = file?.name || ''
+  ElMessage.success(`已选择文件：${uploadedFilename.value}`)
   return false
 }
 
@@ -92,7 +85,23 @@ async function submitTask() {
     return
   }
   if (form.inputMode === 'upload' && !uploadedFileId.value) {
-    ElMessage.warning('请先上传 GPC 文件')
+    if (!selectedUploadFile.value) {
+      ElMessage.warning('请先选择 GPC 文件')
+      return
+    }
+  }
+  if (form.inputMode === 'upload' && selectedUploadFile.value) {
+    try {
+      const data = await uploadFile(selectedUploadFile.value, 'gpc')
+      uploadedFileId.value = data.file_id
+      uploadedFilename.value = data.filename
+    } catch (error) {
+      ElMessage.error(getApiErrorMessage(error))
+      return
+    }
+  }
+  if (form.inputMode === 'upload' && !uploadedFileId.value) {
+    ElMessage.warning('上传失败，请重新选择文件')
     return
   }
   if (form.detectMode === 'manual' && (form.manualStart === null || form.manualEnd === null)) {
@@ -138,8 +147,8 @@ async function submitTask() {
       <el-form label-width="180px">
         <el-form-item label="输入方式">
           <el-radio-group v-model="form.inputMode">
+            <el-radio value="upload">上传文件</el-radio>
             <el-radio value="path">服务器本地文件路径</el-radio>
-            <el-radio value="upload">上传文件后使用 file_id</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -149,9 +158,10 @@ async function submitTask() {
 
         <el-form-item v-else label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".arw,.pdf,.json">
-            <el-button :loading="uploading" type="primary" plain>选择并上传</el-button>
+            <el-button type="primary" plain>选择文件</el-button>
           </el-upload>
-          <el-tag v-if="uploadedFileId" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
+          <el-tag v-if="uploadedFilename" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
+          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">提交任务时自动上传</div>
         </el-form-item>
 
         <el-divider content-position="left">峰检测参数</el-divider>

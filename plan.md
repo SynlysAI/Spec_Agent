@@ -1,182 +1,166 @@
-﻿# Spec_Agent 重构上线方案（Plan）
+﻿# Spec_Agent 重构计划与进展（更新于 2026-04-11）
 
-## 1. 项目背景与目标
+## 1. 目标与边界
 
-- 当前项目为重构项目，源项目路径：`E:\github_project\Spec_Agent`
-- 源项目是一个面向多种表征实验谱图（GPC/NMR/IR/Raman 等）的智能解析 Agent 系统
-- 现状为 `streamlit` Demo 形态，已不适合正式上线
-- 目标是改造为可正式上线、可持续迭代的工程化系统
+- 源项目：`E:\github_project\Spec_Agent`（`streamlit_webui.py` + `web_pages/*`）
+- 重构项目：`E:\xx_project\Spec_Agent`（前后端分离）
+- 当前阶段目标：先完成 `GPC + NMR + 任务中心 + 文件上传` 主链路，形成可演示闭环
+- 最终目标：正式发布版本必须可独立部署，运行时不依赖 `E:\github_project\Spec_Agent`
 
-### 1.1 重构目标
+## 2. 源项目能力基线（按入口 `streamlit_webui.py`）
 
-- 保持源项目核心分析能力与结果口径一致
-- 前后端解耦，支持多用户并发与权限管理扩展
-- 支持长耗时任务异步执行、可观测、可追踪
-- 架构可扩展到更多谱图类型与更多 Agent
+源项目共 9 类入口能力：
 
-## 2. 技术架构选型
+1. 服务状态
+2. GPC 分析
+3. NMR 分析
+4. NMRServer（正向/反向/数据库搜索）
+5. Raman/IR 分析
+6. LC-MS（占位）
+7. 数据管理
+8. 问答对话
+9. 验收测试
 
-## 2.1 总体架构
+## 3. 当前重构进展评估
 
-- 前端：`Vue3 + Vite + Element Plus + Plotly/ECharts`
-- 后端 API：`FastAPI`
-- 异步任务：`Celery + RabbitMQ`
-- 数据存储：`MongoDB`
-- 文件存储：本地目录（后续可切换 MinIO/NAS）
-- 网关与部署：`Nginx + Docker Compose`（后续可升级 K8s）
+## 3.1 文档与基线（Phase 0）
 
-## 2.2 选型说明
+- 已完成：`需求-能力映射表.md`
+- 已完成：`验收样本清单.md`
+- 已完成：`API草案-v1.md`
 
-- 使用 `FastAPI` 替代 `streamlit` 作为线上主服务框架
-- 使用 `RabbitMQ` 作为任务队列 Broker（复用现有服务）
-- 使用 `MongoDB` 存储任务、结果元数据、日志与会话等文档型数据
-- 不强依赖 Redis（当前阶段可不引入）
+结论：Phase 0 基线文档已落地，可作为后续迭代验收标准。
 
-## 3. 目标系统分层设计
+## 3.2 后端（FastAPI + Celery + RabbitMQ + MongoDB）
 
-## 3.1 分层结构
+已实现接口（以 `backend/openapi.json` 为准）：
 
-- `presentation`：Web 前端（页面、表单、任务看板、结果可视化）
-- `api`：统一 HTTP/WebSocket 接口层（鉴权、参数校验、路由）
-- `application`：任务编排层（提交任务、查询状态、聚合结果）
-- `domain`：谱图分析领域层（复用 `agents/analysis/services` 核心逻辑）
-- `infrastructure`：MongoDB、RabbitMQ、文件存储、日志、配置
+- `GET /api/v1/health`
+- `POST /api/v1/files/upload`
+- `GET /api/v1/tasks`
+- `POST /api/v1/tasks/gpc`
+- `POST /api/v1/tasks/nmr`
+- `GET /api/v1/tasks/{task_id}`
+- `GET /api/v1/tasks/{task_id}/result`
+- `GET /api/v1/tasks/{task_id}/artifacts`
 
-## 3.2 任务执行模式
+已完成能力：
 
-- 同步接口只负责“创建任务并返回任务ID”
-- 重计算在 Celery Worker 异步执行
-- 前端通过轮询/WebSocket 获取任务进度与结果
-- 任务失败保留错误堆栈与可重试能力
+- 统一响应结构与异常处理
+- 任务状态机流转（`PENDING -> QUEUED -> RUNNING -> SUCCESS/FAILED`）
+- GPC/NMR 异步任务执行与结果落库
+- 文件上传入库（`files` 集合）与任务输入 `file_id` 解析
+- 输出产物静态托管（`/static/outputs`）
+- OpenAPI 导出脚本与 P0 回归脚本
 
-## 4. 数据与任务模型（建议）
+当前关键缺口：
 
-## 4.1 核心集合（MongoDB）
+- IR/Raman、NMRServer、数据管理、问答、验收等 API 尚未落地
+- Worker 仍通过 `SOURCE_SPEC_AGENT_ROOT` 动态导入源项目模块，尚未独立部署
+- `health` 中 `worker` 状态当前为固定 `"up"`，缺少真实探活
+- 缺少鉴权、审计日志、可观测性指标与统一追踪 ID
 
-- `tasks`：任务主表（类型、状态、参数、进度、耗时、错误）
-- `analysis_results`：结构化结果与报告索引
-- `files`：输入/输出文件元数据（路径、hash、大小、归属）
-- `audit_logs`：操作审计日志（用户、动作、时间）
+## 3.3 前端（Vue3 + Vite + Element Plus）
 
-## 4.2 任务状态机（统一）
+已完成页面：
 
-- `PENDING`：已创建
-- `QUEUED`：已入队
-- `RUNNING`：执行中
-- `SUCCESS`：成功
-- `FAILED`：失败
-- `CANCELED`：已取消（二期）
+- 工作台：`/dashboard`
+- 任务提交：`/tasks/submit/gpc`、`/tasks/submit/nmr`
+- 任务中心：`/tasks/center`
+- 任务详情：`/tasks/detail/:taskId`
+- IR/Raman 提交占位页
 
-## 5. API 规划（第一批）
+已打通链路：
 
-- `POST /api/v1/tasks/gpc`：提交 GPC 分析任务
-- `POST /api/v1/tasks/nmr`：提交 NMR 分析任务
-- `POST /api/v1/tasks/ir`：提交 IR 分析任务
-- `POST /api/v1/tasks/raman`：提交 Raman 分析任务
-- `GET /api/v1/tasks/{task_id}`：查询任务状态与进度
-- `GET /api/v1/tasks/{task_id}/result`：获取任务结果
-- `POST /api/v1/files/upload`：上传谱图文件
-- `GET /api/v1/health`：服务健康检查
+- 上传 -> 提交任务 -> 轮询查询 -> 查看结构化结果/文本报告/图像产物
 
-## 6. 与现有代码的迁移策略
+当前关键缺口：
 
-## 6.1 可复用模块
+- NMRServer、数据管理、问答对话、验收测试页面未迁移
+- 服务状态页未按源项目能力重建（当前仅具备基础任务看板）
+- 存在字段对齐问题风险：上传响应使用 `file_name`，部分前端代码读取 `filename`
 
-- `agents/*`：保留并改为 API/Worker 调用入口
-- `analysis/*`：保留领域算法能力
-- `services/*`：逐步去除 Streamlit 会话耦合，沉淀为纯服务层
-- `spec_cli/*`：保留为运维/离线任务入口
+## 3.4 结论（截至 2026-04-11）
 
-## 6.2 需要改造模块
+- 当前状态：P0 主链路可演示，但未达到“可上线”标准
+- 覆盖情况：源项目 9 类能力中，已实装核心 2 类（GPC/NMR）+ 任务基础设施
+- 最大阻塞项：运行时仍依赖源项目目录，不满足独立部署目标
 
-- `streamlit_webui.py` 与 `web_pages/*`：退出主流程，改为历史 Demo
-- 配置体系：拆分为 `dev/test/prod`，去除硬编码本地路径
-- 输出目录：统一按任务ID隔离，便于追踪和归档
-- 解析能力迁移：由“运行时复用源项目模块”逐步迁移为“本项目内聚代码”，最终实现独立部署
+## 4. 阶段状态看板
 
-## 7. 分阶段实施计划
+| 阶段 | 范围 | 当前状态 | 完成度 |
+| --- | --- | --- | --- |
+| Phase 0 | 基线梳理与文档 | 已完成 | 100% |
+| Phase 1 | 后端 P0 主链路（GPC/NMR） | 基本完成（待收口） | 85% |
+| Phase 2 | 前端 P0 MVP | 已可演示（待补质量） | 75% |
+| Phase 3 | 能力补齐（IR/Raman/NMRServer/数据/问答/验收） | 未开始 | 10% |
+| Phase 4 | 工程化上线（独立部署、监控、发布） | 未开始 | 5% |
 
-## 7.1 Phase 0：基线确认（1 周）
+## 5. 后续计划（按优先级）
 
-- 梳理源项目功能清单与输出口径
-- 制定“重构不改变核心结果”的验收样本集
-- 输出接口契约初稿与任务状态标准
+## 5.1 P0 收口（优先级 P0，目标 1 周）
 
-交付物：
-
-- `需求-能力映射表`
-- `验收样本清单`
-- `API 草案`
-
-## 7.2 Phase 1：后端最小可用（2 周）
-
-- 建立 FastAPI 骨架与统一异常处理
-- 建立 Celery + RabbitMQ 任务链路
-- 建立 MongoDB 任务与结果持久化
-- 打通 GPC/NMR 两类任务提交与查询
+1. 修复前后端字段与契约不一致项（含上传返回字段等）。
+2. 补齐回归脚本到“上传链路 + 错误场景 + 并发任务”。
+3. 完成任务详情结果结构稳定化（GPC/NMR JSON 字段版本约束）。
+4. 输出 P0 验收记录（与 `验收样本清单.md` 对齐）。
 
 交付物：
 
-- 可运行后端服务
-- GPC/NMR 任务全链路
-- OpenAPI 文档
+- P0 验收报告（Markdown）
+- 契约一致性修订记录
 
-当前进度（2026-04-10）：
+## 5.2 能力补齐（优先级 P1，目标 2~3 周）
 
-- 已完成：FastAPI 骨架与统一异常处理
-- 已完成：Celery + RabbitMQ + MongoDB 任务链路
-- 已完成：GPC/NMR 任务提交、执行、查询、结果获取
-- 已完成：`backend/scripts/export_openapi.py` 与 `backend/openapi.json`
-- 已完成：`backend/scripts/run_regression.py`（真实样本回归通过）
-- 未完成：IR/Raman（按决策延后至 P1）
-
+1. 后端新增 `POST /api/v1/tasks/ir`、`POST /api/v1/tasks/raman`。
+2. 新增 NMRServer 三接口：正向预测/反向预测/数据库搜索。
+3. 新增数据管理 API（结果查询、分页、删除、文件索引）。
+4. 新增问答 API（会话管理、报告增强、上下文持久化）。
+5. 新增验收测试 API（触发、进度、报告下载）。
+6. 前端同步补齐对应页面，达到源项目功能等价覆盖。
 
 交付物：
 
-- 前端 MVP
-- 端到端流程（上传 -> 提交 -> 查看结果）
+- 功能等价迁移清单（9/9）
+- P1 功能验收报告
 
-## 7.4 Phase 3：能力补齐与稳定性（2~3 周）
+## 5.3 工程化与独立部署（优先级 P0/P1 并行，目标 2 周）
 
-- 接入 IR/Raman 分析任务
-- 增加日志追踪、基础监控、告警
-- 增加失败重试与超时控制
-- 完成回归测试与性能压测
-
-交付物：
-
-- 全谱图类型支持
-- 稳定性报告与压测报告
-
-## 7.5 Phase 4：上线准备（1 周）
-
-- 生产配置固化与发布脚本
-- 灰度发布与回滚预案
-- 运维手册与应急手册
-- 完成独立部署验收：移除对 `E:\\github_project\\Spec_Agent` 的运行时依赖
+1. 将 `SOURCE_SPEC_AGENT_ROOT` 依赖改为本仓内聚实现（分模块迁移 `agents/analysis/services`）。
+2. 增加配置分层（`dev/test/prod`）与敏感配置脱敏方案。
+3. 增加观测能力：结构化日志、任务追踪 ID、基础指标（任务耗时/失败率/队列深度）。
+4. 增加任务可靠性策略：超时、重试、失败原因标准化。
+5. 输出 `docker-compose` 部署与回滚方案。
 
 交付物：
 
-- `docker-compose` 生产部署包
-- 上线手册与回滚手册
+- 独立部署验收证明（不依赖 `E:\github_project\Spec_Agent`）
+- 部署手册、回滚手册
 
-## 8. 质量与验收标准
+## 6. 近期执行清单（建议直接按此排期）
 
-- 功能一致性：与源项目核心样本结果偏差在可接受阈值内
-- 稳定性：关键任务成功率 >= 99%（剔除无效输入）
-- 可观测性：任务可追踪、错误可定位、日志可检索
-- 性能：并发场景下任务排队与执行稳定，无服务雪崩
+第 1 周：
 
-## 9. 风险与应对
+- 完成 P0 收口与契约修复
+- 固化回归与验收报告模板
 
-- 算法逻辑与 UI 耦合风险：先抽离服务层，再接 API
-- 长任务阻塞风险：严格异步化，设置超时和重试策略
-- 文件管理混乱风险：统一文件命名与任务目录隔离规范
-- 环境差异风险：固定依赖版本，提供标准化镜像
+第 2~3 周：
 
-## 10. 下一步执行建议
+- 先补 IR/Raman，再补 NMRServer
+- 前后端同步完成功能迁移
 
-- 按 Phase 0 先输出“能力映射+验收样本+API 草案”三件套
-- 先落地 GPC/NMR 两条链路，快速形成可演示闭环
-- 闭环稳定后再扩展 IR/Raman，避免一次性范围过大
-- 在功能稳定后启动“代码内聚迁移”专项，确保最终可脱离源项目目录独立运行
+第 4~5 周：
+
+- 完成数据管理/问答/验收接口与页面
+- 启动独立部署迁移与压测
+
+第 6 周：
+
+- 完成上线前联调、灰度与回滚演练
+
+## 7. 风险与应对
+
+- 源项目耦合风险：先迁移执行入口，再迁移算法模块，避免一次性大改。
+- 长任务稳定性风险：统一超时、重试、幂等键与失败分类。
+- 数据模型漂移风险：为结构化结果定义版本字段并维护兼容层。
+- 上线风险：必须在独立部署环境完成全量回归后再发布。

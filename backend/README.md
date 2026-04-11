@@ -45,6 +45,32 @@ RABBITMQ_VHOST=/
 - `GET /api/v1/tasks/{task_id}`
 - `GET /api/v1/tasks/{task_id}/result`
 
+## 导出 OpenAPI
+
+```bash
+cd E:/xx_project/Spec_Agent/backend
+conda activate spec_agent
+python scripts/export_openapi.py
+```
+
+导出文件：
+
+- `backend/openapi.json`
+
+## 执行回归脚本（P0）
+
+```bash
+cd E:/xx_project/Spec_Agent/backend
+conda activate spec_agent
+python scripts/run_regression.py
+```
+
+可选环境变量：
+
+- `REG_BASE_URL`：默认 `http://127.0.0.1:8000/api/v1`
+- `REG_GPC_PATH`：默认真实 GPC 样本路径
+- `REG_NMR_PATH`：默认真实 NMR 样本路径
+
 ## 说明
 
 - 任务链路为 `FastAPI + Celery + RabbitMQ + MongoDB`。

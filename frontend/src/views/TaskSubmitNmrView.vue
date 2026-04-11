@@ -1,16 +1,18 @@
 ﻿<script setup>
 import { reactive, ref } from 'vue'
+import JSZip from 'jszip'
 import { ElMessage } from 'element-plus'
 import { createNmrTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const submitting = ref(false)
-const uploading = ref(false)
+const folderInputRef = ref(null)
+const selectedZipFile = ref(null)
 const uploadedFileId = ref('')
 const uploadedFilename = ref('')
 const lastTaskId = ref('')
 
 const form = reactive({
-  inputMode: 'path',
+  inputMode: 'upload',
   inputPath: '',
   nucleus: '1H',
   threshold: 0.01,
@@ -30,27 +32,60 @@ const form = reactive({
 })
 
 /**
- * 处理 NMR 文件上传。
+ * 打开目录选择器。
+ */
+function openFolderPicker() {
+  folderInputRef.value?.click()
+}
+
+/**
+ * 将目录文件列表打包为 zip 文件。
  *
  * Args:
- *   file: 上传文件对象。
+ *   files: 浏览器目录选择得到的文件列表。
  *
  * Returns:
- *   Promise<boolean>
+ *   Promise<File>
  */
-async function handleUpload(file) {
+async function buildZipFromFolder(files) {
+  const zip = new JSZip()
+  const fileList = Array.from(files || [])
+  if (fileList.length === 0) {
+    throw new Error('未选择任何文件')
+  }
+  for (const file of fileList) {
+    const relativePath = file.webkitRelativePath || file.name
+    zip.file(relativePath, file)
+  }
+  const rootName = (fileList[0]?.webkitRelativePath || 'nmr_folder').split('/')[0] || 'nmr_folder'
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+  return new File([blob], `${rootName}.zip`, { type: 'application/zip' })
+}
+
+/**
+ * 处理 NMR 目录选择（仅本地打包，不立即上传）。
+ *
+ * Args:
+ *   event: 文件选择事件对象。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function handleFolderChange(event) {
   try {
-    uploading.value = true
-    const data = await uploadFile(file, 'nmr')
-    uploadedFileId.value = data.file_id
-    uploadedFilename.value = data.filename
-    ElMessage.success(`文件上传成功：${data.filename}`)
+    const files = event?.target?.files
+    const zipFile = await buildZipFromFolder(files)
+    selectedZipFile.value = zipFile
+    uploadedFileId.value = ''
+    uploadedFilename.value = zipFile.name
+    ElMessage.success(`已选择文件夹：${zipFile.name}`)
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
   } finally {
-    uploading.value = false
+    if (event?.target) {
+      event.target.value = ''
+    }
   }
-  return false
 }
 
 /**
@@ -86,7 +121,23 @@ async function submitTask() {
     return
   }
   if (form.inputMode === 'upload' && !uploadedFileId.value) {
-    ElMessage.warning('请先上传 NMR 文件')
+    if (!selectedZipFile.value) {
+      ElMessage.warning('请先选择 NMR 文件夹')
+      return
+    }
+  }
+  if (form.inputMode === 'upload' && selectedZipFile.value) {
+    try {
+      const data = await uploadFile(selectedZipFile.value, 'nmr')
+      uploadedFileId.value = data.file_id
+      uploadedFilename.value = data.filename
+    } catch (error) {
+      ElMessage.error(getApiErrorMessage(error))
+      return
+    }
+  }
+  if (form.inputMode === 'upload' && !uploadedFileId.value) {
+    ElMessage.warning('上传失败，请重新选择文件夹')
     return
   }
   if (
@@ -145,8 +196,8 @@ async function submitTask() {
       <el-form label-width="190px">
         <el-form-item label="输入方式">
           <el-radio-group v-model="form.inputMode">
+            <el-radio value="upload">上传文件</el-radio>
             <el-radio value="path">服务器本地文件夹路径</el-radio>
-            <el-radio value="upload">上传文件后使用 file_id</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -154,11 +205,23 @@ async function submitTask() {
           <el-input v-model="form.inputPath" placeholder="示例：E:/spectrum_files/nmr/2026-03-17/WLS-0312-H" />
         </el-form-item>
 
-        <el-form-item v-else label="上传 NMR 文件">
-          <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".txt,.csv,.zip">
-            <el-button :loading="uploading" type="primary" plain>选择并上传</el-button>
-          </el-upload>
-          <el-tag v-if="uploadedFileId" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
+        <el-form-item v-else label="上传 NMR 文件夹">
+          <input
+            ref="folderInputRef"
+            type="file"
+            style="display: none"
+            webkitdirectory
+            directory
+            multiple
+            @change="handleFolderChange"
+          />
+          <el-button type="primary" plain @click="openFolderPicker">
+            选择 Bruker 目录
+          </el-button>
+          <el-tag v-if="uploadedFilename" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
+          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">
+            将自动打包为 zip，提交任务时上传
+          </div>
         </el-form-item>
 
         <el-divider content-position="left">峰检测参数</el-divider>
