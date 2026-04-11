@@ -85,8 +85,8 @@ function toggleSidebar() {
           </template>
           <el-menu-item index="/tasks/submit/gpc">GPC 提交</el-menu-item>
           <el-menu-item index="/tasks/submit/nmr">NMR 提交</el-menu-item>
-          <el-menu-item index="/tasks/submit/ir" disabled>IR 提交（待开放）</el-menu-item>
-          <el-menu-item index="/tasks/submit/raman" disabled>Raman 提交（待开放）</el-menu-item>
+          <el-menu-item index="/tasks/submit/ir">IR 提交</el-menu-item>
+          <el-menu-item index="/tasks/submit/raman">Raman 提交</el-menu-item>
         </el-sub-menu>
 
         <el-menu-item index="/tasks/center">

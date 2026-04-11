@@ -5,7 +5,7 @@ import TaskSubmitGpcView from '../views/TaskSubmitGpcView.vue'
 import TaskSubmitNmrView from '../views/TaskSubmitNmrView.vue'
 import TaskCenterView from '../views/TaskCenterView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
-import TaskSubmitPlaceholderView from '../views/TaskSubmitPlaceholderView.vue'
+import TaskSubmitIrRamanView from '../views/TaskSubmitIrRamanView.vue'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -13,8 +13,8 @@ const routes = [
   { path: '/tasks/submit', redirect: '/tasks/submit/gpc' },
   { path: '/tasks/submit/gpc', component: TaskSubmitGpcView },
   { path: '/tasks/submit/nmr', component: TaskSubmitNmrView },
-  { path: '/tasks/submit/ir', component: TaskSubmitPlaceholderView, props: { type: 'IR' } },
-  { path: '/tasks/submit/raman', component: TaskSubmitPlaceholderView, props: { type: 'Raman' } },
+  { path: '/tasks/submit/ir', component: TaskSubmitIrRamanView, props: { spectype: 'ir' } },
+  { path: '/tasks/submit/raman', component: TaskSubmitIrRamanView, props: { spectype: 'raman' } },
   { path: '/tasks/center', component: TaskCenterView },
   { path: '/tasks/detail/:taskId', component: TaskDetailView, props: true },
 ]

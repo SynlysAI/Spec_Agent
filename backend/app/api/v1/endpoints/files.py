@@ -19,7 +19,7 @@ def upload_file(file: UploadFile = File(...), biz_type: str | None = Form(defaul
     函数名称: upload_file
     参数说明:
     - file: 上传文件对象。
-    - biz_type: 业务类型（gpc/nmr），可选。
+    - biz_type: 业务类型（gpc/nmr/ir/raman），可选。
     """
     _validate_upload(file=file, biz_type=biz_type)
     saved = FileService.save_upload_file(upload_file=file)
@@ -32,7 +32,7 @@ def _validate_upload(file: UploadFile, biz_type: str | None) -> None:
     函数名称: _validate_upload
     参数说明:
     - file: 上传文件对象。
-    - biz_type: 业务类型（gpc/nmr）。
+    - biz_type: 业务类型（gpc/nmr/ir/raman）。
     """
     filename = file.filename or ""
     if not filename:
@@ -44,9 +44,11 @@ def _validate_upload(file: UploadFile, biz_type: str | None) -> None:
         None: {".arw", ".txt", ".csv", ".json", ".pdf"},
         "gpc": {".arw", ".pdf", ".json"},
         "nmr": {".txt", ".csv", ".zip"},
+        "ir": {".txt", ".csv"},
+        "raman": {".txt", ".csv"},
     }
     if biz_type not in allowed_map:
-        raise HTTPException(status_code=400, detail="biz_type 仅支持 gpc 或 nmr")
+        raise HTTPException(status_code=400, detail="biz_type 仅支持 gpc/nmr/ir/raman")
 
     allowed = allowed_map[biz_type]
     if suffix not in allowed:
@@ -60,4 +62,3 @@ def _validate_upload(file: UploadFile, biz_type: str | None) -> None:
     max_size = settings.max_upload_size_mb * 1024 * 1024
     if len(content) > max_size:
         raise HTTPException(status_code=400, detail=f"文件大小超过限制: {settings.max_upload_size_mb}MB")
-

@@ -8,6 +8,7 @@ from app.models.common import ApiResponse
 from app.models.tasks import (
     TaskArtifactsData,
     CreateGpcTaskRequest,
+    CreateIrRamanTaskRequest,
     CreateNmrTaskRequest,
     CreateTaskData,
     TaskKind,
@@ -77,6 +78,52 @@ def create_nmr_task(payload: CreateNmrTaskRequest) -> ApiResponse[CreateTaskData
             task_type="nmr_analysis",
             input_data=payload.input.model_dump(),
             params=payload.params.model_dump(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
+    return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.post("/ir", response_model=ApiResponse[CreateTaskData])
+def create_ir_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTaskData]:
+    """创建 IR 分析任务。
+
+    函数名称: create_ir_task
+    参数说明:
+    - payload: IR 任务请求模型。
+    """
+    try:
+        params = payload.params.model_dump()
+        params["spectype"] = "ir"
+        entity = task_service.create_task(
+            task_type="ir_analysis",
+            input_data=payload.input.model_dump(),
+            params=params,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
+    return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.post("/raman", response_model=ApiResponse[CreateTaskData])
+def create_raman_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTaskData]:
+    """创建 Raman 分析任务。
+
+    函数名称: create_raman_task
+    参数说明:
+    - payload: Raman 任务请求模型。
+    """
+    try:
+        params = payload.params.model_dump()
+        params["spectype"] = "raman"
+        entity = task_service.create_task(
+            task_type="raman_analysis",
+            input_data=payload.input.model_dump(),
+            params=params,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

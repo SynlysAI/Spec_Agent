@@ -1,0 +1,1597 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Spec_Agent Backend",
+    "description": "Spec_Agent 重构项目后端服务（P0）。",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Check",
+        "description": "服务健康检查接口。\n\n函数名称: health_check\n参数说明:\n- 无。",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_dict_"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/upload": {
+      "post": {
+        "tags": [
+          "files"
+        ],
+        "summary": "Upload File",
+        "description": "上传文件接口。\n\n函数名称: upload_file\n参数说明:\n- file: 上传文件对象。\n- biz_type: 业务类型（gpc/nmr/ir/raman），可选。",
+        "operationId": "upload_file_api_v1_files_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_api_v1_files_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_UploadFileData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "List Tasks",
+        "description": "分页查询任务列表。\n\nArgs:\n    page: 页码，从 1 开始。\n    page_size: 每页数量，最大 100。\n    status: 可选任务状态过滤条件。\n    task_type: 可选任务类型过滤条件。\n\nReturns:\n    任务分页列表响应。",
+        "operationId": "list_tasks_api_v1_tasks_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDING",
+                    "QUEUED",
+                    "RUNNING",
+                    "SUCCESS",
+                    "FAILED",
+                    "CANCELED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "task_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "gpc_analysis",
+                    "nmr_analysis",
+                    "ir_analysis",
+                    "raman_analysis"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Task Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TaskListData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/gpc": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Create Gpc Task",
+        "description": "创建 GPC 分析任务。\n\n函数名称: create_gpc_task\n参数说明:\n- payload: GPC 任务请求模型。",
+        "operationId": "create_gpc_task_api_v1_tasks_gpc_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGpcTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CreateTaskData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/nmr": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Create Nmr Task",
+        "description": "创建 NMR 分析任务（单阶段）。\n\n函数名称: create_nmr_task\n参数说明:\n- payload: NMR 任务请求模型。",
+        "operationId": "create_nmr_task_api_v1_tasks_nmr_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNmrTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CreateTaskData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/ir": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Create Ir Task",
+        "description": "创建 IR 分析任务。\n\n函数名称: create_ir_task\n参数说明:\n- payload: IR 任务请求模型。",
+        "operationId": "create_ir_task_api_v1_tasks_ir_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIrRamanTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CreateTaskData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/raman": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Create Raman Task",
+        "description": "创建 Raman 分析任务。\n\n函数名称: create_raman_task\n参数说明:\n- payload: Raman 任务请求模型。",
+        "operationId": "create_raman_task_api_v1_tasks_raman_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIrRamanTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_CreateTaskData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Task Status",
+        "description": "查询任务状态。\n\n函数名称: get_task_status\n参数说明:\n- task_id: 任务ID。",
+        "operationId": "get_task_status_api_v1_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TaskStatusData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}/result": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Task Result",
+        "description": "查询任务结果。\n\n函数名称: get_task_result\n参数说明:\n- task_id: 任务ID。",
+        "operationId": "get_task_result_api_v1_tasks__task_id__result_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TaskResultData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{task_id}/artifacts": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Get Task Artifacts",
+        "description": "查询任务输出产物列表。\n\nArgs:\n    task_id: 任务 ID。\n\nReturns:\n    任务产物列表响应。",
+        "operationId": "get_task_artifacts_api_v1_tasks__task_id__artifacts_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_TaskArtifactsData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiResponse_CreateTaskData_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateTaskData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[CreateTaskData]"
+      },
+      "ApiResponse_TaskArtifactsData_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskArtifactsData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TaskArtifactsData]"
+      },
+      "ApiResponse_TaskListData_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskListData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TaskListData]"
+      },
+      "ApiResponse_TaskResultData_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskResultData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TaskResultData]"
+      },
+      "ApiResponse_TaskStatusData_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskStatusData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[TaskStatusData]"
+      },
+      "ApiResponse_UploadFileData_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UploadFileData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[UploadFileData]"
+      },
+      "ApiResponse_dict_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data",
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[dict]"
+      },
+      "Body_upload_file_api_v1_files_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          },
+          "biz_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Biz Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_api_v1_files_upload_post"
+      },
+      "CreateGpcTaskRequest": {
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/TaskInput"
+          },
+          "params": {
+            "$ref": "#/components/schemas/GpcTaskParams"
+          },
+          "options": {
+            "$ref": "#/components/schemas/TaskOptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input"
+        ],
+        "title": "CreateGpcTaskRequest",
+        "description": "创建 GPC 任务请求模型。\n\n函数名称: CreateGpcTaskRequest\n参数说明:\n- input: 输入配置。\n- params: GPC 参数。\n- options: 可选参数。"
+      },
+      "CreateIrRamanTaskRequest": {
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/TaskInput"
+          },
+          "params": {
+            "$ref": "#/components/schemas/IrRamanTaskParams"
+          },
+          "options": {
+            "$ref": "#/components/schemas/TaskOptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input"
+        ],
+        "title": "CreateIrRamanTaskRequest",
+        "description": "创建 IR/Raman 任务请求模型。\n\n函数名称: CreateIrRamanTaskRequest\n参数说明:\n- input: 输入配置。\n- params: IR/Raman 参数。\n- options: 可选参数。"
+      },
+      "CreateNmrTaskRequest": {
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/TaskInput"
+          },
+          "params": {
+            "$ref": "#/components/schemas/NmrTaskParams"
+          },
+          "options": {
+            "$ref": "#/components/schemas/TaskOptions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input"
+        ],
+        "title": "CreateNmrTaskRequest",
+        "description": "创建 NMR 任务请求模型。\n\n函数名称: CreateNmrTaskRequest\n参数说明:\n- input: 输入配置。\n- params: NMR 参数。\n- options: 可选参数。"
+      },
+      "CreateTaskData": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "gpc_analysis",
+              "nmr_analysis",
+              "ir_analysis",
+              "raman_analysis"
+            ],
+            "title": "Task Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "QUEUED",
+              "RUNNING",
+              "SUCCESS",
+              "FAILED",
+              "CANCELED"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_type",
+          "status"
+        ],
+        "title": "CreateTaskData",
+        "description": "创建任务返回数据模型。\n\n函数名称: CreateTaskData\n参数说明:\n- task_id: 任务ID。\n- task_type: 任务类型。\n- status: 任务状态。"
+      },
+      "GpcTaskParams": {
+        "properties": {
+          "detect_mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "manual"
+            ],
+            "title": "Detect Mode",
+            "description": "峰检测模式",
+            "default": "auto"
+          },
+          "manual_interval": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manual Interval",
+            "description": "手动检测区间"
+          },
+          "three_color_arw_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Three Color Arw Paths",
+            "description": "三色曲线路径"
+          },
+          "calibration_file_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration File Path",
+            "description": "校准文件路径"
+          },
+          "comparison_report_pdf_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison Report Pdf Path",
+            "description": "对比PDF路径"
+          }
+        },
+        "type": "object",
+        "title": "GpcTaskParams",
+        "description": "GPC 任务参数模型。\n\n函数名称: GpcTaskParams\n参数说明:\n- detect_mode: 峰检测模式，auto/manual。\n- manual_interval: 手动检测区间。\n- three_color_arw_paths: 三色曲线路径列表。\n- calibration_file_path: 校准文件路径。\n- comparison_report_pdf_path: 对比 PDF 路径。"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IrRamanTaskParams": {
+        "properties": {
+          "spectype": {
+            "type": "string",
+            "enum": [
+              "ir",
+              "raman"
+            ],
+            "title": "Spectype",
+            "description": "光谱类型",
+            "default": "ir"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "greedy_decode",
+              "beam_search",
+              "retrieval",
+              "function_groups"
+            ],
+            "title": "Mode",
+            "description": "分析模式",
+            "default": "greedy_decode"
+          },
+          "k": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "K",
+            "description": "候选数量",
+            "default": 3
+          },
+          "x0": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "X0",
+            "description": "分析范围起点",
+            "default": 400.0
+          },
+          "x1": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "X1",
+            "description": "分析范围终点",
+            "default": 4000.0
+          },
+          "transmittance": {
+            "type": "boolean",
+            "title": "Transmittance",
+            "description": "IR透射率转吸光度",
+            "default": false
+          },
+          "device": {
+            "type": "string",
+            "enum": [
+              "cpu",
+              "cuda",
+              "auto"
+            ],
+            "title": "Device",
+            "description": "推理设备",
+            "default": "auto"
+          }
+        },
+        "type": "object",
+        "title": "IrRamanTaskParams",
+        "description": "IR/Raman 任务参数模型。\n\n函数名称: IrRamanTaskParams\n参数说明:\n- spectype: 光谱类型，ir 或 raman。\n- mode: 分析模式，greedy_decode/beam_search/retrieval/function_groups。\n- k: 候选数量，beam_search/retrieval 有效。\n- x0/x1: 分析范围。\n- transmittance: IR 是否执行透射率转吸光度。\n- device: 推理设备，cpu/cuda/auto。"
+      },
+      "NmrTaskParams": {
+        "properties": {
+          "nucleus": {
+            "type": "string",
+            "enum": [
+              "1H",
+              "13C"
+            ],
+            "title": "Nucleus",
+            "description": "核类型",
+            "default": "1H"
+          },
+          "threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Threshold",
+            "description": "峰检测阈值",
+            "default": 0.01
+          },
+          "min_distance": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Min Distance",
+            "description": "最小峰距",
+            "default": 0.3
+          },
+          "min_prominence": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Min Prominence",
+            "description": "最小显著性",
+            "default": 0.01
+          },
+          "width_multiplier": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Width Multiplier",
+            "description": "峰宽倍率",
+            "default": 1.0
+          },
+          "baseline_degree": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Baseline Degree",
+            "description": "基线拟合阶数",
+            "default": 3
+          },
+          "smooth_window": {
+            "type": "integer",
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Smooth Window",
+            "description": "平滑窗口",
+            "default": 5
+          },
+          "detection_range_mode": {
+            "type": "string",
+            "enum": [
+              "full",
+              "custom"
+            ],
+            "title": "Detection Range Mode",
+            "description": "检测范围模式",
+            "default": "full"
+          },
+          "detection_range_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detection Range Min",
+            "description": "检测范围最小值"
+          },
+          "detection_range_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detection Range Max",
+            "description": "检测范围最大值"
+          },
+          "ppm_offset": {
+            "type": "number",
+            "title": "Ppm Offset",
+            "description": "ppm偏移",
+            "default": 0.0
+          },
+          "integration_method": {
+            "type": "string",
+            "enum": [
+              "voigt",
+              "trapezoid"
+            ],
+            "title": "Integration Method",
+            "description": "积分方法",
+            "default": "voigt"
+          },
+          "internal_standard_policy": {
+            "type": "string",
+            "const": "auto",
+            "title": "Internal Standard Policy",
+            "description": "内标策略",
+            "default": "auto"
+          },
+          "internal_standard_prefer": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "solvent",
+                "tms"
+              ]
+            },
+            "type": "array",
+            "title": "Internal Standard Prefer",
+            "description": "内标优先级"
+          }
+        },
+        "type": "object",
+        "title": "NmrTaskParams",
+        "description": "NMR 任务参数模型（单阶段）。\n\n函数名称: NmrTaskParams\n参数说明:\n- nucleus: 核类型，1H/13C。\n- threshold/min_distance/min_prominence: 峰检测核心参数。\n- width_multiplier/baseline_degree/smooth_window: 处理参数。\n- detection_range_mode/min/max: 检测范围参数。\n- ppm_offset: ppm 偏移。\n- integration_method: 积分方法。\n- internal_standard_policy: 内标策略，固定为 auto。\n- internal_standard_prefer: 默认内标优先级（溶剂峰/TMS）。"
+      },
+      "TaskArtifactItem": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "relative_path": {
+            "type": "string",
+            "title": "Relative Path"
+          },
+          "file_type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "text",
+              "pdf",
+              "other"
+            ],
+            "title": "File Type"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "relative_path",
+          "file_type",
+          "url"
+        ],
+        "title": "TaskArtifactItem",
+        "description": "任务产物项模型。\n\nArgs:\n    name: 产物文件名。\n    relative_path: 相对 outputs 根目录路径。\n    file_type: 产物类型（image/text/pdf/other）。\n    url: 供前端访问的 URL。"
+      },
+      "TaskArtifactsData": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskArtifactItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "items"
+        ],
+        "title": "TaskArtifactsData",
+        "description": "任务产物列表响应模型。\n\nArgs:\n    task_id: 任务 ID。\n    items: 任务产物列表。"
+      },
+      "TaskInput": {
+        "properties": {
+          "input_type": {
+            "type": "string",
+            "enum": [
+              "file_path",
+              "file_id",
+              "folder_path"
+            ],
+            "title": "Input Type",
+            "description": "输入类型"
+          },
+          "input_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Path",
+            "description": "输入路径"
+          },
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Id",
+            "description": "上传文件ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_type"
+        ],
+        "title": "TaskInput",
+        "description": "任务输入模型。\n\n函数名称: TaskInput\n参数说明:\n- input_type: 输入类型，可为 file_path/file_id/folder_path。\n- input_path: 输入路径。\n- file_id: 已上传文件 ID。"
+      },
+      "TaskListData": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TaskListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "page",
+          "page_size",
+          "items"
+        ],
+        "title": "TaskListData",
+        "description": "任务列表响应模型。\n\nArgs:\n    total: 满足筛选条件的任务总数。\n    page: 当前页码（从 1 开始）。\n    page_size: 每页条数。\n    items: 当前页任务列表。"
+      },
+      "TaskListItem": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "gpc_analysis",
+              "nmr_analysis",
+              "ir_analysis",
+              "raman_analysis"
+            ],
+            "title": "Task Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "QUEUED",
+              "RUNNING",
+              "SUCCESS",
+              "FAILED",
+              "CANCELED"
+            ],
+            "title": "Status"
+          },
+          "progress": {
+            "type": "integer",
+            "title": "Progress"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_type",
+          "status",
+          "progress",
+          "message",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TaskListItem",
+        "description": "任务列表项模型。\n\nArgs:\n    task_id: 任务 ID。\n    task_type: 任务类型。\n    status: 当前状态。\n    progress: 进度百分比。\n    message: 状态消息。\n    created_at: 创建时间。\n    updated_at: 更新时间。"
+      },
+      "TaskOptions": {
+        "properties": {
+          "priority": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "description": "任务优先级",
+            "default": 5
+          },
+          "callback_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Url",
+            "description": "回调地址"
+          }
+        },
+        "type": "object",
+        "title": "TaskOptions",
+        "description": "任务可选参数模型。\n\n函数名称: TaskOptions\n参数说明:\n- priority: 任务优先级，数值越小优先级越高。\n- callback_url: 回调地址。"
+      },
+      "TaskResultData": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "QUEUED",
+              "RUNNING",
+              "SUCCESS",
+              "FAILED",
+              "CANCELED"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskResultError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "status"
+        ],
+        "title": "TaskResultData",
+        "description": "任务结果返回模型。\n\n函数名称: TaskResultData\n参数说明:\n- task_id: 任务ID。\n- status: 任务状态。\n- result: 成功结果对象。\n- error: 失败结果对象。"
+      },
+      "TaskResultError": {
+        "properties": {
+          "error_code": {
+            "type": "string",
+            "title": "Error Code"
+          },
+          "error_message": {
+            "type": "string",
+            "title": "Error Message"
+          },
+          "error_detail": {
+            "type": "string",
+            "title": "Error Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error_code",
+          "error_message",
+          "error_detail"
+        ],
+        "title": "TaskResultError",
+        "description": "任务失败信息模型。\n\n函数名称: TaskResultError\n参数说明:\n- error_code: 错误码。\n- error_message: 错误消息。\n- error_detail: 错误详情。"
+      },
+      "TaskStatusData": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          },
+          "task_type": {
+            "type": "string",
+            "enum": [
+              "gpc_analysis",
+              "nmr_analysis",
+              "ir_analysis",
+              "raman_analysis"
+            ],
+            "title": "Task Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "QUEUED",
+              "RUNNING",
+              "SUCCESS",
+              "FAILED",
+              "CANCELED"
+            ],
+            "title": "Status"
+          },
+          "progress": {
+            "type": "integer",
+            "title": "Progress"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "task_type",
+          "status",
+          "progress",
+          "message",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TaskStatusData",
+        "description": "任务状态返回模型。\n\n函数名称: TaskStatusData\n参数说明:\n- task_id: 任务ID。\n- task_type: 任务类型。\n- status: 当前状态。\n- progress: 进度百分比。\n- message: 状态消息。\n- created_at: 创建时间。\n- updated_at: 更新时间。"
+      },
+      "UploadFileData": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id",
+            "description": "文件唯一标识"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name",
+            "description": "原始文件名"
+          },
+          "file_size": {
+            "type": "integer",
+            "title": "File Size",
+            "description": "文件大小"
+          },
+          "file_ext": {
+            "type": "string",
+            "title": "File Ext",
+            "description": "文件扩展名"
+          },
+          "storage_path": {
+            "type": "string",
+            "title": "Storage Path",
+            "description": "存储相对路径"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256",
+            "description": "文件摘要"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "file_name",
+          "file_size",
+          "file_ext",
+          "storage_path",
+          "sha256"
+        ],
+        "title": "UploadFileData",
+        "description": "上传文件返回数据模型。\n\n函数名称: UploadFileData\n参数说明:\n- file_id: 文件唯一标识。\n- file_name: 原始文件名。\n- file_size: 文件大小（字节）。\n- file_ext: 文件扩展名。\n- storage_path: 存储相对路径。\n- sha256: 文件摘要。"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

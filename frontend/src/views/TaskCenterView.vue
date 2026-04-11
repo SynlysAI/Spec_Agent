@@ -94,6 +94,8 @@ onMounted(fetchTasks)
             <el-option label="全部" value="" />
             <el-option label="gpc_analysis" value="gpc_analysis" />
             <el-option label="nmr_analysis" value="nmr_analysis" />
+            <el-option label="ir_analysis" value="ir_analysis" />
+            <el-option label="raman_analysis" value="raman_analysis" />
           </el-select>
         </el-form-item>
       </el-form>

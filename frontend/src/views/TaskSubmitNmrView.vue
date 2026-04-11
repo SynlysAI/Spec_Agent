@@ -130,7 +130,7 @@ async function submitTask() {
     try {
       const data = await uploadFile(selectedZipFile.value, 'nmr')
       uploadedFileId.value = data.file_id
-      uploadedFilename.value = data.filename
+      uploadedFilename.value = data.file_name
     } catch (error) {
       ElMessage.error(getApiErrorMessage(error))
       return

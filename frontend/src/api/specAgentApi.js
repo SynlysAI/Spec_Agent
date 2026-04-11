@@ -56,6 +56,16 @@ export async function createNmrTask(payload) {
   return unwrapResponse(response)
 }
 
+export async function createIrTask(payload) {
+  const response = await apiClient.post('/tasks/ir', payload)
+  return unwrapResponse(response)
+}
+
+export async function createRamanTask(payload) {
+  const response = await apiClient.post('/tasks/raman', payload)
+  return unwrapResponse(response)
+}
+
 export async function getTaskStatus(taskId) {
   const response = await apiClient.get(`/tasks/${taskId}`)
   return unwrapResponse(response)
@@ -88,8 +98,10 @@ export async function uploadFile(file, bizType) {
   }
   const response = await apiClient.post('/files/upload', formData)
   const data = unwrapResponse(response)
+  const normalizedFileName = data?.file_name || data?.filename || ''
   return {
     ...data,
-    filename: data?.filename || data?.file_name || '',
+    file_name: normalizedFileName,
+    filename: normalizedFileName,
   }
 }

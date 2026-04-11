@@ -123,6 +123,24 @@ def _sanitize_nmr_structured_data(structured_data: dict[str, Any]) -> dict[str, 
     return {"nmr_results": safe_results, "summary_rows": _to_basic(structured_data.get("summary_rows", []))}
 
 
+def _sanitize_ir_raman_structured_data(structured_data: dict[str, Any]) -> dict[str, Any]:
+    """清洗 IR/Raman 结构化数据，保留关键字段并做基础序列化。
+
+    Args:
+        structured_data: 原始结构化数据。
+
+    Returns:
+        清洗后的结构化数据。
+    """
+    return {
+        "spectype": _to_basic(structured_data.get("spectype")),
+        "mode": _to_basic(structured_data.get("mode")),
+        "x0": _to_basic(structured_data.get("x0")),
+        "x1": _to_basic(structured_data.get("x1")),
+        "raw_output": _to_basic(structured_data.get("raw_output")),
+    }
+
+
 def _update_task(task_id: str, **kwargs: Any) -> None:
     """更新任务记录。
 
@@ -320,6 +338,80 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     }
 
 
+def _execute_ir_raman(task_id: str, input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    """执行 IR/Raman 实际分析。
+
+    Args:
+        task_id: 任务 ID。
+        input_data: 任务输入对象。
+        params: IR/Raman 分析参数。
+
+    Returns:
+        统一结果对象，包含 structured_data、text_report、metadata。
+    """
+    _ensure_source_import_path()
+    input_path = _resolve_input_path(input_data)
+    if not Path(input_path).is_file():
+        raise ValueError("IR/Raman 输入必须是谱图文件路径")
+
+    try:
+        agent_module = importlib.import_module("agents.ir_raman_agent")
+    except ModuleNotFoundError as exc:
+        raise ValueError(
+            "IR/Raman 依赖缺失，请安装 numpy/torch/pyyaml 等依赖后重试"
+        ) from exc
+    run_from_file = getattr(agent_module, "run_ir_raman_analysis_from_file")
+
+    spectype = str(params.get("spectype") or "ir").lower()
+    mode = str(params.get("mode") or "greedy_decode")
+    k = int(params.get("k") or 3)
+    x0 = float(params.get("x0") or 400.0)
+    x1 = float(params.get("x1") or 4000.0)
+    transmittance = bool(params.get("transmittance") or False)
+    device_name = str(params.get("device") or "auto").lower()
+
+    device = None
+    if device_name in {"cpu", "cuda"}:
+        torch_module = importlib.import_module("torch")
+        if device_name == "cuda" and not torch_module.cuda.is_available():
+            device = torch_module.device("cpu")
+        else:
+            device = torch_module.device(device_name)
+
+    output_dir = settings.outputs_root / "tasks" / task_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / f"{Path(input_path).stem}_{spectype}_report.md"
+
+    result = run_from_file(
+        spectrum_file=input_path,
+        spectype=spectype,
+        mode=mode,
+        k=k,
+        x0=x0,
+        x1=x1,
+        transmittance=transmittance,
+        device=device,
+        report_path=str(report_path),
+    )
+
+    errors = result.get("errors") or []
+    if errors:
+        raise ValueError("; ".join([str(item) for item in errors]))
+
+    return {
+        "structured_data": _sanitize_ir_raman_structured_data(result.get("structured_data", {})),
+        "text_report": str(result.get("text_report", "")),
+        "metadata": _to_basic(
+            {
+                **(result.get("metadata") or {}),
+                "spectrum_type": spectype,
+                "mode": mode,
+                "input_path": input_path,
+            }
+        ),
+    }
+
+
 def _prepare_nmr_input_path(task_id: str, input_path: str) -> str:
     """将 NMR 输入路径标准化为可分析的目录路径。
 
@@ -369,6 +461,8 @@ def execute_analysis_task(task_id: str) -> None:
             result_payload = _execute_gpc(task_id=task_id, input_data=input_data, params=params)
         elif task_type == "nmr_analysis":
             result_payload = _execute_nmr(task_id=task_id, input_data=input_data, params=params)
+        elif task_type in {"ir_analysis", "raman_analysis"}:
+            result_payload = _execute_ir_raman(task_id=task_id, input_data=input_data, params=params)
         else:
             raise ValueError(f"不支持的任务类型: {task_type}")
 

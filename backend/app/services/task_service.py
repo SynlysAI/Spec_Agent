@@ -38,7 +38,13 @@ class TaskService:
         """
         TaskService._validate_input_source(input_data=input_data)
 
-        prefix = "t_gpc" if task_type == "gpc_analysis" else "t_nmr"
+        prefix_map = {
+            "gpc_analysis": "t_gpc",
+            "nmr_analysis": "t_nmr",
+            "ir_analysis": "t_ir",
+            "raman_analysis": "t_raman",
+        }
+        prefix = prefix_map.get(task_type, "t_task")
         task_id = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
         now = datetime.now()
 
@@ -225,6 +231,20 @@ class TaskService:
             file_doc = get_files_collection().find_one({"file_id": file_id}, {"_id": 0})
             if not file_doc:
                 raise ValueError("file_id 不存在")
+            return
+
+        input_path = input_data.get("input_path")
+        if input_type in {"file_path", "folder_path"}:
+            if not input_path:
+                raise ValueError("input_path 不能为空")
+            target_path = Path(str(input_path))
+            if not target_path.exists():
+                raise ValueError(f"输入路径不存在: {target_path}")
+            if input_type == "folder_path" and not target_path.is_dir():
+                raise ValueError(f"folder_path 必须是目录: {target_path}")
+            return
+
+        raise ValueError(f"不支持的 input_type: {input_type}")
 
 
 task_service = TaskService()

@@ -34,8 +34,8 @@ async function handleUpload(file) {
     uploading.value = true
     const data = await uploadFile(file, form.taskKind)
     uploadedFileId.value = data.file_id
-    uploadedFilename.value = data.filename
-    ElMessage.success(`文件上传成功：${data.filename}`)
+    uploadedFilename.value = data.file_name
+    ElMessage.success(`文件上传成功：${data.file_name}`)
   } catch (error) {
     ElMessage.error(error?.message || '文件上传失败')
   } finally {

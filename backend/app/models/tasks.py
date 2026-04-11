@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 TaskStatus = Literal["PENDING", "QUEUED", "RUNNING", "SUCCESS", "FAILED", "CANCELED"]
-TaskKind = Literal["gpc_analysis", "nmr_analysis"]
+TaskKind = Literal["gpc_analysis", "nmr_analysis", "ir_analysis", "raman_analysis"]
 
 
 class TaskInput(BaseModel):
@@ -146,6 +146,59 @@ class CreateNmrTaskRequest(BaseModel):
 
     input: TaskInput
     params: NmrTaskParams = Field(default_factory=NmrTaskParams)
+    options: TaskOptions = Field(default_factory=TaskOptions)
+
+
+class IrRamanTaskParams(BaseModel):
+    """IR/Raman 任务参数模型。
+
+    函数名称: IrRamanTaskParams
+    参数说明:
+    - spectype: 光谱类型，ir 或 raman。
+    - mode: 分析模式，greedy_decode/beam_search/retrieval/function_groups。
+    - k: 候选数量，beam_search/retrieval 有效。
+    - x0/x1: 分析范围。
+    - transmittance: IR 是否执行透射率转吸光度。
+    - device: 推理设备，cpu/cuda/auto。
+    """
+
+    spectype: Literal["ir", "raman"] = Field(default="ir", description="光谱类型")
+    mode: Literal["greedy_decode", "beam_search", "retrieval", "function_groups"] = Field(
+        default="greedy_decode", description="分析模式"
+    )
+    k: int = Field(default=3, ge=1, le=10, description="候选数量")
+    x0: float = Field(default=400.0, ge=0.0, description="分析范围起点")
+    x1: float = Field(default=4000.0, ge=0.0, description="分析范围终点")
+    transmittance: bool = Field(default=False, description="IR透射率转吸光度")
+    device: Literal["cpu", "cuda", "auto"] = Field(default="auto", description="推理设备")
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "IrRamanTaskParams":
+        """校验范围参数合法性。
+
+        函数名称: validate_range
+        参数说明:
+        - self: 当前模型实例。
+        """
+        if self.x0 >= self.x1:
+            raise ValueError("x0 必须小于 x1")
+        if self.spectype == "raman" and self.transmittance:
+            raise ValueError("raman 模式不支持 transmittance=true")
+        return self
+
+
+class CreateIrRamanTaskRequest(BaseModel):
+    """创建 IR/Raman 任务请求模型。
+
+    函数名称: CreateIrRamanTaskRequest
+    参数说明:
+    - input: 输入配置。
+    - params: IR/Raman 参数。
+    - options: 可选参数。
+    """
+
+    input: TaskInput
+    params: IrRamanTaskParams = Field(default_factory=IrRamanTaskParams)
     options: TaskOptions = Field(default_factory=TaskOptions)
 
 
