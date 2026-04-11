@@ -8,6 +8,7 @@ import {
   Histogram,
   Monitor,
   Operation,
+  Tools,
   Fold,
   Expand,
 } from '@element-plus/icons-vue'
@@ -23,6 +24,9 @@ const activeMenu = computed(() => {
   }
   if (current.startsWith('/tasks/submit/')) {
     return current
+  }
+  if (current.startsWith('/tools/')) {
+    return '/tools/nmrserver'
   }
   return current
 })
@@ -93,6 +97,13 @@ function toggleSidebar() {
           <el-icon><Histogram /></el-icon>
           <span>任务中心</span>
         </el-menu-item>
+        <el-sub-menu index="/tools">
+          <template #title>
+            <el-icon><Tools /></el-icon>
+            <span>工具服务</span>
+          </template>
+          <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/docs">
           <el-icon><Document /></el-icon>
           <span>接口文档</span>

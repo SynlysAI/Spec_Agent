@@ -1,7 +1,8 @@
-﻿<script setup>
+<script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { getTaskArtifacts, getTaskResult, getTaskStatus } from '../api/specAgentApi'
+import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
+import { getTaskArtifacts, getTaskResult, getTaskStatus, previewSpectrum } from '../api/specAgentApi'
 
 const route = useRoute()
 const taskId = computed(() => route.params.taskId)
@@ -10,10 +11,15 @@ const loading = ref(false)
 const statusData = ref(null)
 const resultData = ref(null)
 const artifactItems = ref([])
+const previewLoading = ref(false)
+const previewData = ref(null)
 
 const structuredData = computed(() => resultData.value?.result?.structured_data || {})
 const isNmrTask = computed(() => statusData.value?.task_type === 'nmr_analysis')
 const isGpcTask = computed(() => statusData.value?.task_type === 'gpc_analysis')
+const isIrRamanTask = computed(() =>
+  ['ir_analysis', 'raman_analysis'].includes(String(statusData.value?.task_type || '')),
+)
 const imageArtifacts = computed(() => artifactItems.value.filter((item) => item.file_type === 'image'))
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1'
 const backendOrigin = new URL(apiBaseUrl).origin
@@ -28,44 +34,79 @@ const imageGroups = computed(() => {
   }
   for (const item of imageArtifacts.value) {
     const name = String(item.name || '').toLowerCase()
-    if (
-      name.includes('raw') ||
-      name.includes('spectrum') ||
-      name.endsWith('.fid.png')
-    ) {
+    if (name.includes('raw') || name.includes('spectrum') || name.endsWith('.fid.png')) {
       groups.raw.push(item)
       continue
     }
-    if (
-      name.includes('processing') ||
-      name.includes('process') ||
-      name.includes('baseline') ||
-      name.includes('step')
-    ) {
+    if (name.includes('processing') || name.includes('process') || name.includes('baseline') || name.includes('step')) {
       groups.process.push(item)
       continue
     }
-    if (
-      name.includes('peak') ||
-      name.includes('roi') ||
-      name.includes('integration_region')
-    ) {
+    if (name.includes('peak') || name.includes('roi') || name.includes('integration_region')) {
       groups.peak.push(item)
       continue
     }
-    if (
-      name.includes('result') ||
-      name.includes('detailed_gpc_plot') ||
-      name.includes('machine_curve') ||
-      name.includes('quant') ||
-      name.includes('fit')
-    ) {
+    if (name.includes('result') || name.includes('detailed_gpc_plot') || name.includes('machine_curve') || name.includes('quant') || name.includes('fit')) {
       groups.result.push(item)
       continue
     }
     groups.other.push(item)
   }
   return groups
+})
+
+const gpcRows = computed(() => structuredData.value.analysis_results || [])
+const nmrRows = computed(() => structuredData.value.nmr_results || [])
+
+const irRamanMode = computed(() => String(structuredData.value.mode || ''))
+const irRamanRawOutput = computed(() => structuredData.value.raw_output)
+const irRamanFunctionGroups = computed(() => {
+  if (irRamanMode.value !== 'function_groups') {
+    return []
+  }
+  return Array.isArray(irRamanRawOutput.value) ? irRamanRawOutput.value : []
+})
+const irRamanStructures = computed(() => {
+  if (irRamanMode.value === 'function_groups') {
+    return []
+  }
+  if (irRamanMode.value === 'greedy_decode') {
+    return Array.isArray(irRamanRawOutput.value) ? irRamanRawOutput.value : []
+  }
+  if (irRamanRawOutput.value && typeof irRamanRawOutput.value === 'object') {
+    const structureList = irRamanRawOutput.value.structure
+    return Array.isArray(structureList) ? structureList : []
+  }
+  return []
+})
+const irRamanScores = computed(() => {
+  if (irRamanRawOutput.value && typeof irRamanRawOutput.value === 'object') {
+    const scoreList = irRamanRawOutput.value.score
+    return Array.isArray(scoreList) ? scoreList : []
+  }
+  return []
+})
+const previewAxisConfig = computed(() => {
+  const spectype = String(previewData.value?.spectype || '').toLowerCase()
+  if (spectype === 'nmr') {
+    return {
+      xAxisName: '化学位移 (ppm)',
+      yAxisName: '信号强度',
+      inverseXAxis: true,
+    }
+  }
+  if (spectype === 'gpc') {
+    return {
+      xAxisName: '时间 (min)',
+      yAxisName: '信号强度 (μRIU)',
+      inverseXAxis: false,
+    }
+  }
+  return {
+    xAxisName: '波数 (cm⁻¹)',
+    yAxisName: '强度',
+    inverseXAxis: false,
+  }
 })
 
 /**
@@ -101,6 +142,38 @@ function buildPreviewUrls(list) {
 }
 
 /**
+ * 构建后端分子结构图片 URL。
+ *
+ * Args:
+ *   smiles: 分子 SMILES 字符串。
+ *
+ * Returns:
+ *   图片可访问 URL。
+ */
+function buildMoleculeImageUrl(smiles) {
+  if (!smiles) {
+    return ''
+  }
+  return `${apiBaseUrl}/chemistry/molecule-image?smiles=${encodeURIComponent(smiles)}&size=300`
+}
+
+/**
+ * 构建后端官能团结构图片 URL。
+ *
+ * Args:
+ *   smarts: 官能团 SMARTS 字符串。
+ *
+ * Returns:
+ *   图片可访问 URL。
+ */
+function buildFunctionGroupImageUrl(smarts) {
+  if (!smarts) {
+    return ''
+  }
+  return `${apiBaseUrl}/chemistry/function-group-image?smarts=${encodeURIComponent(smarts)}&size=260`
+}
+
+/**
  * 解析对象为表格展示数组。
  *
  * Args:
@@ -119,8 +192,48 @@ function toKeyValueRows(source) {
   }))
 }
 
-const gpcRows = computed(() => structuredData.value.analysis_results || [])
-const nmrRows = computed(() => structuredData.value.nmr_results || [])
+/**
+ * 判断当前任务是否成功结束。
+ *
+ * Returns:
+ *   boolean
+ */
+function isSuccess() {
+  return resultData.value?.status === 'SUCCESS'
+}
+
+/**
+ * 自动加载任务输入谱图预览。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function fetchSourcePreview() {
+  previewData.value = null
+  if (!isSuccess()) {
+    return
+  }
+  const metadata = resultData.value?.result?.metadata || {}
+  const inputPath = metadata.input_path
+  const spectrumType = String(metadata.spectrum_type || '').toLowerCase()
+  if (!inputPath || !['ir', 'raman', 'gpc', 'nmr'].includes(spectrumType)) {
+    return
+  }
+
+  const formData = new FormData()
+  formData.append('spectype', spectrumType)
+  formData.append('input_path', inputPath)
+  formData.append('max_points', '4096')
+
+  previewLoading.value = true
+  try {
+    previewData.value = await previewSpectrum(formData)
+  } catch (_error) {
+    previewData.value = null
+  } finally {
+    previewLoading.value = false
+  }
+}
 
 /**
  * 加载任务详情数据。
@@ -139,19 +252,10 @@ async function fetchDetail() {
     statusData.value = status
     resultData.value = result
     artifactItems.value = artifacts.items || []
+    await fetchSourcePreview()
   } finally {
     loading.value = false
   }
-}
-
-/**
- * 判断当前任务是否成功结束。
- *
- * Returns:
- *   boolean
- */
-function isSuccess() {
-  return resultData.value?.status === 'SUCCESS'
 }
 
 onMounted(fetchDetail)
@@ -187,6 +291,23 @@ onMounted(fetchDetail)
           :title="resultData?.error?.error_message || '任务失败'"
           :description="resultData?.error?.error_detail"
         />
+
+        <template v-if="isSuccess()">
+          <el-divider />
+          <h4 style="margin: 8px 0">原始谱图预览</h4>
+          <div v-loading="previewLoading">
+            <SpectrumPreviewChart
+              v-if="previewData?.x_values?.length"
+              :x-values="previewData.x_values"
+              :y-values="previewData.y_values"
+              :x-axis-name="previewAxisConfig.xAxisName"
+              :y-axis-name="previewAxisConfig.yAxisName"
+              :inverse-x-axis="previewAxisConfig.inverseXAxis"
+              :title="`${previewData.spectype?.toUpperCase() || ''} 原始谱图`"
+            />
+            <el-empty v-else description="暂无原始谱图预览数据" />
+          </div>
+        </template>
 
         <template v-if="isSuccess() && isGpcTask">
           <h4 style="margin: 8px 0">GPC 结果概览</h4>
@@ -240,6 +361,60 @@ onMounted(fetchDetail)
               </template>
             </el-table-column>
           </el-table>
+        </template>
+
+        <template v-if="isSuccess() && isIrRamanTask">
+          <el-divider />
+          <h4 style="margin: 8px 0">结果预览</h4>
+          <el-descriptions :column="3" border size="small">
+            <el-descriptions-item label="光谱类型">{{ structuredData.spectype || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="分析模式">{{ irRamanMode || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="分析范围">{{ structuredData.x0 }} - {{ structuredData.x1 }}</el-descriptions-item>
+          </el-descriptions>
+
+          <template v-if="irRamanMode === 'function_groups'">
+            <el-table :data="irRamanFunctionGroups.map((item, idx) => ({ index: idx + 1, smarts: item }))" stripe style="margin-top: 12px">
+              <el-table-column prop="index" label="序号" width="80" />
+              <el-table-column prop="smarts" label="官能团 SMARTS" min-width="240" />
+              <el-table-column label="结构图" min-width="220">
+                <template #default="scope">
+                  <el-image
+                    :src="buildFunctionGroupImageUrl(scope.row.smarts)"
+                    fit="contain"
+                    style="width: 200px; height: 120px; background: #f6f9ff"
+                    :preview-src-list="[buildFunctionGroupImageUrl(scope.row.smarts)]"
+                  />
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-if="irRamanFunctionGroups.length === 0" description="未识别到官能团" />
+          </template>
+
+          <template v-else>
+            <div class="ir-raman-card-grid">
+              <el-card
+                v-for="(smiles, index) in irRamanStructures"
+                :key="`${smiles}_${index}`"
+                class="ir-raman-card"
+                shadow="hover"
+              >
+                <template #header>
+                  <div class="ir-raman-card-header">
+                    <span>候选 {{ index + 1 }}</span>
+                    <span v-if="irRamanScores[index] !== undefined">评分：{{ Number(irRamanScores[index]).toFixed(4) }}</span>
+                  </div>
+                </template>
+                <el-image
+                  :src="buildMoleculeImageUrl(smiles)"
+                  fit="contain"
+                  style="width: 100%; height: 180px; background: #f6f9ff"
+                  :preview-src-list="[buildMoleculeImageUrl(smiles)]"
+                />
+                <div class="smiles-line">{{ smiles }}</div>
+              </el-card>
+            </div>
+            <el-empty v-if="irRamanStructures.length === 0" description="未识别到候选分子结构" />
+          </template>
         </template>
 
         <template v-if="imageArtifacts.length > 0">
@@ -396,3 +571,41 @@ onMounted(fetchDetail)
     </div>
   </div>
 </template>
+
+<style scoped>
+.ir-raman-card-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ir-raman-card {
+  border-radius: 10px;
+}
+
+.ir-raman-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #2a466f;
+  font-size: 13px;
+}
+
+.smiles-line {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #eef4ff;
+  color: #35527f;
+  word-break: break-all;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .ir-raman-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

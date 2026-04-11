@@ -6,6 +6,7 @@ import TaskSubmitNmrView from '../views/TaskSubmitNmrView.vue'
 import TaskCenterView from '../views/TaskCenterView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
 import TaskSubmitIrRamanView from '../views/TaskSubmitIrRamanView.vue'
+import ToolNmrServerView from '../views/ToolNmrServerView.vue'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -17,6 +18,7 @@ const routes = [
   { path: '/tasks/submit/raman', component: TaskSubmitIrRamanView, props: { spectype: 'raman' } },
   { path: '/tasks/center', component: TaskCenterView },
   { path: '/tasks/detail/:taskId', component: TaskDetailView, props: true },
+  { path: '/tools/nmrserver', component: ToolNmrServerView },
 ]
 
 const router = createRouter({

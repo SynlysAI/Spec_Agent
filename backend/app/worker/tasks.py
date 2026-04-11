@@ -255,7 +255,13 @@ def _execute_gpc(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     return {
         "structured_data": _sanitize_gpc_structured_data(result.get("structured_data", {})),
         "text_report": result.get("text_report", ""),
-        "metadata": _to_basic(result.get("metadata", {"spectrum_type": "gpc"})),
+        "metadata": _to_basic(
+            {
+                **(result.get("metadata") or {}),
+                "spectrum_type": "gpc",
+                "input_path": input_path,
+            }
+        ),
     }
 
 

@@ -8,3 +8,5 @@ python-dotenv==1.2.1
 numpy>=1.26
 PyYAML>=6.0
 torch>=2.4
+requests>=2.31
+rdkit>=2024.9.1

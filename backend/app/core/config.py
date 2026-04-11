@@ -45,6 +45,9 @@ class Settings:
         self.rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "password123")
         self.rabbitmq_vhost: str = os.getenv("RABBITMQ_VHOST", "/")
 
+        # NMRServer 外部服务配置
+        self.nmr_server_base_url: str = os.getenv("NMR_SERVER_BASE_URL", "http://100.84.59.58:8080")
+
     @property
     def mongodb_uri(self) -> str:
         """生成 MongoDB 连接 URI。

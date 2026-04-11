@@ -66,6 +66,35 @@ export async function createRamanTask(payload) {
   return unwrapResponse(response)
 }
 
+/**
+ * 预览谱图数据。
+ *
+ * Args:
+ *   formData: 谱图预览请求表单。
+ *
+ * Returns:
+ *   谱图预览结果对象。
+ */
+export async function previewSpectrum(formData) {
+  const response = await apiClient.post('/spectra/preview', formData)
+  return unwrapResponse(response)
+}
+
+export async function nmrserverForward(payload) {
+  const response = await apiClient.post('/nmrserver/forward', payload)
+  return unwrapResponse(response)
+}
+
+export async function nmrserverReverse(payload) {
+  const response = await apiClient.post('/nmrserver/reverse', payload)
+  return unwrapResponse(response)
+}
+
+export async function nmrserverSearch(payload) {
+  const response = await apiClient.post('/nmrserver/search', payload)
+  return unwrapResponse(response)
+}
+
 export async function getTaskStatus(taskId) {
   const response = await apiClient.get(`/tasks/${taskId}`)
   return unwrapResponse(response)
