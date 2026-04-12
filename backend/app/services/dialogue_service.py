@@ -208,7 +208,7 @@ class DialogueService:
             LLM 回答文本，失败时返回空字符串。
         """
         try:
-            model_module = importlib.import_module("llm_server.model")
+            model_module = importlib.import_module("services.llm_service")
             create_llm_client = getattr(model_module, "create_llm_client")
             llm_client = create_llm_client()
 

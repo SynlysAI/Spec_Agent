@@ -15,7 +15,7 @@ from analysis.gpc.tools.gpc_validation import GPCValidator
 from analysis.gpc.utils.gpc_analyzer import GPCAnalyzer
 from analysis.gpc.utils.gpc_plotter import GPCDataPlotter
 from config import GLOBAL_CONFIG
-from llm_server.model import create_llm_client
+from services.llm_service import create_llm_client
 
 
 def _parse_manual_interval(value: Optional[str]) -> Optional[List[float]]:

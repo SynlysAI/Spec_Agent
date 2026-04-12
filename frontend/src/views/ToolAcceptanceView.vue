@@ -1,17 +1,21 @@
 ﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
+  buildAcceptanceReportUrl,
   createAcceptanceRun,
   getAcceptanceConfig,
   getAcceptanceRun,
   getApiErrorMessage,
 } from '../api/specAgentApi'
 
+const router = useRouter()
 const loadingConfig = ref(false)
 const creatingRun = ref(false)
 const configData = ref(null)
-const runData = ref(null)
+const runSummary = ref(null)
+const runFinal = ref(null)
 const activeRunId = ref('')
 const pollingTimer = ref(null)
 
@@ -27,14 +31,14 @@ const typeOptions = computed(() => {
 })
 
 const summaryRate = computed(() => {
-  const summary = runData.value?.summary
+  const summary = runSummary.value?.summary
   if (!summary || !summary.total) {
     return '0.0%'
   }
   return `${((summary.success / summary.total) * 100).toFixed(1)}%`
 })
 
-const aggregate = computed(() => runData.value?.aggregate_metrics || {})
+const aggregate = computed(() => runFinal.value?.aggregate_metrics || {})
 const aggregateNmr = computed(() => aggregate.value.nmr || {})
 const aggregateGpc = computed(() => aggregate.value.gpc || {})
 const aggregateIr = computed(() => aggregate.value.ir || {})
@@ -56,6 +60,30 @@ function formatMetric(value, digits = 2, suffix = '') {
     return 'N/A'
   }
   return `${Number(value).toFixed(digits)}${suffix}`
+}
+
+/**
+ * 打开任务详情页（新窗口）。
+ *
+ * Args:
+ *   taskId: 任务 ID。
+ */
+function openTaskDetail(taskId) {
+  if (!taskId) {
+    return
+  }
+  const detailUrl = router.resolve({ path: `/tasks/detail/${taskId}` }).href
+  window.open(detailUrl, '_blank')
+}
+
+/**
+ * 下载当前批次验收报告。
+ */
+function downloadReport() {
+  if (!runFinal.value?.run_id) {
+    return
+  }
+  window.open(buildAcceptanceReportUrl(runFinal.value.run_id), '_blank')
 }
 
 /**
@@ -95,6 +123,13 @@ async function startRun() {
   try {
     const data = await createAcceptanceRun(selectedTypes.value)
     activeRunId.value = data.run_id
+    runFinal.value = null
+    runSummary.value = {
+      run_id: data.run_id,
+      status: data.status || 'RUNNING',
+      summary: { total: 0, success: 0, failed: 0, progress: 0 },
+      report_path: null,
+    }
     await refreshRun()
     startPolling()
   } catch (error) {
@@ -116,9 +151,15 @@ async function refreshRun() {
   }
   try {
     const data = await getAcceptanceRun(activeRunId.value)
-    runData.value = data
+    runSummary.value = {
+      run_id: data.run_id,
+      status: data.status,
+      summary: data.summary,
+      report_path: data.report_path || null,
+    }
     if (data.status !== 'RUNNING') {
       stopPolling()
+      runFinal.value = data
     }
   } catch (error) {
     stopPolling()
@@ -190,9 +231,13 @@ onBeforeUnmount(() => {
             <template #header>
               <div class="card-header">执行控制</div>
             </template>
-            <el-form label-width="120px">
+            <el-form label-position="top">
               <el-form-item label="执行类型">
-                <el-select v-model="selectedTypes" multiple style="width: 100%">
+                <el-select
+                  v-model="selectedTypes"
+                  multiple
+                  style="width: 100%"
+                >
                   <el-option
                     v-for="item in typeOptions"
                     :key="item.value"
@@ -217,19 +262,28 @@ onBeforeUnmount(() => {
         </el-col>
       </el-row>
 
-      <el-card v-if="runData" shadow="never" class="block-card">
+      <el-card v-if="runSummary" shadow="never" class="block-card">
         <template #header>
-          <div class="card-header">运行结果（{{ runData.run_id }}）</div>
+          <div class="card-header">运行状态（{{ runSummary.run_id }}）</div>
         </template>
         <el-row :gutter="16" class="metrics-row">
-          <el-col :span="4"><el-statistic title="状态" :value="runData.status" /></el-col>
-          <el-col :span="4"><el-statistic title="总样本" :value="runData.summary.total" /></el-col>
-          <el-col :span="4"><el-statistic title="成功" :value="runData.summary.success" /></el-col>
-          <el-col :span="4"><el-statistic title="失败" :value="runData.summary.failed" /></el-col>
+          <el-col :span="4"><el-statistic title="状态" :value="runSummary.status" /></el-col>
+          <el-col :span="4"><el-statistic title="总样本" :value="runSummary.summary.total" /></el-col>
+          <el-col :span="4"><el-statistic title="成功" :value="runSummary.summary.success" /></el-col>
+          <el-col :span="4"><el-statistic title="失败" :value="runSummary.summary.failed" /></el-col>
           <el-col :span="4"><el-statistic title="成功率" :value="summaryRate" /></el-col>
-          <el-col :span="4"><el-statistic title="进度" :value="`${runData.summary.progress}%`" /></el-col>
+          <el-col :span="4"><el-statistic title="进度" :value="`${runSummary.summary.progress}%`" /></el-col>
         </el-row>
+        <el-progress :percentage="runSummary.summary.progress || 0" :stroke-width="14" />
+        <div class="running-tip" v-if="runSummary.status === 'RUNNING'">
+          运行中，完成后将一次性展示全部样本明细与指标汇总。
+        </div>
+      </el-card>
 
+      <el-card v-if="runFinal && runFinal.status !== 'RUNNING'" shadow="never" class="block-card">
+        <template #header>
+          <div class="card-header">运行结果（{{ runFinal.run_id }}）</div>
+        </template>
         <el-divider content-position="left">验收指标汇总</el-divider>
 
         <el-row :gutter="12" class="aggregate-row">
@@ -279,14 +333,21 @@ onBeforeUnmount(() => {
           </el-col>
         </el-row>
 
-        <div class="report-line">报告路径：{{ runData.report_path || '-' }}</div>
-        <el-table :data="runData.results || []" size="small" border max-height="420">
+        <div class="report-line">
+          <el-button type="primary" plain @click="downloadReport">下载批量验收报告</el-button>
+        </div>
+        <el-table :data="runFinal.results || []" size="small" border max-height="420">
           <el-table-column prop="spectrum_type" label="类型" width="90" />
           <el-table-column prop="sample_name" label="样本" min-width="220" />
           <el-table-column prop="status" label="状态" width="100" />
           <el-table-column prop="duration_seconds" label="耗时(s)" width="110" />
           <el-table-column prop="task_id" label="任务ID" min-width="240" />
           <el-table-column prop="error_message" label="错误信息" min-width="220" />
+          <el-table-column label="操作" width="110" fixed="right">
+            <template #default="scope">
+              <el-button link type="primary" @click="openTaskDetail(scope.row.task_id)">详情</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-card>
     </div>
@@ -323,6 +384,12 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 
+.running-tip {
+  margin-top: 10px;
+  color: #627089;
+  font-size: 13px;
+}
+
 .aggregate-row {
   margin-bottom: 12px;
 }
@@ -337,3 +404,6 @@ onBeforeUnmount(() => {
   color: #5f6d84;
 }
 </style>
+
+
+

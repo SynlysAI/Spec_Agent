@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from app.models.acceptance import (
     AcceptanceConfigData,
@@ -52,3 +55,24 @@ def get_acceptance_run(run_id: str) -> ApiResponse[AcceptanceRunData]:
         raise HTTPException(status_code=404, detail="run not found")
     return ApiResponse(code=0, message="ok", data=run_data)
 
+
+@router.get("/run/{run_id}/report")
+def download_acceptance_report(run_id: str) -> FileResponse:
+    """下载批量验收 Markdown 报告。
+
+    Args:
+        run_id: 批次运行 ID。
+    """
+    run_data = acceptance_service.get_run(run_id=run_id)
+    if not run_data:
+        raise HTTPException(status_code=404, detail="run not found")
+    if not run_data.report_path:
+        raise HTTPException(status_code=404, detail="report not found")
+    report_path = Path(run_data.report_path)
+    if not report_path.exists() or not report_path.is_file():
+        raise HTTPException(status_code=404, detail="report not found")
+    return FileResponse(
+        path=str(report_path),
+        filename=f"{run_id}.md",
+        media_type="text/markdown; charset=utf-8",
+    )

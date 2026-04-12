@@ -17,6 +17,7 @@ const previewLoading = ref(false)
 const previewData = ref(null)
 
 const structuredData = computed(() => resultData.value?.result?.structured_data || {})
+const resultMetadata = computed(() => resultData.value?.result?.metadata || {})
 const isNmrTask = computed(() => statusData.value?.task_type === 'nmr_analysis')
 const isGpcTask = computed(() => statusData.value?.task_type === 'gpc_analysis')
 const isIrRamanTask = computed(() =>
@@ -114,7 +115,11 @@ const previewAxisConfig = computed(() => {
     inverseXAxis: false,
   }
 })
-const structuredTreeData = computed(() => buildJsonTreeData(structuredData.value))
+const jsonPanelData = computed(() => ({
+  structured_data: structuredData.value || {},
+  metadata: resultMetadata.value || {},
+}))
+const structuredTreeData = computed(() => buildJsonTreeData(jsonPanelData.value))
 
 /**
  * 构建可访问的图片 URL。

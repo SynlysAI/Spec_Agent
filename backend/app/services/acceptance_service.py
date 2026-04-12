@@ -459,6 +459,17 @@ class AcceptanceService:
         ir_items = _slice("ir")
         raman_items = _slice("raman")
 
+        nmr_baseline_rmse: list[float] = []
+        nmr_solvent_ppm_errors: list[float] = []
+        for item in nmr_items:
+            metrics = item.metrics or {}
+            nmr_baseline_rmse.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("baseline_rmse", [])) if value is not None]
+            )
+            nmr_solvent_ppm_errors.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("solvent_ppm_errors", [])) if value is not None]
+            )
+
         gpc_mn_rd: list[float] = []
         gpc_mw_rd: list[float] = []
         gpc_pdi_rd: list[float] = []
@@ -479,12 +490,16 @@ class AcceptanceService:
             "nmr": {
                 "sample_count": len(nmr_items),
                 "task_success_rate": _rate(nmr_items),
-                "baseline_rmse_count": 0,
-                "baseline_rmse_avg": None,
-                "baseline_rmse_pass_rate": None,
-                "solvent_ppm_error_count": 0,
-                "solvent_ppm_error_avg": None,
-                "solvent_ppm_error_pass_rate": None,
+                "baseline_rmse_count": len(nmr_baseline_rmse),
+                "baseline_rmse_avg": AcceptanceService._avg(nmr_baseline_rmse),
+                "baseline_rmse_pass_rate": AcceptanceService._pass_rate(
+                    nmr_baseline_rmse, thresholds["nmr_baseline_rmse"]
+                ),
+                "solvent_ppm_error_count": len(nmr_solvent_ppm_errors),
+                "solvent_ppm_error_avg": AcceptanceService._avg(nmr_solvent_ppm_errors),
+                "solvent_ppm_error_pass_rate": AcceptanceService._pass_rate(
+                    nmr_solvent_ppm_errors, thresholds["nmr_solvent_ppm_error"]
+                ),
             },
             "gpc": {
                 "sample_count": len(gpc_items),
@@ -534,6 +549,15 @@ class AcceptanceService:
         qa_metrics = metadata.get("qa_metrics", {}) if isinstance(metadata, dict) else {}
         if isinstance(qa_metrics, dict) and qa_metrics:
             metrics: dict[str, Any] = {}
+            if spectrum_type == "nmr":
+                baseline_rmse = self._safe_float(qa_metrics.get("baseline_rmse"))
+                if baseline_rmse is not None:
+                    metrics["baseline_rmse"] = [baseline_rmse]
+                solvent_ppm_errors = qa_metrics.get("solvent_ppm_errors")
+                if isinstance(solvent_ppm_errors, list):
+                    metrics["solvent_ppm_errors"] = [
+                        value for value in (self._safe_float(v) for v in solvent_ppm_errors) if value is not None
+                    ]
             for key in ("mn_rd_pct", "mw_rd_pct", "pdi_rd_pct"):
                 val = self._safe_float(qa_metrics.get(key))
                 if val is not None:
@@ -648,11 +672,55 @@ class AcceptanceService:
             f"- 失败: {run_data.summary.failed}",
             f"- 总耗时(秒): {run_data.summary.duration_seconds:.1f}",
             "",
-            "## 样本明细",
+            "## 验收指标汇总",
             "",
-            "| 类型 | 样本 | 状态 | 耗时(s) | 任务ID | 错误 |",
-            "| --- | --- | --- | --- | --- | --- |",
         ]
+        aggregate_metrics = run_data.aggregate_metrics or {}
+        nmr_metrics = aggregate_metrics.get("nmr", {}) if isinstance(aggregate_metrics, dict) else {}
+        gpc_metrics = aggregate_metrics.get("gpc", {}) if isinstance(aggregate_metrics, dict) else {}
+        ir_metrics = aggregate_metrics.get("ir", {}) if isinstance(aggregate_metrics, dict) else {}
+        raman_metrics = aggregate_metrics.get("raman", {}) if isinstance(aggregate_metrics, dict) else {}
+
+        lines.extend(
+            [
+                "### NMR（可自动计算）",
+                f"- 样本数: {nmr_metrics.get('sample_count', 0)}",
+                f"- 任务成功率: {self._format_percent(nmr_metrics.get('task_success_rate'))}",
+                f"- 基线RMSE均值: {self._format_number(nmr_metrics.get('baseline_rmse_avg'), 4)}",
+                f"- 基线达标率: {self._format_percent(nmr_metrics.get('baseline_rmse_pass_rate'))}",
+                f"- 溶剂峰ppm误差均值: {self._format_number(nmr_metrics.get('solvent_ppm_error_avg'), 4)}",
+                f"- 溶剂峰达标率: {self._format_percent(nmr_metrics.get('solvent_ppm_error_pass_rate'))}",
+                "",
+                "### GPC（分子量偏差验收）",
+                f"- 样本数: {gpc_metrics.get('sample_count', 0)}",
+                f"- 任务成功率: {self._format_percent(gpc_metrics.get('task_success_rate'))}",
+                f"- Mn偏差均值: {self._format_number(gpc_metrics.get('mn_rd_avg'), 2, '%')} (n={gpc_metrics.get('mn_rd_count', 0)})",
+                f"- Mn达标率: {self._format_percent(gpc_metrics.get('mn_rd_pass_rate'))}",
+                f"- Mw偏差均值: {self._format_number(gpc_metrics.get('mw_rd_avg'), 2, '%')} (n={gpc_metrics.get('mw_rd_count', 0)})",
+                f"- Mw达标率: {self._format_percent(gpc_metrics.get('mw_rd_pass_rate'))}",
+                f"- PDI偏差均值: {self._format_number(gpc_metrics.get('pdi_rd_avg'), 2, '%')} (n={gpc_metrics.get('pdi_rd_count', 0)})",
+                f"- PDI达标率: {self._format_percent(gpc_metrics.get('pdi_rd_pass_rate'))}",
+                "",
+                "### IR（标签指标）",
+                f"- 样本数: {ir_metrics.get('sample_count', 0)}",
+                f"- 任务成功率: {self._format_percent(ir_metrics.get('task_success_rate'))}",
+                f"- 已标注样本: {ir_metrics.get('labeled_count', 0)}",
+                f"- Micro-F1: {self._format_number(ir_metrics.get('micro_f1'), 4)}",
+                f"- 样本平均F1: {self._format_number(ir_metrics.get('sample_f1_avg'), 4)}",
+                "",
+                "### Raman（标签指标）",
+                f"- 样本数: {raman_metrics.get('sample_count', 0)}",
+                f"- 任务成功率: {self._format_percent(raman_metrics.get('task_success_rate'))}",
+                f"- 已标注样本: {raman_metrics.get('labeled_count', 0)}",
+                f"- Top1准确率: {self._format_percent(raman_metrics.get('top1_accuracy'))}",
+                f"- Recall@3: {self._format_percent(raman_metrics.get('recall_at_3'))}",
+                "",
+                "## 样本明细",
+                "",
+                "| 类型 | 样本 | 状态 | 耗时(s) | 任务ID | 错误 |",
+                "| --- | --- | --- | --- | --- | --- |",
+            ]
+        )
         for item in run_data.results:
             lines.append(
                 f"| {item.spectrum_type} | {item.sample_name} | {item.status} | "
@@ -660,6 +728,22 @@ class AcceptanceService:
             )
         file_path.write_text("\n".join(lines), encoding="utf-8")
         return file_path
+
+    @staticmethod
+    def _format_number(value: Any, digits: int, suffix: str = "") -> str:
+        """格式化数值输出，空值时返回 N/A。"""
+        parsed = AcceptanceService._safe_float(value)
+        if parsed is None:
+            return "N/A"
+        return f"{parsed:.{digits}f}{suffix}"
+
+    @staticmethod
+    def _format_percent(value: Any) -> str:
+        """格式化百分比输出，空值时返回 N/A。"""
+        parsed = AcceptanceService._safe_float(value)
+        if parsed is None:
+            return "N/A"
+        return f"{parsed:.1f}%"
 
 
 acceptance_service = AcceptanceService()

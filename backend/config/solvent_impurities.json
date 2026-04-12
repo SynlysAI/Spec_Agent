@@ -1,0 +1,258 @@
+{
+    "1H": {
+        "CDCl3": [
+            {
+                "name": "Solvent (CHCl3)",
+                "ppm": 7.26,
+                "type": "Solvent"
+            },
+            {
+                "name": "Water",
+                "ppm": 1.56,
+                "type": "Impurity"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            },
+            {
+                "name": "Acetone",
+                "ppm": 2.17,
+                "type": "Impurity"
+            },
+            {
+                "name": "Ethyl Acetate (CH3CO)",
+                "ppm": 2.05,
+                "type": "Impurity"
+            },
+            {
+                "name": "Ethyl Acetate (OCH2)",
+                "ppm": 4.12,
+                "type": "Impurity"
+            },
+            {
+                "name": "Ethyl Acetate (CH3)",
+                "ppm": 1.26,
+                "type": "Impurity"
+            },
+            {
+                "name": "Methanol (CH3)",
+                "ppm": 3.49,
+                "type": "Impurity"
+            },
+            {
+                "name": "Diethyl Ether (CH3)",
+                "ppm": 1.21,
+                "type": "Impurity"
+            },
+            {
+                "name": "Diethyl Ether (CH2)",
+                "ppm": 3.48,
+                "type": "Impurity"
+            },
+            {
+                "name": "Hexane (CH3)",
+                "ppm": 0.88,
+                "type": "Impurity"
+            },
+            {
+                "name": "Hexane (CH2)",
+                "ppm": 1.26,
+                "type": "Impurity"
+            },
+            {
+                "name": "DMSO",
+                "ppm": 2.62,
+                "type": "Impurity"
+            }
+        ],
+        "DMSO": [
+            {
+                "name": "Solvent (DMSO)",
+                "ppm": 2.5,
+                "type": "Solvent"
+            },
+            {
+                "name": "Water",
+                "ppm": 3.33,
+                "type": "Impurity"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            },
+            {
+                "name": "Ethyl Acetate (CH3CO)",
+                "ppm": 1.99,
+                "type": "Impurity"
+            },
+            {
+                "name": "Ethyl Acetate (OCH2)",
+                "ppm": 4.03,
+                "type": "Impurity"
+            },
+            {
+                "name": "Ethyl Acetate (CH3)",
+                "ppm": 1.17,
+                "type": "Impurity"
+            },
+            {
+                "name": "Diethyl Ether (CH3)",
+                "ppm": 1.09,
+                "type": "Impurity"
+            },
+            {
+                "name": "Diethyl Ether (CH2)",
+                "ppm": 3.38,
+                "type": "Impurity"
+            }
+        ],
+        "MeOD": [
+            {
+                "name": "Solvent (CHD2OD)",
+                "ppm": 3.31,
+                "type": "Solvent"
+            },
+            {
+                "name": "Water",
+                "ppm": 4.87,
+                "type": "Impurity"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            },
+            {
+                "name": "Ethyl Acetate (CH3CO)",
+                "ppm": 2.01,
+                "type": "Impurity"
+            },
+            {
+                "name": "Ethyl Acetate (OCH2)",
+                "ppm": 4.09,
+                "type": "Impurity"
+            },
+            {
+                "name": "Ethyl Acetate (CH3)",
+                "ppm": 1.24,
+                "type": "Impurity"
+            }
+        ],
+        "Acetone": [
+            {
+                "name": "Solvent (Acetone-d5)",
+                "ppm": 2.05,
+                "type": "Solvent"
+            },
+            {
+                "name": "Water",
+                "ppm": 2.84,
+                "type": "Impurity"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ],
+        "D2O": [
+            {
+                "name": "Solvent (HDO)",
+                "ppm": 4.8,
+                "type": "Solvent"
+            },
+            {
+                "name": "DSS / TSP",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ]
+    },
+    "13C": {
+        "CDCl3": [
+            {
+                "name": "Solvent (CDCl3)",
+                "ppm": 77.16,
+                "type": "Solvent"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ],
+        "DMSO": [
+            {
+                "name": "Solvent (DMSO)",
+                "ppm": 39.52,
+                "type": "Solvent"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ],
+        "MeOD": [
+            {
+                "name": "Solvent (CD3OD)",
+                "ppm": 49.0,
+                "type": "Solvent"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ],
+        "Acetone": [
+            {
+                "name": "Solvent (Acetone-d6 CH3)",
+                "ppm": 29.84,
+                "type": "Solvent"
+            },
+            {
+                "name": "Solvent (Acetone-d6 C=O)",
+                "ppm": 206.26,
+                "type": "Solvent"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ],
+        "C6D6": [
+            {
+                "name": "Solvent (C6D6)",
+                "ppm": 128.06,
+                "type": "Solvent"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ],
+        "CD3CN": [
+            {
+                "name": "Solvent (CD3CN CH3)",
+                "ppm": 1.32,
+                "type": "Solvent"
+            },
+            {
+                "name": "Solvent (CD3CN CN)",
+                "ppm": 118.26,
+                "type": "Solvent"
+            },
+            {
+                "name": "TMS",
+                "ppm": 0.0,
+                "type": "TMS"
+            }
+        ]
+    }
+}

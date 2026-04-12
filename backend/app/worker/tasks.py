@@ -323,6 +323,18 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
         integration_method=integration_method_label,
         ppm_offset=float(params.get("ppm_offset", 0.0) or 0.0),
     )
+    qa_metrics: dict[str, Any] = {}
+    try:
+        nmr_agent_module = importlib.import_module("agents.langraph_nmr_agent")
+        compute_nmr_qa_metrics = getattr(nmr_agent_module, "_compute_nmr_qa_metrics")
+        qa_metrics = compute_nmr_qa_metrics(
+            input_path=nmr_folder_path,
+            structured_data={"nmr_results": nmr_results, "summary_rows": summary_rows},
+            baseline_degree=int(params.get("baseline_degree", 3) or 3),
+        )
+    except Exception:
+        qa_metrics = {}
+
     return {
         "structured_data": _sanitize_nmr_structured_data({"nmr_results": nmr_results, "summary_rows": summary_rows}),
         "text_report": text_report,
@@ -330,6 +342,7 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
             "spectrum_type": "nmr",
             "input_path": nmr_folder_path,
             "internal_standard_idx": standard_idx,
+            "qa_metrics": qa_metrics,
         }),
     }
 

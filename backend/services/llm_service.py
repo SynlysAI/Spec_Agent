@@ -1,10 +1,11 @@
 """
-LLM 客户端与兼容入口。
+LLM 客户端服务模块。
 
-从环境变量与 `config.GLOBAL_CONFIG` 中的 ``llm`` 段读取参数，提供统一的
-`get_llm_config` / `get_llm_client` / `create_llm_client`。
-注意：须先导入 `config`（会加载 `.env`），再使用本模块。
+从环境变量与 ``config.GLOBAL_CONFIG`` 的 ``llm`` 配置段读取参数，
+提供统一的 ``get_llm_config``、``get_llm_client``、``create_llm_client``。
 """
+
+from __future__ import annotations
 
 from functools import lru_cache
 
@@ -14,27 +15,28 @@ from config import GLOBAL_CONFIG, setup_logging
 
 
 def get_llm_config() -> dict:
-    """返回当前 LLM 相关配置的浅拷贝，便于调用方安全修改副本。
+    """返回当前 LLM 配置的浅拷贝。
 
     Returns:
-        包含 model、api_key、base_url、temperature、max_tokens、timeout、max_retries
-        等键的字典，来源为 ``GLOBAL_CONFIG["llm"]``。
+        包含 model、api_key、base_url、temperature、max_tokens、timeout、
+        max_retries 等键的配置字典。
     """
     return GLOBAL_CONFIG["llm"].copy()
 
 
 @lru_cache(maxsize=1)
 def get_llm_client() -> ChatOpenAI:
-    """获取进程内单例的 ChatOpenAI 客户端（带缓存）。
+    """获取进程内单例 ChatOpenAI 客户端。
 
     Returns:
-        根据 ``get_llm_config()`` 构造的 ``ChatOpenAI`` 实例。
+        根据当前 LLM 配置创建的 ChatOpenAI 实例。
     """
     logger = setup_logging(logger_name="spec_agent")
     llm_settings = get_llm_config()
 
     if not llm_settings.get("api_key"):
         logger.warning("LLM API Key 未配置，模型调用可能失败")
+
     client = ChatOpenAI(
         model=llm_settings["model"],
         api_key=llm_settings["api_key"],
@@ -49,13 +51,13 @@ def get_llm_client() -> ChatOpenAI:
 
 
 def create_llm_client(**overrides) -> ChatOpenAI:
-    """创建 LLM 客户端；无关键字参数时返回与 ``get_llm_client()`` 相同的缓存实例。
+    """创建 LLM 客户端。
 
     Args:
-        **overrides: 覆盖 ``get_llm_config()`` 中的任意键，例如 ``model=``、``temperature=``。
+        **overrides: 对默认 LLM 配置的覆盖参数。
 
     Returns:
-        ``ChatOpenAI`` 实例；无 overrides 时为单例，有 overrides 时为新建实例。
+        ChatOpenAI 实例；未传覆盖参数时返回缓存单例。
     """
     if not overrides:
         return get_llm_client()
@@ -74,12 +76,9 @@ def create_llm_client(**overrides) -> ChatOpenAI:
     )
 
 
-# 兼容旧代码：模块级默认模型实例（延迟失败，避免非 LLM 场景导入中断）
+# 兼容旧逻辑：模块级默认模型实例（若初始化失败则保持为 None）。
 try:
     CHAT_MODEL = get_llm_client()
 except Exception:
     CHAT_MODEL = None
 
-
-if __name__ == "__main__":
-    print(CHAT_MODEL.invoke("你好"))

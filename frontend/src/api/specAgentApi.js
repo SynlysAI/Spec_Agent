@@ -216,3 +216,17 @@ export async function getAcceptanceRun(runId) {
   const response = await apiClient.get(`/acceptance/run/${runId}`)
   return unwrapResponse(response)
 }
+
+/**
+ * 构建批量验收报告下载地址。
+ *
+ * Args:
+ *   runId: 批次运行 ID。
+ *
+ * Returns:
+ *   可直接打开下载的 URL。
+ */
+export function buildAcceptanceReportUrl(runId) {
+  const base = String(apiClient.defaults.baseURL || '').replace(/\/+$/, '')
+  return `${base}/acceptance/run/${runId}/report`
+}

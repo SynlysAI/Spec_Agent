@@ -17,6 +17,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const sidebarCollapsed = ref(false)
+const currentDate = ref(formatCurrentDate())
 
 const activeMenu = computed(() => {
   const current = route.path
@@ -56,6 +57,20 @@ function handleMenuSelect(index) {
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
+
+/**
+ * 生成当前日期字符串（YYYY-MM-DD）。
+ *
+ * Returns:
+ *   当前日期字符串。
+ */
+function formatCurrentDate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 </script>
 
 <template>
@@ -65,7 +80,7 @@ function toggleSidebar() {
         <div class="brand-logo">S</div>
         <div v-if="!sidebarCollapsed" class="brand-text">
           <div class="brand-title">Spec Agent</div>
-          <div class="brand-subtitle">实验谱图智能平台</div>
+          <div class="brand-subtitle">谱图智能分析平台</div>
         </div>
       </div>
       <el-menu
@@ -134,7 +149,7 @@ function toggleSidebar() {
           <span>开放平台</span>
         </div>
         <div class="header-right">
-          <span class="header-date">2026-04-10</span>
+          <span class="header-date">{{ currentDate }}</span>
           <el-avatar size="small">管</el-avatar>
           <span>实验室管理员</span>
         </div>
