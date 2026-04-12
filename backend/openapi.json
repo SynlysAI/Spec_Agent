@@ -466,6 +466,132 @@
           }
         }
       }
+    },
+    "/api/v1/nmrserver/forward": {
+      "post": {
+        "tags": [
+          "nmrserver"
+        ],
+        "summary": "Nmrserver Forward",
+        "description": "NMRServer 正向预测接口。",
+        "operationId": "nmrserver_forward_api_v1_nmrserver_forward_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NmrServerForwardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_NmrServerResultData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nmrserver/reverse": {
+      "post": {
+        "tags": [
+          "nmrserver"
+        ],
+        "summary": "Nmrserver Reverse",
+        "description": "NMRServer 反向预测接口。",
+        "operationId": "nmrserver_reverse_api_v1_nmrserver_reverse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NmrServerReverseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_NmrServerResultData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nmrserver/search": {
+      "post": {
+        "tags": [
+          "nmrserver"
+        ],
+        "summary": "Nmrserver Search",
+        "description": "NMRServer 数据库搜索接口。",
+        "operationId": "nmrserver_search_api_v1_nmrserver_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NmrServerSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse_NmrServerResultData_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -510,6 +636,47 @@
         },
         "type": "object",
         "title": "ApiResponse[CreateTaskData]"
+      },
+      "ApiResponse_NmrServerResultData_": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "业务状态码",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "响应消息",
+            "default": "ok"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NmrServerResultData"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "响应数据"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "请求追踪ID"
+          }
+        },
+        "type": "object",
+        "title": "ApiResponse[NmrServerResultData]"
       },
       "ApiResponse_TaskArtifactsData_": {
         "properties": {
@@ -1030,6 +1197,129 @@
         "type": "object",
         "title": "IrRamanTaskParams",
         "description": "IR/Raman 任务参数模型。\n\n函数名称: IrRamanTaskParams\n参数说明:\n- spectype: 光谱类型，ir 或 raman。\n- mode: 分析模式，greedy_decode/beam_search/retrieval/function_groups。\n- k: 候选数量，beam_search/retrieval 有效。\n- x0/x1: 分析范围。\n- transmittance: IR 是否执行透射率转吸光度。\n- device: 推理设备，cpu/cuda/auto。"
+      },
+      "NmrServerForwardRequest": {
+        "properties": {
+          "smiles_input": {
+            "type": "string",
+            "title": "Smiles Input",
+            "description": "多行 SMILES 输入文本"
+          }
+        },
+        "type": "object",
+        "required": [
+          "smiles_input"
+        ],
+        "title": "NmrServerForwardRequest",
+        "description": "NMRServer 正向预测请求模型。\n\nArgs:\n    smiles_input: 多行 SMILES 输入文本，每行一个分子。"
+      },
+      "NmrServerResultData": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "NmrServerResultData",
+        "description": "NMRServer 统一返回模型。\n\nArgs:\n    items: 结果项列表。"
+      },
+      "NmrServerReverseRequest": {
+        "properties": {
+          "h_shifts_input": {
+            "type": "string",
+            "title": "H Shifts Input",
+            "description": "氢谱化学位移输入",
+            "default": ""
+          },
+          "h_split_input": {
+            "type": "string",
+            "title": "H Split Input",
+            "description": "峰裂分类型输入",
+            "default": ""
+          },
+          "c_shifts_input": {
+            "type": "string",
+            "title": "C Shifts Input",
+            "description": "碳谱化学位移输入",
+            "default": ""
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula",
+            "description": "可选分子式约束",
+            "default": ""
+          },
+          "allowed_elements": {
+            "type": "string",
+            "title": "Allowed Elements",
+            "description": "可选元素限制",
+            "default": ""
+          },
+          "candidates": {
+            "type": "string",
+            "title": "Candidates",
+            "description": "可选候选分子",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "NmrServerReverseRequest",
+        "description": "NMRServer 反向预测请求模型。\n\nArgs:\n    h_shifts_input: 氢谱化学位移输入字符串。\n    h_split_input: 峰裂分类型输入字符串。\n    c_shifts_input: 碳谱化学位移输入字符串。\n    formula: 可选分子式约束。\n    allowed_elements: 可选元素限制字符串。\n    candidates: 可选候选分子 SMILES 字符串。"
+      },
+      "NmrServerSearchRequest": {
+        "properties": {
+          "h_shifts_input": {
+            "type": "string",
+            "title": "H Shifts Input",
+            "description": "氢谱化学位移输入",
+            "default": ""
+          },
+          "h_split_input": {
+            "type": "string",
+            "title": "H Split Input",
+            "description": "峰裂分类型输入",
+            "default": ""
+          },
+          "c_shifts_input": {
+            "type": "string",
+            "title": "C Shifts Input",
+            "description": "碳谱化学位移输入",
+            "default": ""
+          },
+          "num_search": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 10.0,
+            "title": "Num Search",
+            "description": "搜索候选数量",
+            "default": 500
+          },
+          "topk": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Topk",
+            "description": "返回结果数量",
+            "default": 10
+          },
+          "allowed_elements": {
+            "type": "string",
+            "title": "Allowed Elements",
+            "description": "可选元素限制",
+            "default": "C,H,N,O"
+          }
+        },
+        "type": "object",
+        "title": "NmrServerSearchRequest",
+        "description": "NMRServer 数据库搜索请求模型。\n\nArgs:\n    h_shifts_input: 氢谱化学位移输入字符串。\n    h_split_input: 峰裂分类型输入字符串。\n    c_shifts_input: 碳谱化学位移输入字符串。\n    num_search: 搜索候选数量。\n    topk: 返回结果数量。\n    allowed_elements: 可选元素限制字符串。"
       },
       "NmrTaskParams": {
         "properties": {

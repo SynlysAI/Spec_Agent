@@ -6,6 +6,7 @@ import {
   Document,
   Files,
   Histogram,
+  ChatLineRound,
   Monitor,
   Operation,
   SetUp,
@@ -26,7 +27,7 @@ const activeMenu = computed(() => {
     return current
   }
   if (current.startsWith('/tools/')) {
-    return '/tools/nmrserver'
+    return current
   }
   return current
 })
@@ -97,12 +98,17 @@ function toggleSidebar() {
           <el-icon><Histogram /></el-icon>
           <span>任务中心</span>
         </el-menu-item>
+        <el-menu-item index="/dialogue">
+          <el-icon><ChatLineRound /></el-icon>
+          <span>问答对话</span>
+        </el-menu-item>
         <el-sub-menu index="/tools">
           <template #title>
             <el-icon><SetUp /></el-icon>
             <span>工具服务</span>
           </template>
           <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
+          <el-menu-item index="/tools/acceptance">批量验收测试</el-menu-item>
         </el-sub-menu>
         <el-menu-item index="/docs">
           <el-icon><Document /></el-icon>

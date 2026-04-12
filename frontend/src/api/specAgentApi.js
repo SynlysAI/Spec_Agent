@@ -134,3 +134,85 @@ export async function uploadFile(file, bizType) {
     filename: normalizedFileName,
   }
 }
+
+/**
+ * 查询问答分析类型列表。
+ *
+ * Returns:
+ *   分析类型列表数据。
+ */
+export async function listDialogueAnalysisTypes() {
+  const response = await apiClient.get('/dialogue/analysis-types')
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询问答报告列表。
+ *
+ * Args:
+ *   analysisType: 分析类型编码。
+ *
+ * Returns:
+ *   报告列表数据。
+ */
+export async function listDialogueReports(analysisType) {
+  const response = await apiClient.get('/dialogue/reports', {
+    params: { analysis_type: analysisType, limit: 30 },
+  })
+  return unwrapResponse(response)
+}
+
+/**
+ * 执行问答请求。
+ *
+ * Args:
+ *   payload: 问答请求参数。
+ *
+ * Returns:
+ *   问答响应数据。
+ */
+export async function dialogueChat(payload) {
+  const response = await apiClient.post('/dialogue/chat', payload)
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询验收配置摘要。
+ *
+ * Returns:
+ *   验收配置数据。
+ */
+export async function getAcceptanceConfig() {
+  const response = await apiClient.get('/acceptance/config')
+  return unwrapResponse(response)
+}
+
+/**
+ * 启动批量验收运行。
+ *
+ * Args:
+ *   spectrumTypes: 谱图类型列表，为空表示全量。
+ *
+ * Returns:
+ *   运行创建结果。
+ */
+export async function createAcceptanceRun(spectrumTypes) {
+  const response = await apiClient.post('/acceptance/run', {
+    spectrum_types: spectrumTypes,
+  })
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询批量验收运行状态。
+ *
+ * Args:
+ *   runId: 批次运行 ID。
+ *
+ * Returns:
+ *   批次运行数据。
+ */
+export async function getAcceptanceRun(runId) {
+  const response = await apiClient.get(`/acceptance/run/${runId}`)
+  return unwrapResponse(response)
+}

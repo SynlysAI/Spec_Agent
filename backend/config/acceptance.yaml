@@ -1,0 +1,22 @@
+samples:
+  nmr:
+    dirs:
+      - E:/spectrum_files/acceptance/nmr
+  gpc:
+    dirs:
+      - E:/spectrum_files/acceptance/gpc
+    patterns:
+      - "*.arw"
+  ir:
+    dirs:
+      - E:/spectrum_files/acceptance/ir
+    patterns:
+      - "*.txt"
+      - "*.csv"
+  raman:
+    dirs:
+      - E:/spectrum_files/acceptance/raman
+    patterns:
+      - "*.txt"
+      - "*.csv"
+
