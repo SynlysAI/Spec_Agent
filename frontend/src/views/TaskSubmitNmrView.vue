@@ -1,9 +1,11 @@
 ﻿<script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import JSZip from 'jszip'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { createNmrTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
+const router = useRouter()
 const submitting = ref(false)
 const folderInputRef = ref(null)
 const selectedZipFile = ref(null)
@@ -11,25 +13,66 @@ const uploadedFileId = ref('')
 const uploadedFilename = ref('')
 const lastTaskId = ref('')
 
+const NMR_PEAK_PRESETS = {
+  '1H': {
+    threshold: 0.01,
+    minDistance: 0.3,
+    minProminence: 0.01,
+    smoothWindow: 5,
+  },
+  '13C': {
+    threshold: 0.05,
+    minDistance: 1.0,
+    minProminence: 0.03,
+    smoothWindow: 11,
+  },
+}
+
 const form = reactive({
   inputMode: 'upload',
   inputPath: '',
   nucleus: '1H',
-  threshold: 0.01,
-  minDistance: 0.3,
-  minProminence: 0.01,
+  threshold: NMR_PEAK_PRESETS['1H'].threshold,
+  minDistance: NMR_PEAK_PRESETS['1H'].minDistance,
+  minProminence: NMR_PEAK_PRESETS['1H'].minProminence,
   widthMultiplier: 1.0,
   baselineDegree: 3,
-  smoothWindow: 5,
+  smoothWindow: NMR_PEAK_PRESETS['1H'].smoothWindow,
   detectionRangeMode: 'full',
   detectionRangeMin: null,
   detectionRangeMax: null,
-  ppmOffset: 0.0,
+  ppmOffsetMode: 'auto',
+  ppmOffsetManual: 0.0,
   integrationMethod: 'voigt',
   internalStandardPolicy: 'auto',
   internalStandardPrefer: ['solvent', 'tms'],
   priority: 5,
 })
+
+/**
+ * 根据核种应用默认峰检测参数。
+ *
+ * Args:
+ *   nucleus: 核种类型，支持 1H / 13C。
+ */
+function applyNucleusPreset(nucleus) {
+  const preset = NMR_PEAK_PRESETS[nucleus]
+  if (!preset) {
+    return
+  }
+  form.threshold = preset.threshold
+  form.minDistance = preset.minDistance
+  form.minProminence = preset.minProminence
+  form.smoothWindow = preset.smoothWindow
+}
+
+watch(
+  () => form.nucleus,
+  (nucleus) => {
+    applyNucleusPreset(nucleus)
+  },
+  { immediate: true },
+)
 
 /**
  * 打开目录选择器。
@@ -163,7 +206,8 @@ async function submitTask() {
         form.detectionRangeMode === 'custom' ? Number(form.detectionRangeMin) : null,
       detection_range_max:
         form.detectionRangeMode === 'custom' ? Number(form.detectionRangeMax) : null,
-      ppm_offset: Number(form.ppmOffset),
+      ppm_offset:
+        form.ppmOffsetMode === 'manual' ? Number(form.ppmOffsetManual || 0) : 0.0,
       integration_method: form.integrationMethod,
       internal_standard_policy: form.internalStandardPolicy,
       internal_standard_prefer: form.internalStandardPrefer,
@@ -184,6 +228,16 @@ async function submitTask() {
   } finally {
     submitting.value = false
   }
+}
+
+/**
+ * 跳转到任务详情页。
+ */
+function goTaskDetail() {
+  if (!lastTaskId.value) {
+    return
+  }
+  router.push(`/tasks/detail/${lastTaskId.value}`)
 }
 </script>
 
@@ -237,7 +291,7 @@ async function submitTask() {
         <el-form-item label="最小峰间距">
           <el-input-number v-model="form.minDistance" :precision="3" :step="0.1" />
         </el-form-item>
-        <el-form-item label="最小显著性">
+        <el-form-item label="最小峰高阈值">
           <el-input-number v-model="form.minProminence" :precision="4" :step="0.005" />
         </el-form-item>
         <el-form-item label="峰宽倍率">
@@ -263,8 +317,14 @@ async function submitTask() {
         </el-form-item>
 
         <el-divider content-position="left">积分与内标</el-divider>
-        <el-form-item label="ppm 偏移校正">
-          <el-input-number v-model="form.ppmOffset" :precision="3" :step="0.01" />
+        <el-form-item label="位移校正方式">
+          <el-radio-group v-model="form.ppmOffsetMode">
+            <el-radio value="auto">自动校正（按 TMS）</el-radio>
+            <el-radio value="manual">手动位移校正</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="form.ppmOffsetMode === 'manual'" label="手动校正值（ppm）">
+          <el-input-number v-model="form.ppmOffsetManual" :precision="3" :step="0.01" />
         </el-form-item>
         <el-form-item label="积分方法">
           <el-radio-group v-model="form.integrationMethod">
@@ -297,8 +357,12 @@ async function submitTask() {
         :closable="false"
         show-icon
         :title="`任务创建成功：${lastTaskId}`"
-        description="可在任务中心查看进度和结果。"
-      />
+      >
+        <p>
+          可在任务中心查看进度和结果，
+          <el-link type="primary" @click="goTaskDetail">点击查看任务详情</el-link>
+        </p>
+      </el-alert>
     </div>
   </div>
 </template>

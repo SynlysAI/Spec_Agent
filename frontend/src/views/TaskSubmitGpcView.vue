@@ -1,8 +1,10 @@
 ﻿<script setup>
 import { reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createGpcTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
+const router = useRouter()
 const submitting = ref(false)
 const selectedUploadFile = ref(null)
 const uploadedFileId = ref('')
@@ -136,6 +138,16 @@ async function submitTask() {
     submitting.value = false
   }
 }
+
+/**
+ * 跳转到任务详情页。
+ */
+function goTaskDetail() {
+  if (!lastTaskId.value) {
+    return
+  }
+  router.push(`/tasks/detail/${lastTaskId.value}`)
+}
 </script>
 
 <template>
@@ -210,8 +222,12 @@ async function submitTask() {
         :closable="false"
         show-icon
         :title="`任务创建成功：${lastTaskId}`"
-        description="可在任务中心查看进度和结果。"
-      />
+      >
+        <p>
+          可在任务中心查看进度和结果，
+          <el-link type="primary" @click="goTaskDetail">点击查看任务详情</el-link>
+        </p>
+      </el-alert>
     </div>
   </div>
 </template>

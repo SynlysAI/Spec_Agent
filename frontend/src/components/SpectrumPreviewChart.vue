@@ -41,6 +41,17 @@ let resizeObserver = null
  */
 function buildOption() {
   const lineData = props.xValues.map((x, idx) => [Number(x), Number(props.yValues[idx])])
+  const xNumbers = lineData.map((item) => item[0]).filter((item) => Number.isFinite(item))
+  let xMin = null
+  let xMax = null
+  if (xNumbers.length > 0) {
+    xMin = Math.min(...xNumbers)
+    xMax = Math.max(...xNumbers)
+    if (xMin === xMax) {
+      xMin -= 1
+      xMax += 1
+    }
+  }
 
   return {
     title: {
@@ -69,6 +80,8 @@ function buildOption() {
       type: 'value',
       name: props.xAxisName,
       inverse: Boolean(props.inverseXAxis),
+      min: xMin,
+      max: xMax,
       nameLocation: 'middle',
       nameGap: 26,
       splitLine: { lineStyle: { color: '#ecf2fb' } },

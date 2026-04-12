@@ -8,7 +8,7 @@ import {
   Histogram,
   Monitor,
   Operation,
-  Tools,
+  SetUp,
   Fold,
   Expand,
 } from '@element-plus/icons-vue'
@@ -99,7 +99,7 @@ function toggleSidebar() {
         </el-menu-item>
         <el-sub-menu index="/tools">
           <template #title>
-            <el-icon><Tools /></el-icon>
+            <el-icon><SetUp /></el-icon>
             <span>工具服务</span>
           </template>
           <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
