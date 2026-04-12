@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
 import { getTaskArtifacts, getTaskResult, getTaskStatus, previewSpectrum } from '../api/specAgentApi'
 
 const route = useRoute()
+const router = useRouter()
 const taskId = computed(() => route.params.taskId)
 
 const loading = ref(false)
@@ -23,6 +25,10 @@ const isIrRamanTask = computed(() =>
 const imageArtifacts = computed(() => artifactItems.value.filter((item) => item.file_type === 'image'))
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1'
 const backendOrigin = new URL(apiBaseUrl).origin
+const treeProps = {
+  children: 'children',
+  label: 'label',
+}
 
 const imageGroups = computed(() => {
   const groups = {
@@ -108,6 +114,7 @@ const previewAxisConfig = computed(() => {
     inverseXAxis: false,
   }
 })
+const structuredTreeData = computed(() => buildJsonTreeData(structuredData.value))
 
 /**
  * 构建可访问的图片 URL。
@@ -193,6 +200,83 @@ function toKeyValueRows(source) {
 }
 
 /**
+ * 生成 JSON 树节点 ID。
+ *
+ * Args:
+ *   parentPath: 父节点路径。
+ *   key: 当前键名。
+ *
+ * Returns:
+ *   树节点唯一 ID。
+ */
+function buildNodeId(parentPath, key) {
+  return parentPath ? `${parentPath}.${String(key)}` : String(key)
+}
+
+/**
+ * 构建可折叠 JSON 树数据。
+ *
+ * Args:
+ *   source: 任意 JSON 值。
+ *
+ * Returns:
+ *   Element Plus Tree 数据源。
+ */
+function buildJsonTreeData(source) {
+  if (Array.isArray(source)) {
+    return source.map((item, index) => buildJsonTreeNode(`[${index}]`, item, `$[${index}]`))
+  }
+  if (source && typeof source === 'object') {
+    return Object.entries(source).map(([key, value]) => buildJsonTreeNode(key, value, `$.${key}`))
+  }
+  return [buildJsonTreeNode('value', source, '$')]
+}
+
+/**
+ * 构建单个 JSON 树节点。
+ *
+ * Args:
+ *   key: 键名。
+ *   value: 键值。
+ *   path: 节点路径。
+ *
+ * Returns:
+ *   树节点对象。
+ */
+function buildJsonTreeNode(key, value, path) {
+  if (Array.isArray(value)) {
+    return {
+      id: buildNodeId(path, key),
+      label: String(key),
+      valueText: `Array(${value.length})`,
+      children: value.map((item, index) => buildJsonTreeNode(`[${index}]`, item, `${path}[${index}]`)),
+    }
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value)
+    return {
+      id: buildNodeId(path, key),
+      label: String(key),
+      valueText: `Object(${entries.length})`,
+      children: entries.map(([childKey, childValue]) => buildJsonTreeNode(childKey, childValue, `${path}.${childKey}`)),
+    }
+  }
+  return {
+    id: buildNodeId(path, key),
+    label: String(key),
+    valueText: value === null ? 'null' : String(value),
+    children: [],
+  }
+}
+
+/**
+ * 返回任务中心页面。
+ */
+function goTaskCenter() {
+  router.push('/tasks/center')
+}
+
+/**
  * 判断当前任务是否成功结束。
  *
  * Returns:
@@ -266,7 +350,13 @@ onMounted(fetchDetail)
     <div class="panel">
       <div class="panel-header">
         <h3 class="panel-title">任务详情</h3>
-        <el-button type="primary" plain @click="fetchDetail">刷新</el-button>
+        <div class="header-actions">
+          <el-button plain @click="goTaskCenter">
+            <el-icon><ArrowLeft /></el-icon>
+            返回任务中心
+          </el-button>
+          <el-button type="primary" plain @click="fetchDetail">刷新</el-button>
+        </div>
       </div>
       <div class="panel-body" v-loading="loading">
         <el-descriptions v-if="statusData" :column="2" border>
@@ -566,13 +656,33 @@ onMounted(fetchDetail)
         <h3 class="panel-title">结构化结果（JSON）</h3>
       </div>
       <div class="panel-body">
-        <pre class="json-block">{{ JSON.stringify(structuredData, null, 2) }}</pre>
+        <el-tree
+          class="json-tree"
+          :data="structuredTreeData"
+          :props="treeProps"
+          node-key="id"
+          :expand-on-click-node="false"
+        >
+          <template #default="{ data }">
+            <div class="json-tree-node">
+              <span class="node-key">{{ data.label }}</span>
+              <span class="node-separator">:</span>
+              <span class="node-value">{{ data.valueText }}</span>
+            </div>
+          </template>
+        </el-tree>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ir-raman-card-grid {
   margin-top: 12px;
   display: grid;
@@ -601,6 +711,37 @@ onMounted(fetchDetail)
   word-break: break-all;
   font-family: Consolas, 'Courier New', monospace;
   font-size: 12px;
+}
+
+.json-tree {
+  background: #081f3e;
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #d8e7ff;
+  max-height: 640px;
+  overflow: auto;
+}
+
+.json-tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.node-key {
+  color: #8ec5ff;
+}
+
+.node-separator {
+  color: #8fa7c8;
+}
+
+.node-value {
+  color: #d7f0b2;
+  word-break: break-all;
 }
 
 @media (max-width: 1200px) {

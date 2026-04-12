@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -16,13 +15,6 @@ from app.infra.mongo import get_files_collection
 
 class SpectrumPreviewService:
     """统一谱图预览服务。"""
-
-    @staticmethod
-    def _ensure_source_import_path() -> None:
-        """确保源项目路径可导入。"""
-        source_root = str(settings.source_spec_agent_root)
-        if source_root not in sys.path:
-            sys.path.insert(0, source_root)
 
     @staticmethod
     def _decode_text_bytes(file_bytes: bytes) -> str:
@@ -91,7 +83,6 @@ class SpectrumPreviewService:
         Returns:
             ppm 与强度序列。
         """
-        self._ensure_source_import_path()
         nmr_service = importlib.import_module("services.nmr_service")
         get_nmr_sample_data = getattr(nmr_service, "get_nmr_sample_data")
         data, ppm_scale, _, _ = get_nmr_sample_data(folder_path, index=0)

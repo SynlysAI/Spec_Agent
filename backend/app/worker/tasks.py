@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -153,13 +152,6 @@ def _update_task(task_id: str, **kwargs: Any) -> None:
     get_tasks_collection().update_one({"task_id": task_id}, {"$set": updates})
 
 
-def _ensure_source_import_path() -> None:
-    """确保源项目路径已加入 Python 导入路径。"""
-    source_root = str(settings.source_spec_agent_root)
-    if source_root not in sys.path:
-        sys.path.insert(0, source_root)
-
-
 def _resolve_input_path(input_data: dict[str, Any]) -> str:
     """解析任务输入路径。
 
@@ -235,7 +227,6 @@ def _execute_gpc(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     Returns:
         统一结果对象，包含 structured_data、text_report、metadata。
     """
-    _ensure_source_import_path()
     input_path = _resolve_input_path(input_data)
     output_dir = settings.outputs_root / "tasks" / task_id
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -276,7 +267,6 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     Returns:
         统一结果对象，包含 structured_data、text_report、metadata。
     """
-    _ensure_source_import_path()
     input_path = _resolve_input_path(input_data)
     output_dir = settings.outputs_root / "tasks" / task_id
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -355,7 +345,6 @@ def _execute_ir_raman(task_id: str, input_data: dict[str, Any], params: dict[str
     Returns:
         统一结果对象，包含 structured_data、text_report、metadata。
     """
-    _ensure_source_import_path()
     input_path = _resolve_input_path(input_data)
     if not Path(input_path).is_file():
         raise ValueError("IR/Raman 输入必须是谱图文件路径")

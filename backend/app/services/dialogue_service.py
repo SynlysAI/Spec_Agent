@@ -6,7 +6,6 @@ import importlib
 from datetime import datetime
 from typing import Any
 
-from app.core.config import settings
 from app.infra.mongo import get_results_collection, get_tasks_collection
 from app.models.dialogue import DialogueReportItem
 
@@ -209,12 +208,6 @@ class DialogueService:
             LLM 回答文本，失败时返回空字符串。
         """
         try:
-            source_root = str(settings.source_spec_agent_root)
-            import sys
-
-            if source_root not in sys.path:
-                sys.path.insert(0, source_root)
-
             model_module = importlib.import_module("llm_server.model")
             create_llm_client = getattr(model_module, "create_llm_client")
             llm_client = create_llm_client()

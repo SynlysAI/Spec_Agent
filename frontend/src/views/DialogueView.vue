@@ -1,6 +1,7 @@
 <script setup>
 import { nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import {
   dialogueChat,
   getApiErrorMessage,
@@ -120,6 +121,22 @@ async function sendMessage() {
 }
 
 /**
+ * 处理输入框回车发送。
+ *
+ * Args:
+ *   event: 键盘事件对象。
+ */
+function handleEnterSend(event) {
+  if (event.shiftKey) {
+    return
+  }
+  event.preventDefault()
+  if (!sending.value) {
+    sendMessage()
+  }
+}
+
+/**
  * 清空当前会话消息。
  */
 function clearMessages() {
@@ -224,6 +241,13 @@ onMounted(async () => {
             <div class="chat-role">{{ item.role === 'user' ? '你' : '助手' }}</div>
             <div class="chat-content">{{ item.content }}</div>
           </div>
+          <div v-if="sending" class="chat-item assistant thinking">
+            <div class="chat-role">助手</div>
+            <div class="chat-content thinking-content">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>正在思考中，请稍候...</span>
+            </div>
+          </div>
         </div>
 
         <div class="chat-editor">
@@ -232,7 +256,7 @@ onMounted(async () => {
             type="textarea"
             :rows="3"
             placeholder="请输入你的问题，例如：请总结该报告中最重要的三点。"
-            @keyup.enter.ctrl="sendMessage"
+            @keydown.enter="handleEnterSend"
           />
           <div class="chat-actions">
             <el-button type="primary" :loading="sending" @click="sendMessage">发送</el-button>
@@ -299,6 +323,12 @@ onMounted(async () => {
 
 .chat-item.assistant .chat-content {
   background: #f2f5fa;
+}
+
+.thinking-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .chat-actions {

@@ -220,29 +220,19 @@ async function submitSearch() {
             </template>
           </el-alert>
 
-          <el-row :gutter="16">
-            <el-col :md="18" :sm="24">
-              <el-form label-width="140px">
-                <el-form-item label="SMILES 分子式">
-                  <el-input
-                    v-model="forwardForm.smiles_input"
-                    type="textarea"
-                    :rows="5"
-                    placeholder="每行一个 SMILES，例如：C1=CC=CC=C1"
-                  />
-                </el-form-item>
-              </el-form>
-            </el-col>
-            <el-col :md="6" :sm="24">
-              <div class="example-box">
-                <div class="example-title">示例值</div>
-                <pre class="example-code">{{ forwardExampleSmiles }}</pre>
-                <el-button plain size="small" @click="fillForwardExample">使用示例</el-button>
-              </div>
-            </el-col>
-          </el-row>
+          <el-form label-width="140px">
+            <el-form-item label="SMILES 分子式">
+              <el-input
+                v-model="forwardForm.smiles_input"
+                type="textarea"
+                :rows="5"
+                :placeholder="`每行一个 SMILES，示例：\n${forwardExampleSmiles}`"
+              />
+            </el-form-item>
+          </el-form>
 
           <div class="action-row">
+            <el-button plain @click="fillForwardExample">使用示例数据</el-button>
             <el-button type="primary" :loading="forwardLoading" @click="submitForward">开始预测</el-button>
           </div>
 
@@ -531,32 +521,6 @@ async function submitSearch() {
 <style scoped>
 .desc-block {
   margin-bottom: 14px;
-}
-
-.example-box {
-  border: 1px solid #d9e6fa;
-  border-radius: 10px;
-  background: #f7fbff;
-  padding: 10px;
-  height: 100%;
-}
-
-.example-title {
-  color: #476089;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.example-code {
-  margin: 0 0 10px;
-  padding: 8px;
-  border-radius: 8px;
-  background: #edf4ff;
-  color: #38527e;
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 
 .action-row {

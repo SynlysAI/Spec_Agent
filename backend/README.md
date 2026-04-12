@@ -21,7 +21,6 @@ celery -A app.worker.celery_app.celery_app worker --loglevel=info -Q celery -P s
 
 ```bash
 APP_ENV=dev
-SOURCE_SPEC_AGENT_ROOT=E:/github_project/Spec_Agent
 
 MONGODB_HOST=100.84.59.58
 MONGODB_PORT=27018
@@ -74,4 +73,4 @@ python scripts/run_regression.py
 ## 说明
 
 - 任务链路为 `FastAPI + Celery + RabbitMQ + MongoDB`。
-- `GPC/NMR` 任务已调用源项目解析能力（通过 `SOURCE_SPEC_AGENT_ROOT` 指定源项目路径）。
+- `GPC/NMR/IR/Raman` 任务能力已迁入本仓 `backend/analysis`、`backend/agents`、`backend/services`，运行时不再依赖源项目目录。

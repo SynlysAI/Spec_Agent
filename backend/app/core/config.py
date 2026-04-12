@@ -27,9 +27,6 @@ class Settings:
         self.max_upload_size_mb: int = 100
         self.api_prefix: str = "/api/v1"
         self.app_env: str = os.getenv("APP_ENV", "dev")
-        self.source_spec_agent_root: Path = Path(
-            os.getenv("SOURCE_SPEC_AGENT_ROOT", "E:/github_project/Spec_Agent")
-        )
 
         # MongoDB 配置
         self.mongodb_host: str = os.getenv("MONGODB_HOST", "100.84.59.58")
