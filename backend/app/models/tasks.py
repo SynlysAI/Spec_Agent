@@ -71,6 +71,7 @@ class GpcTaskParams(BaseModel):
     three_color_arw_paths: Optional[list[str]] = Field(default=None, description="三色曲线路径")
     calibration_file_path: Optional[str] = Field(default=None, description="校准文件路径")
     comparison_report_pdf_path: Optional[str] = Field(default=None, description="对比PDF路径")
+    source_file_name: Optional[str] = Field(default=None, description="上传原始文件名（可选，用于三色匹配）")
 
     @model_validator(mode="after")
     def validate_params(self) -> "GpcTaskParams":

@@ -21,6 +21,7 @@ celery_app.conf.update(
     timezone="Asia/Shanghai",
     enable_utc=False,
     task_track_started=True,
+    task_default_queue=settings.celery_task_queue,
 )
 
 # Windows 下使用 prefork 容易出现子进程任务跟踪异常，默认切换为 solo 池。

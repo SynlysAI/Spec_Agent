@@ -64,7 +64,7 @@ class TaskService:
         get_tasks_collection().insert_one(task_doc)
 
         try:
-            execute_analysis_task.delay(task_id)
+            execute_analysis_task.apply_async(args=[task_id], queue=settings.celery_task_queue)
             get_tasks_collection().update_one(
                 {"task_id": task_id},
                 {"$set": {"status": "QUEUED", "progress": 5, "message": "queued", "updated_at": datetime.now()}},

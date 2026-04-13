@@ -4,7 +4,7 @@
 
 ```bash
 cd E:/xx_project/Spec_Agent/backend
-conda activate spec_agent
+conda activate Spec_Agent
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -13,8 +13,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```bash
 cd E:/xx_project/Spec_Agent/backend
-conda activate spec_agent
-celery -A app.worker.celery_app.celery_app worker --loglevel=info -Q celery -P solo
+conda activate Spec_Agent
+celery -A app.worker.celery_app.celery_app worker --loglevel=info -Q spec_agent -P solo
 ```
 
 ## 环境变量（可选）
@@ -48,7 +48,7 @@ RABBITMQ_VHOST=/
 
 ```bash
 cd E:/xx_project/Spec_Agent/backend
-conda activate spec_agent
+conda activate Spec_Agent
 python scripts/export_openapi.py
 ```
 
@@ -60,7 +60,7 @@ python scripts/export_openapi.py
 
 ```bash
 cd E:/xx_project/Spec_Agent/backend
-conda activate spec_agent
+conda activate Spec_Agent
 python scripts/run_regression.py
 ```
 

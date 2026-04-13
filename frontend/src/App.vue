@@ -44,10 +44,6 @@ function handleMenuSelect(index) {
     window.open('http://127.0.0.1:8000/docs', '_blank')
     return
   }
-  if (index === '/files') {
-    router.push('/tasks/submit/gpc')
-    return
-  }
   router.push(index)
 }
 
@@ -129,9 +125,9 @@ function formatCurrentDate() {
           <el-icon><Document /></el-icon>
           <span>接口文档</span>
         </el-menu-item>
-        <el-menu-item index="/files">
+        <el-menu-item index="/data" disabled>
           <el-icon><Files /></el-icon>
-          <span>文件管理</span>
+          <span>数据管理</span>
         </el-menu-item>
         <el-menu-item index="/ops" disabled>
           <el-icon><Operation /></el-icon>

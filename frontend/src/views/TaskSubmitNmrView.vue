@@ -187,7 +187,7 @@ async function submitTask() {
     form.detectionRangeMode === 'custom' &&
     (form.detectionRangeMin === null || form.detectionRangeMax === null)
   ) {
-    ElMessage.warning('自定义检测范围时必须填写最小/最大值')
+    ElMessage.warning('自定义检测范围（ppm）时必须填写最小/最大值')
     return
   }
 
@@ -304,13 +304,13 @@ function goTaskDetail() {
           <el-input-number v-model="form.smoothWindow" :min="1" :max="99" />
         </el-form-item>
 
-        <el-form-item label="检测范围模式">
+        <el-form-item label="检测范围模式（ppm）">
           <el-radio-group v-model="form.detectionRangeMode">
-            <el-radio value="full">全谱范围</el-radio>
-            <el-radio value="custom">自定义范围</el-radio>
+            <el-radio value="full">全谱范围（ppm）</el-radio>
+            <el-radio value="custom">自定义范围（ppm）</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="form.detectionRangeMode === 'custom'" label="自定义检测范围">
+        <el-form-item v-if="form.detectionRangeMode === 'custom'" label="自定义检测范围（ppm）">
           <el-input-number v-model="form.detectionRangeMin" :precision="3" />
           <span style="margin: 0 8px">-</span>
           <el-input-number v-model="form.detectionRangeMax" :precision="3" />

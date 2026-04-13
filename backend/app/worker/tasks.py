@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,32 @@ from typing import Any
 from app.core.config import settings
 from app.infra.mongo import get_files_collection, get_results_collection, get_tasks_collection
 from app.worker.celery_app import celery_app
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _import_backend_module(module_name: str) -> Any:
+    """导入 backend 顶层模块，必要时自动修复 sys.path 后重试。
+
+    Args:
+        module_name: 需要导入的模块路径，如 agents.langraph_gpc_agent。
+
+    Returns:
+        已导入的模块对象。
+    """
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        top_level_name = module_name.split(".")[0]
+        missing_name = getattr(exc, "name", "")
+        if missing_name not in {top_level_name, module_name}:
+            raise
+
+        backend_root = str(BACKEND_ROOT)
+        if backend_root not in sys.path:
+            sys.path.insert(0, backend_root)
+        return importlib.import_module(module_name)
 
 
 def _to_basic(value: Any) -> Any:
@@ -231,8 +258,14 @@ def _execute_gpc(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     output_dir = settings.outputs_root / "tasks" / task_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    gpc_module = importlib.import_module("agents.langraph_gpc_agent")
+    gpc_module = _import_backend_module("agents.langraph_gpc_agent")
     run_gpc_analysis = getattr(gpc_module, "run_gpc_analysis")
+    source_file_name = str(params.get("source_file_name") or "").strip() or None
+    if not source_file_name and input_data.get("input_type") == "file_id":
+        file_id = str(input_data.get("file_id") or "").strip()
+        if file_id:
+            file_doc = get_files_collection().find_one({"file_id": file_id}, {"_id": 0, "file_name": 1})
+            source_file_name = str((file_doc or {}).get("file_name") or "").strip() or None
     result = run_gpc_analysis(
         input_path=input_path,
         detect_mode=params.get("detect_mode", "auto"),
@@ -240,6 +273,7 @@ def _execute_gpc(task_id: str, input_data: dict[str, Any], params: dict[str, Any
         three_color_arw_paths=tuple(params["three_color_arw_paths"]) if params.get("three_color_arw_paths") else None,
         calibration_file_path=params.get("calibration_file_path"),
         comparison_report_pdf_path=params.get("comparison_report_pdf_path"),
+        source_file_name=source_file_name,
         enable_llm=False,
         output_dir=str(output_dir),
     )
@@ -272,7 +306,7 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     output_dir.mkdir(parents=True, exist_ok=True)
     nmr_folder_path = _prepare_nmr_input_path(task_id=task_id, input_path=input_path)
 
-    nmr_service = importlib.import_module("services.nmr_service")
+    nmr_service = _import_backend_module("services.nmr_service")
     build_peak_detection_result = getattr(nmr_service, "build_peak_detection_result")
     run_integration_analysis = getattr(nmr_service, "run_integration_analysis")
     build_summary_rows = getattr(nmr_service, "build_summary_rows")
@@ -325,7 +359,7 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     )
     qa_metrics: dict[str, Any] = {}
     try:
-        nmr_agent_module = importlib.import_module("agents.langraph_nmr_agent")
+        nmr_agent_module = _import_backend_module("agents.langraph_nmr_agent")
         compute_nmr_qa_metrics = getattr(nmr_agent_module, "_compute_nmr_qa_metrics")
         qa_metrics = compute_nmr_qa_metrics(
             input_path=nmr_folder_path,
@@ -363,7 +397,7 @@ def _execute_ir_raman(task_id: str, input_data: dict[str, Any], params: dict[str
         raise ValueError("IR/Raman 输入必须是谱图文件路径")
 
     try:
-        agent_module = importlib.import_module("agents.ir_raman_agent")
+        agent_module = _import_backend_module("agents.ir_raman_agent")
     except ModuleNotFoundError as exc:
         raise ValueError(
             "IR/Raman 依赖缺失，请安装 numpy/torch/pyyaml 等依赖后重试"

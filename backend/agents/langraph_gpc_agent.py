@@ -2,6 +2,7 @@ import argparse
 import glob
 import operator
 import os
+import re
 import traceback
 from typing import Annotated, Dict, Any, List, Optional, Tuple
 
@@ -32,6 +33,17 @@ def _parse_manual_interval(value: Optional[str]) -> Optional[List[float]]:
     if start >= end:
         raise ValueError("manual_interval 必须满足 start < end")
     return [start, end]
+
+
+def _strip_upload_file_prefix(file_name: str) -> str:
+    """剥离上传文件自动前缀，恢复原始谱图文件名。"""
+    if not file_name:
+        return file_name
+    pattern = r"^f_\d{8}_\d{6}_[0-9a-fA-F]{6}_(.+)$"
+    matched = re.match(pattern, file_name)
+    if matched and matched.group(1):
+        return matched.group(1)
+    return file_name
 
 
 class GPCState(TypedDict, total=False):
@@ -65,6 +77,8 @@ class GPCState(TypedDict, total=False):
     calibration_file_path: NotRequired[str]
     # 可选：对比实验 GPC 报告 PDF（与 Agent 结果对照）；提供则不再按名称在配置目录中匹配
     comparison_report_pdf_path: NotRequired[str]
+    # 可选：上传原始文件名（用于三色曲线匹配）
+    source_file_name: NotRequired[str]
 
 
 class GPCPathWorkflow:
@@ -117,14 +131,19 @@ class GPCPathWorkflow:
                 # 读取 ARW 文件数据
                 actual_curve = pd.read_csv(file_path, sep="\t", header=None, names=["retention_time", "intensity"])
                 actual_curve_name = os.path.basename(file_path)
-                simple_name = os.path.splitext(actual_curve_name)[0]
+                source_file_name = str(state.get("source_file_name") or "").strip()
+                candidate_name = source_file_name if source_file_name and len(state["file_paths"]) == 1 else actual_curve_name
+                display_curve_name = _strip_upload_file_prefix(candidate_name)
+                simple_name = os.path.splitext(display_curve_name)[0]
                 # 准备输出目录
                 output_dir = os.path.join(self.output_dir, simple_name)
                 os.makedirs(output_dir, exist_ok=True)
 
                 origin_data = {
                     "curve_file": file_path,
-                    "actual_curve_name": actual_curve_name,
+                    "actual_curve_name": display_curve_name,
+                    "stored_curve_name": actual_curve_name,
+                    "source_file_name": source_file_name or None,
                     "simple_name": simple_name,
                     "actual_curve": actual_curve,  # 直接存储原始 DataFrame
                     "output_dir": output_dir
@@ -167,10 +186,28 @@ class GPCPathWorkflow:
                     )
                 else:
                     effective_three_dir = self.three_color_dir
-                    three_color_curve_name = self.name_parser.match_three_color_curve(
+                    candidate_names: list[str] = []
+                    for name in [
+                        str(data.get("source_file_name") or "").strip(),
                         actual_curve_name,
-                        effective_three_dir,
-                    )
+                        _strip_upload_file_prefix(actual_curve_name),
+                        _strip_upload_file_prefix(str(data.get("stored_curve_name") or "")),
+                    ]:
+                        if name and name not in candidate_names:
+                            candidate_names.append(name)
+
+                    three_color_curve_name = None
+                    for candidate_name in candidate_names:
+                        three_color_curve_name = self.name_parser.match_three_color_curve(
+                            candidate_name,
+                            effective_three_dir,
+                        )
+                        if three_color_curve_name:
+                            break
+                    if not three_color_curve_name:
+                        raise ValueError(
+                            f"无法根据文件名匹配三色曲线，候选名: {candidate_names}"
+                        )
                     roi_result = self.roi_processor.calculate_roi(
                         three_color_curve_name,
                         effective_three_dir,
@@ -557,6 +594,7 @@ def run_gpc_analysis(
     three_color_arw_paths: Optional[Tuple[str, str, str]] = None,
     calibration_file_path: Optional[str] = None,
     comparison_report_pdf_path: Optional[str] = None,
+    source_file_name: Optional[str] = None,
     enable_llm: bool = False,
     output_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -566,6 +604,7 @@ def run_gpc_analysis(
         "input_path": input_path,
         "detect_mode": detect_mode,
         "manual_interval": manual_interval,
+        "source_file_name": source_file_name,
     }
     if three_color_arw_paths:
         state["three_color_arw_paths"] = three_color_arw_paths
@@ -590,6 +629,7 @@ def run_gpc_analysis(
             "spectrum_type": "gpc",
             "input_path": input_path,
             "detect_mode": detect_mode,
+            "source_file_name": source_file_name,
             "sample_count": len(analysis_results),
             "qa_metrics": qa_metrics,
         },

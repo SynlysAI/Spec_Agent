@@ -120,6 +120,7 @@ async function submitTask() {
       three_color_arw_paths: parseThreeColorPaths(),
       calibration_file_path: form.calibrationFilePath.trim() || null,
       comparison_report_pdf_path: form.comparisonReportPdfPath.trim() || null,
+      source_file_name: form.inputMode === 'upload' ? uploadedFilename.value || null : null,
     },
     options: {
       priority: Number(form.priority || 5),
