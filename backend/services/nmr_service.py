@@ -10,6 +10,7 @@ from analysis.nmr.nmr_analysis import (
     get_nmr_sample_data,
     integrate_region,
     plot_nmr_spectrum,
+    plot_peak_detection_overview,
     plot_processing_steps,
 )
 from analysis.nmr.peak_detection import (
@@ -310,6 +311,7 @@ def build_peak_detection_result(
         "integration_regions": integration_regions,
         "detection_range": detection_range,
         "metadata": metadata,
+        "detected_peaks": detected_peaks if integration_mode == "自动模式" else [],
         "multiplet_results": multiplet_results,
     }
 
@@ -363,6 +365,9 @@ def run_integration_analysis(
     ppm_scale = peak_results["ppm_scale"]
     processing_steps = dict(peak_results["processing_steps"])
     integration_regions = peak_results["integration_regions"]
+    detected_peaks = peak_results.get("detected_peaks", [])
+    detection_range = peak_results.get("detection_range")
+    multiplet_results = peak_results.get("multiplet_results")
 
     if not integration_regions:
         raise ValueError("请至少配置一个积分区域")
@@ -403,6 +408,16 @@ def run_integration_analysis(
     sample_output_dir = os.path.join(output_dir, sample_name)
     os.makedirs(sample_output_dir, exist_ok=True)
     plot_nmr_spectrum(ppm_scale, data, sample_name, sample_output_dir)
+    plot_peak_detection_overview(
+        ppm_scale,
+        data,
+        sample_name,
+        sample_output_dir,
+        detected_peaks=detected_peaks,
+        integration_regions=integration_regions,
+        multiplet_results=multiplet_results,
+        detection_range=detection_range,
+    )
     plot_processing_steps(
         ppm_scale,
         processing_steps,

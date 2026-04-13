@@ -19,12 +19,14 @@ const NMR_PEAK_PRESETS = {
     minDistance: 0.3,
     minProminence: 0.01,
     smoothWindow: 5,
+    maxCouplingHz: 20.0,
   },
   '13C': {
     threshold: 0.05,
     minDistance: 1.0,
     minProminence: 0.03,
     smoothWindow: 11,
+    maxCouplingHz: 40.0,
   },
 }
 
@@ -38,6 +40,8 @@ const form = reactive({
   widthMultiplier: 1.0,
   baselineDegree: 3,
   smoothWindow: NMR_PEAK_PRESETS['1H'].smoothWindow,
+  enableMultiplet: true,
+  maxCouplingHz: NMR_PEAK_PRESETS['1H'].maxCouplingHz,
   detectionRangeMode: 'full',
   detectionRangeMin: null,
   detectionRangeMax: null,
@@ -64,6 +68,7 @@ function applyNucleusPreset(nucleus) {
   form.minDistance = preset.minDistance
   form.minProminence = preset.minProminence
   form.smoothWindow = preset.smoothWindow
+  form.maxCouplingHz = preset.maxCouplingHz
 }
 
 watch(
@@ -201,6 +206,8 @@ async function submitTask() {
       width_multiplier: Number(form.widthMultiplier),
       baseline_degree: Number(form.baselineDegree),
       smooth_window: Number(form.smoothWindow),
+      enable_multiplet: Boolean(form.enableMultiplet),
+      max_coupling_hz: Number(form.maxCouplingHz),
       detection_range_mode: form.detectionRangeMode,
       detection_range_min:
         form.detectionRangeMode === 'custom' ? Number(form.detectionRangeMin) : null,
@@ -302,6 +309,12 @@ function goTaskDetail() {
         </el-form-item>
         <el-form-item label="平滑窗口">
           <el-input-number v-model="form.smoothWindow" :min="1" :max="99" />
+        </el-form-item>
+        <el-form-item label="启用多重峰聚合">
+          <el-switch v-model="form.enableMultiplet" />
+        </el-form-item>
+        <el-form-item label="耦合常数阈值（Hz)">
+          <el-input-number v-model="form.maxCouplingHz" :precision="2" :step="1" :min="0.1" />
         </el-form-item>
 
         <el-form-item label="检测范围模式（ppm）">

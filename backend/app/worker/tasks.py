@@ -324,7 +324,8 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
         "detection_range_min": params.get("detection_range_min"),
         "detection_range_max": params.get("detection_range_max"),
         "ppm_offset": params.get("ppm_offset", 0.0),
-        "enable_multiplet": True,
+        "enable_multiplet": bool(params.get("enable_multiplet", True)),
+        "max_coupling_hz": float(params.get("max_coupling_hz", 40.0 if str(params.get("nucleus", "1H")).upper() == "13C" else 20.0)),
     }
     if str(params.get("nucleus", "1H")).upper() == "13C":
         peak_detection_params.update({"threshold": 0.05, "min_distance": 1.0, "min_prominence": 0.03, "smooth_window": 11})

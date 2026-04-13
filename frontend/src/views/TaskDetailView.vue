@@ -49,7 +49,7 @@ const imageGroups = computed(() => {
       groups.process.push(item)
       continue
     }
-    if (name.includes('peak') || name.includes('roi') || name.includes('integration_region')) {
+    if (name.includes('peak') || name.includes('roi') || name.includes('integration_region') || name.includes('multiplet')) {
       groups.peak.push(item)
       continue
     }

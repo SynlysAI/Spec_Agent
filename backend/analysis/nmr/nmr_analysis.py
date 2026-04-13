@@ -358,3 +358,77 @@ def plot_processing_steps(ppm_scale, processing_steps, sample_name, output_dir, 
     # 保存图像
     plt.savefig(os.path.join(output_dir, f'{sample_name}_processing_steps.png'), dpi=200, bbox_inches='tight')
     plt.close()  # 关闭图像以释放资源
+
+
+def plot_peak_detection_overview(ppm_scale, data, sample_name, output_dir, detected_peaks=None,
+                                 integration_regions=None, multiplet_results=None,
+                                 detection_range=None):
+    """绘制峰检测总览图与积分区域图。
+
+    Args:
+        ppm_scale: 化学位移数组。
+        data: 峰检测使用的谱图数据。
+        sample_name: 样品名称。
+        output_dir: 图像输出目录。
+        detected_peaks: 检测到的峰列表。
+        integration_regions: 积分区域列表。
+        multiplet_results: 多重峰分析结果列表。
+        detection_range: 检测范围。
+    """
+    abs_data = np.abs(data)
+    detected_peaks = detected_peaks or []
+    integration_regions = integration_regions or []
+    multiplet_results = multiplet_results or []
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True,
+                             gridspec_kw={'hspace': 0.18})
+
+    peak_ax = axes[0]
+    peak_ax.plot(ppm_scale, abs_data, color='black', linewidth=0.9)
+    peak_ax.invert_xaxis()
+    peak_ax.set_ylabel('强度', fontsize=12)
+    peak_ax.set_title(f'峰检测结果 - {sample_name}', fontsize=14)
+    peak_ax.grid(linestyle=':', alpha=0.5)
+
+    if detection_range is not None:
+        range_min, range_max = min(detection_range), max(detection_range)
+        peak_ax.axvspan(range_min, range_max, color='#cfe5ff', alpha=0.25, label='检测范围')
+
+    for index, peak in enumerate(detected_peaks, start=1):
+        ppm, height, _width = peak
+        peak_ax.axvline(ppm, color='#2f7ed8', linestyle='--', linewidth=0.8, alpha=0.8)
+        peak_ax.scatter([ppm], [height], color='#d14a61', s=18, zorder=3)
+        peak_ax.text(ppm, height, f'{index}', fontsize=8, ha='center', va='bottom')
+
+    for mp in multiplet_results:
+        peak_ax.axvspan(min(mp.region_end, mp.region_start), max(mp.region_end, mp.region_start),
+                        color='#8bd3c7', alpha=0.18)
+        peak_ax.text(mp.center_ppm, np.max(abs_data) * 0.92, mp.to_display_str(),
+                     fontsize=8, ha='center', va='top', rotation=0,
+                     bbox=dict(facecolor='white', alpha=0.65, edgecolor='none'))
+
+    region_ax = axes[1]
+    region_ax.plot(ppm_scale, abs_data, color='black', linewidth=0.9)
+    region_ax.invert_xaxis()
+    region_ax.set_xlabel('δ (ppm)', fontsize=12)
+    region_ax.set_ylabel('强度', fontsize=12)
+    region_ax.set_title(f'积分区域结果 - {sample_name}', fontsize=14)
+    region_ax.grid(linestyle=':', alpha=0.5)
+
+    for region in integration_regions:
+        if len(region) == 4:
+            name, start, end, peak_position = region
+        else:
+            name, start, end = region
+            peak_position = (start + end) / 2
+        left, right = min(start, end), max(start, end)
+        mask = (ppm_scale >= left) & (ppm_scale <= right)
+        if np.any(mask):
+            region_ax.fill_between(ppm_scale[mask], 0, abs_data[mask], alpha=0.28, color='#f6bd60')
+            region_ax.text(peak_position, np.max(abs_data[mask]) * 0.82, name,
+                           fontsize=8, ha='center', va='center',
+                           bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(output_dir, f'{sample_name}_peak_detection_overview.png'), dpi=180, bbox_inches='tight')
+    plt.close(fig)

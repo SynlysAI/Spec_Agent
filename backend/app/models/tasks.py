@@ -95,6 +95,7 @@ class NmrTaskParams(BaseModel):
     - nucleus: 核类型，1H/13C。
     - threshold/min_distance/min_prominence: 峰检测核心参数。
     - width_multiplier/baseline_degree/smooth_window: 处理参数。
+    - enable_multiplet/max_coupling_hz: 多重峰聚合配置。
     - detection_range_mode/min/max: 检测范围参数。
     - ppm_offset: ppm 偏移。
     - integration_method: 积分方法。
@@ -109,6 +110,8 @@ class NmrTaskParams(BaseModel):
     width_multiplier: float = Field(default=1.0, gt=0, description="峰宽倍率")
     baseline_degree: int = Field(default=3, ge=1, le=10, description="基线拟合阶数")
     smooth_window: int = Field(default=5, ge=1, le=99, description="平滑窗口")
+    enable_multiplet: bool = Field(default=True, description="是否启用多重峰聚合")
+    max_coupling_hz: float = Field(default=20.0, gt=0, description="多重峰最大耦合常数阈值")
     detection_range_mode: Literal["full", "custom"] = Field(default="full", description="检测范围模式")
     detection_range_min: Optional[float] = Field(default=None, description="检测范围最小值")
     detection_range_max: Optional[float] = Field(default=None, description="检测范围最大值")
