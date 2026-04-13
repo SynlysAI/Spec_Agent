@@ -1,13 +1,11 @@
-import numpy as np
+import json
 import logging
 import os
-import json
 from typing import Dict, List, Callable, Any
 
-# 确保项目根目录被添加到sys.path中
-import sys
+import numpy as np
 
-from config import setup_logging
+from config import setup_logging, GLOBAL_CONFIG
 
 # 配置日志记录
 setup_logging(logger_name="GPCCalibrationCurve")
@@ -35,8 +33,7 @@ class GPCCalibrationCurve:
             logger.info(f"获取仪器特性曲线: {curve_name}")
             
             # 构建JSON文件路径
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-            calibration_dir = os.path.join(base_dir, "data", "calibration_curves")
+            calibration_dir = GLOBAL_CONFIG["data_storage"]["calibration_curves"]
             json_path = os.path.join(calibration_dir, f"{curve_name}.json")
             logger.info(f"读取JSON文件: {json_path}")
             

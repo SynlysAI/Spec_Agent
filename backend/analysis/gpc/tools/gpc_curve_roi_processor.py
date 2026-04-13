@@ -1,15 +1,14 @@
-import os
 import logging
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+import os
 from typing import Dict, Any, List, Tuple, Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 from scipy import signal
 
-# 确保项目根目录被添加到sys.path中
-import sys
+from config import setup_logging, setup_matplotlib_font, GLOBAL_CONFIG
 
-from config import setup_logging, setup_matplotlib_font
 
 setup_matplotlib_font()
 from analysis.gpc.tools.gpc_calibration_curve import GPCCalibrationCurve
@@ -307,8 +306,7 @@ class GPCCurveROIProcessor:
             else:
                 # 尝试查找匹配的校准曲线文件
                 try:
-                    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-                    json_dir = os.path.join(base_dir, "data", "gpc_pdf_data")
+                    json_dir = GLOBAL_CONFIG["data_storage"]["calibration_curves"]
                     json_files = [f for f in os.listdir(json_dir) if f.endswith(".json")]
                     
                     # 查找匹配的校准曲线文件
@@ -407,8 +405,7 @@ class GPCCurveROIProcessor:
             # 计算每个保留时间对应的分子量，用于分析0-12.09部分
             # 这里我们需要临时计算分子量，以便分析0-12.09部分
             # 首先获取校准曲线函数
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            json_dir = os.path.join(base_dir, "data", "gpc_pdf_data")
+            json_dir = GLOBAL_CONFIG["data_storage"]["calibration_curves"]
             json_files = [f for f in os.listdir(json_dir) if f.endswith(".json")]
 
             # 查找匹配的校准曲线文件

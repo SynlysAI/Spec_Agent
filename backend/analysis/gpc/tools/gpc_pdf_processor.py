@@ -1,15 +1,13 @@
-import fitz
-import numpy as np
+import json
 import logging
 import os
-import json
-from typing import Dict, Any, List, Tuple
 import re
+from typing import Dict, Any, List, Tuple
 
-# 确保项目根目录被添加到sys.path中
-import sys
+import fitz
 
-from config import setup_logging
+from config import setup_logging, GLOBAL_CONFIG
+
 
 # 配置日志记录
 setup_logging(logger_name="GPCPDFProcessor")
@@ -331,7 +329,7 @@ class GPCPDFProcessor:
             # 处理输出路径
             if output_path is None:
                 # 创建输出目录（如果不存在）
-                output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "gpc_pdf_data")
+                output_dir = GLOBAL_CONFIG["data_storage"]["calibration_curves"]
                 os.makedirs(output_dir, exist_ok=True)
                 
                 # 使用原始文件名（不包含扩展名）
