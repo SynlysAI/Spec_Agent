@@ -7,15 +7,18 @@ import {
   createAcceptanceRun,
   getAcceptanceConfig,
   getAcceptanceRun,
+  getAcceptanceRuns,
   getApiErrorMessage,
 } from '../api/specAgentApi'
 
 const router = useRouter()
 const loadingConfig = ref(false)
 const creatingRun = ref(false)
+const loadingHistory = ref(false)
 const configData = ref(null)
 const runSummary = ref(null)
 const runFinal = ref(null)
+const historyItems = ref([])
 const activeRunId = ref('')
 const pollingTimer = ref(null)
 
@@ -87,6 +90,37 @@ function downloadReport() {
 }
 
 /**
+ * 打开历史批次报告。
+ *
+ * Args:
+ *   runId: 批次运行 ID。
+ */
+function openHistoryReport(runId) {
+  if (!runId) {
+    return
+  }
+  window.open(buildAcceptanceReportUrl(runId), '_blank')
+}
+
+/**
+ * 加载历史批次详情。
+ *
+ * Args:
+ *   runId: 批次运行 ID。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function openHistoryRun(runId) {
+  if (!runId) {
+    return
+  }
+  activeRunId.value = runId
+  runFinal.value = null
+  await refreshRun()
+}
+
+/**
  * 加载验收配置摘要。
  *
  * Returns:
@@ -105,6 +139,24 @@ async function loadConfig() {
     ElMessage.error(getApiErrorMessage(error))
   } finally {
     loadingConfig.value = false
+  }
+}
+
+/**
+ * 加载验收历史批次列表。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function loadHistory() {
+  loadingHistory.value = true
+  try {
+    const data = await getAcceptanceRuns(30)
+    historyItems.value = data?.items || []
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error))
+  } finally {
+    loadingHistory.value = false
   }
 }
 
@@ -132,6 +184,7 @@ async function startRun() {
     }
     await refreshRun()
     startPolling()
+    await loadHistory()
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
   } finally {
@@ -160,6 +213,7 @@ async function refreshRun() {
     if (data.status !== 'RUNNING') {
       stopPolling()
       runFinal.value = data
+      await loadHistory()
     }
   } catch (error) {
     stopPolling()
@@ -189,6 +243,7 @@ function stopPolling() {
 
 onMounted(async () => {
   await loadConfig()
+  await loadHistory()
 })
 
 onBeforeUnmount(() => {
@@ -261,6 +316,49 @@ onBeforeUnmount(() => {
           </el-card>
         </el-col>
       </el-row>
+
+      <el-card shadow="never" class="block-card">
+        <template #header>
+          <div class="card-header">
+            <span>历史批次</span>
+            <el-button link type="primary" :loading="loadingHistory" @click="loadHistory">刷新</el-button>
+          </div>
+        </template>
+        <el-table :data="historyItems" size="small" border v-loading="loadingHistory" max-height="280">
+          <el-table-column prop="run_id" label="批次ID" min-width="220" />
+          <el-table-column prop="status" label="状态" width="100" />
+          <el-table-column prop="started_at" label="开始时间" width="170" />
+          <el-table-column prop="finished_at" label="结束时间" width="170" />
+          <el-table-column label="执行类型" min-width="180">
+            <template #default="scope">
+              {{ (scope.row.selected_types || []).join(', ') || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="总样本" width="90">
+            <template #default="scope">
+              {{ scope.row.summary?.total ?? 0 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="成功/失败" width="120">
+            <template #default="scope">
+              {{ scope.row.summary?.success ?? 0 }} / {{ scope.row.summary?.failed ?? 0 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="180" fixed="right">
+            <template #default="scope">
+              <el-button link type="primary" @click="openHistoryRun(scope.row.run_id)">加载详情</el-button>
+              <el-button
+                link
+                type="primary"
+                :disabled="!scope.row.report_exists"
+                @click="openHistoryReport(scope.row.run_id)"
+              >
+                打开报告
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
 
       <el-card v-if="runSummary" shadow="never" class="block-card">
         <template #header>
@@ -360,6 +458,9 @@ onBeforeUnmount(() => {
 }
 
 .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-weight: 600;
   color: #2b3447;
 }

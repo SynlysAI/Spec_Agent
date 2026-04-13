@@ -218,6 +218,20 @@ export async function getAcceptanceRun(runId) {
 }
 
 /**
+ * 查询批量验收历史列表。
+ *
+ * Args:
+ *   limit: 返回条数上限。
+ *
+ * Returns:
+ *   历史批次列表数据。
+ */
+export async function getAcceptanceRuns(limit = 20) {
+  const response = await apiClient.get('/acceptance/runs', { params: { limit } })
+  return unwrapResponse(response)
+}
+
+/**
  * 构建批量验收报告下载地址。
  *
  * Args:

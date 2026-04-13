@@ -1,4 +1,4 @@
-"""批量验收测试相关请求与响应模型。"""
+﻿"""批量验收测试相关请求与响应模型。"""
 
 from __future__ import annotations
 
@@ -72,3 +72,22 @@ class AcceptanceRunCreateData(BaseModel):
 
     run_id: str = Field(description="批次运行 ID。")
     status: str = Field(description="批次状态。")
+
+
+class AcceptanceRunHistoryItem(BaseModel):
+    """验收运行历史列表项。"""
+
+    run_id: str = Field(description="批次运行 ID。")
+    status: str = Field(description="批次状态。")
+    started_at: str = Field(default="", description="开始时间。")
+    finished_at: str | None = Field(default=None, description="结束时间。")
+    selected_types: list[str] = Field(default_factory=list, description="执行类型列表。")
+    summary: AcceptanceRunSummary = Field(description="汇总信息。")
+    report_exists: bool = Field(default=False, description="报告文件是否存在。")
+
+
+class AcceptanceRunHistoryData(BaseModel):
+    """验收运行历史列表。"""
+
+    total: int = Field(default=0, description="总条数。")
+    items: list[AcceptanceRunHistoryItem] = Field(default_factory=list, description="历史列表数据。")

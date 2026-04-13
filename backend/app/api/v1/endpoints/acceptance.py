@@ -11,6 +11,7 @@ from app.models.acceptance import (
     AcceptanceConfigData,
     AcceptanceRunCreateData,
     AcceptanceRunData,
+    AcceptanceRunHistoryData,
     AcceptanceRunRequest,
 )
 from app.models.common import ApiResponse
@@ -41,6 +42,17 @@ def create_acceptance_run(payload: AcceptanceRunRequest) -> ApiResponse[Acceptan
     run_data = acceptance_service.create_run(spectrum_types=payload.spectrum_types)
     data = AcceptanceRunCreateData(run_id=run_data.run_id, status=run_data.status)
     return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.get("/runs", response_model=ApiResponse[AcceptanceRunHistoryData])
+def list_acceptance_runs(limit: int = 20) -> ApiResponse[AcceptanceRunHistoryData]:
+    """查询验收运行历史列表。
+
+    Args:
+        limit: 返回条数上限。
+    """
+    items = acceptance_service.list_runs(limit=limit)
+    return ApiResponse(code=0, message="ok", data=AcceptanceRunHistoryData(total=len(items), items=items))
 
 
 @router.get("/run/{run_id}", response_model=ApiResponse[AcceptanceRunData])

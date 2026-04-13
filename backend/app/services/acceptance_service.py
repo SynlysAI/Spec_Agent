@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ import yaml
 
 from app.core.config import settings
 from app.models.acceptance import (
+    AcceptanceRunHistoryItem,
     AcceptanceRunData,
     AcceptanceRunItem,
     AcceptanceRunSummary,
@@ -119,9 +121,54 @@ class AcceptanceService:
         """
         with self._lock:
             data = self._run_store.get(run_id)
-            if not data:
-                return None
-            return data.model_copy(deep=True)
+            if data:
+                return data.model_copy(deep=True)
+        return self._load_run_from_report(run_id)
+
+    def list_runs(self, limit: int = 20) -> list[AcceptanceRunHistoryItem]:
+        """查询验收批次历史列表。
+
+        Args:
+            limit: 返回条数上限。
+
+        Returns:
+            历史批次列表（按开始时间倒序）。
+        """
+        safe_limit = max(1, min(int(limit or 20), 200))
+        history: list[AcceptanceRunHistoryItem] = []
+        known_run_ids: set[str] = set()
+
+        with self._lock:
+            current_runs = list(self._run_store.values())
+        for run_data in current_runs:
+            history.append(
+                AcceptanceRunHistoryItem(
+                    run_id=run_data.run_id,
+                    status=run_data.status,
+                    started_at=run_data.started_at,
+                    finished_at=run_data.finished_at,
+                    selected_types=list(run_data.selected_types),
+                    summary=run_data.summary,
+                    report_exists=bool(run_data.report_path and Path(run_data.report_path).exists()),
+                )
+            )
+            known_run_ids.add(run_data.run_id)
+
+        report_dir = settings.outputs_root / "acceptance"
+        if report_dir.exists() and report_dir.is_dir():
+            report_files = sorted(report_dir.glob("acc_*.md"), key=lambda path: path.name, reverse=True)
+            for report_file in report_files:
+                run_id = report_file.stem
+                if run_id in known_run_ids:
+                    continue
+                parsed = self._parse_report_file(report_file=report_file)
+                history.append(parsed)
+
+        history.sort(
+            key=lambda item: self._parse_datetime_text(item.started_at) or datetime.min,
+            reverse=True,
+        )
+        return history[:safe_limit]
 
     def _run_batch(self, run_id: str) -> None:
         """后台执行批量验收任务。
@@ -744,6 +791,109 @@ class AcceptanceService:
         if parsed is None:
             return "N/A"
         return f"{parsed:.1f}%"
+
+
+    def _load_run_from_report(self, run_id: str) -> AcceptanceRunData | None:
+        """从历史报告文件加载批次基础信息。
+
+        Args:
+            run_id: 批次运行 ID。
+
+        Returns:
+            运行数据对象；若报告不存在则返回 None。
+        """
+        report_path = settings.outputs_root / "acceptance" / f"{run_id}.md"
+        if not report_path.exists() or not report_path.is_file():
+            return None
+        parsed = self._parse_report_file(report_file=report_path)
+        return AcceptanceRunData(
+            run_id=parsed.run_id,
+            status=parsed.status,
+            started_at=parsed.started_at,
+            finished_at=parsed.finished_at,
+            selected_types=parsed.selected_types,
+            summary=parsed.summary,
+            aggregate_metrics={},
+            results=[],
+            report_path=str(report_path),
+        )
+
+    def _parse_report_file(self, report_file: Path) -> AcceptanceRunHistoryItem:
+        """解析验收报告文件，提取历史展示信息。
+
+        Args:
+            report_file: 验收报告文件路径。
+
+        Returns:
+            历史批次列表项。
+        """
+        run_id = report_file.stem
+        content = report_file.read_text(encoding="utf-8", errors="ignore")
+
+        status = self._extract_line_value(content, "状态") or "FINISHED"
+        started_at = self._extract_line_value(content, "开始时间") or ""
+        finished_at = self._extract_line_value(content, "结束时间") or None
+        selected_types_text = self._extract_line_value(content, "执行类型") or ""
+        selected_types = [item.strip() for item in selected_types_text.split(",") if item.strip()]
+
+        summary = AcceptanceRunSummary(
+            total=self._extract_int_value(content, "总样本"),
+            success=self._extract_int_value(content, "成功"),
+            failed=self._extract_int_value(content, "失败"),
+            progress=100,
+            duration_seconds=self._extract_float_value(content, "总耗时(秒)"),
+        )
+        return AcceptanceRunHistoryItem(
+            run_id=run_id,
+            status=status,
+            started_at=started_at,
+            finished_at=finished_at,
+            selected_types=selected_types,
+            summary=summary,
+            report_exists=True,
+        )
+
+    @staticmethod
+    def _extract_line_value(content: str, key: str) -> str:
+        """从 Markdown 列表行中提取键对应的值。"""
+        pattern = re.compile(rf"-\\s*{re.escape(key)}\\s*[:：]\\s*(.+)")
+        match = pattern.search(content)
+        if not match:
+            return ""
+        return match.group(1).strip()
+
+    def _extract_int_value(self, content: str, key: str) -> int:
+        """从报告键值中提取整数值。"""
+        raw = self._extract_line_value(content, key)
+        if not raw:
+            return 0
+        digits_match = re.search(r"[-+]?\\d+", raw)
+        if not digits_match:
+            return 0
+        return int(digits_match.group(0))
+
+    def _extract_float_value(self, content: str, key: str) -> float:
+        """从报告键值中提取浮点值。"""
+        raw = self._extract_line_value(content, key)
+        if not raw:
+            return 0.0
+        number_match = re.search(r"[-+]?\\d+(?:\\.\\d+)?", raw)
+        if not number_match:
+            return 0.0
+        return float(number_match.group(0))
+
+    @staticmethod
+    def _parse_datetime_text(value: str) -> datetime | None:
+        """将字符串时间解析为 datetime。"""
+        if not value:
+            return None
+        value = str(value).strip()
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y%m%d_%H%M%S"):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        return None
 
 
 acceptance_service = AcceptanceService()
