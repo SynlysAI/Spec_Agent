@@ -9,9 +9,10 @@ from torch.autograd import Variable
 from transformers import AutoTokenizer
 
 from analysis.raman.models.Transformer import make_model
+from config import GLOBAL_CONFIG
 
 PARENT_PATH = os.path.dirname(os.path.realpath(__file__))
-TOKENIZER_PATH = os.path.join(PARENT_PATH, 'models', 'moltokenizer')
+TOKENIZER_PATH = str(GLOBAL_CONFIG["resources"]["raman_tokenizer_root"])
 VOCAB_PATH = os.path.join(TOKENIZER_PATH, 'vocab.json')
 
 def get_smiles(label):

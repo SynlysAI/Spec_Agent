@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.models.common import ApiResponse
-from app.models.dialogue import (
+from app.schemas.common import ApiResponse
+from app.schemas.dialogue import (
     DialogueAnalysisTypeData,
     DialogueAnalysisTypeItem,
     DialogueChatData,

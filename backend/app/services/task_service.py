@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from app.core.config import settings
 from app.infra.mongo import get_files_collection, get_results_collection, get_tasks_collection
-from app.models.tasks import (
+from app.schemas.tasks import (
     TaskArtifactItem,
     TaskArtifactsData,
     TaskKind,

@@ -10,13 +10,15 @@ from analysis.raman.greedy_search import greedy_decode, preprocess_spectrum, mol
 from analysis.raman.greedy_search import load_net_state
 from analysis.raman.models.Transformer import make_model
 from analysis.raman.retrieval import retrieval
+from config import GLOBAL_CONFIG
 
 PARENT_PATH = os.path.dirname(os.path.realpath(__file__))
-IR_CHECKPOINT = os.path.join(PARENT_PATH, 'checkpoints', 'ir_generation.pth')
-RAMAN_CHECKPOINT = os.path.join(PARENT_PATH, 'checkpoints', 'raman_generation.pth')
-IR_RETRIEVAL_CHECKPOINT = os.path.join(PARENT_PATH, 'checkpoints', 'ir_retrieval.pth')
-IR_FG_CHECKPOINT = os.path.join(PARENT_PATH, 'checkpoints', 'ir_fg.pth')
-RAMAN_RETRIEVAL_CHECKPOINT = os.path.join(PARENT_PATH, 'checkpoints', 'raman_retrieval.pth')
+RAMAN_RESOURCES = GLOBAL_CONFIG["resources"]
+IR_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "ir_generation.pth")
+RAMAN_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "raman_generation.pth")
+IR_RETRIEVAL_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "ir_retrieval.pth")
+IR_FG_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "ir_fg.pth")
+RAMAN_RETRIEVAL_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "raman_retrieval.pth")
 
 
 def seed_everything(seed):
@@ -79,7 +81,8 @@ def main(spectrum, x0, x1, device, spectype='raman', mode='greedy_decode', k=3, 
         if spectype == 'ir':
             checkpoint = IR_RETRIEVAL_CHECKPOINT
         model = load_net_state(model, torch.load(checkpoint, map_location=device, weights_only=True)['model_state']).to(device)
-        db = torch.load(f'{PARENT_PATH}/database/{spectype}_db.pkl', weights_only=0)
+        db_path = os.path.join(RAMAN_RESOURCES["raman_database_root"], f"{spectype}_db.pkl")
+        db = torch.load(db_path, weights_only=0)
         output = retrieval(spectrum, db, model, device, k)
 
     elif mode == 'function_groups':

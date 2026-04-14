@@ -3,11 +3,12 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+from config import GLOBAL_CONFIG
 
 
 def collate_fn(batch):
     
-    tokenizer = AutoTokenizer.from_pretrained("models/moltokenizer")
+    tokenizer = AutoTokenizer.from_pretrained(str(GLOBAL_CONFIG["resources"]["raman_tokenizer_root"]))
     x = [item[0] for item in batch]
     x = torch.nn.utils.rnn.pad_sequence(x, batch_first=True, padding_value=1).unsqueeze(1)
     y = [item[1] for item in batch]

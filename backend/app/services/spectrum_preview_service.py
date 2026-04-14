@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import tempfile
 import zipfile
 from pathlib import Path
@@ -11,6 +10,7 @@ import numpy as np
 
 from app.core.config import settings
 from app.infra.mongo import get_files_collection
+from app.modules.nmr.service import get_nmr_sample_data
 
 
 class SpectrumPreviewService:
@@ -83,8 +83,6 @@ class SpectrumPreviewService:
         Returns:
             ppm 与强度序列。
         """
-        nmr_service = importlib.import_module("services.nmr_service")
-        get_nmr_sample_data = getattr(nmr_service, "get_nmr_sample_data")
         data, ppm_scale, _, _ = get_nmr_sample_data(folder_path, index=0)
         return np.asarray(ppm_scale, dtype=np.float64), np.asarray(data, dtype=np.float64)
 

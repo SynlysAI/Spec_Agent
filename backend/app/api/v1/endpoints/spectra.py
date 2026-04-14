@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from app.models.common import ApiResponse
-from app.models.spectra import SpectrumPreviewData
+from app.schemas.common import ApiResponse
+from app.schemas.spectra import SpectrumPreviewData
 from app.services.spectrum_preview_service import spectrum_preview_service
 
 router = APIRouter(prefix="/spectra", tags=["spectra"])

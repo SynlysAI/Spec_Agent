@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.common import ApiResponse
-from app.models.tasks import (
+from app.schemas.common import ApiResponse
+from app.schemas.tasks import (
     TaskArtifactsData,
     CreateGpcTaskRequest,
     CreateIrRamanTaskRequest,

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import importlib
 from datetime import datetime
 from typing import Any
 
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
 from app.infra.mongo import get_results_collection, get_tasks_collection
-from app.models.dialogue import DialogueReportItem
+from app.modules.common.llm_service import create_llm_client
+from app.schemas.dialogue import DialogueReportItem
 
 ANALYSIS_TYPE_LABELS = {
     "none": "无",
@@ -208,14 +210,7 @@ class DialogueService:
             LLM 回答文本，失败时返回空字符串。
         """
         try:
-            model_module = importlib.import_module("services.llm_service")
-            create_llm_client = getattr(model_module, "create_llm_client")
             llm_client = create_llm_client()
-
-            langchain_messages = importlib.import_module("langchain_core.messages")
-            SystemMessage = getattr(langchain_messages, "SystemMessage")
-            HumanMessage = getattr(langchain_messages, "HumanMessage")
-            AIMessage = getattr(langchain_messages, "AIMessage")
 
             merged_system_prompt = DialogueService._build_llm_system_prompt(
                 analysis_type=analysis_type,

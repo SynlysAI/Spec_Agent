@@ -5,8 +5,8 @@ from __future__ import annotations
 import requests
 from fastapi import APIRouter, HTTPException
 
-from app.models.common import ApiResponse
-from app.models.nmr_server import (
+from app.schemas.common import ApiResponse
+from app.schemas.nmr_server import (
     NmrServerForwardRequest,
     NmrServerResultData,
     NmrServerReverseRequest,

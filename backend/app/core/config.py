@@ -22,8 +22,10 @@ class Settings:
 
     def __init__(self) -> None:
         self.project_root: Path = Path(__file__).resolve().parents[3]
+        self.backend_root: Path = self.project_root / "backend"
         self.upload_root: Path = self.project_root / "uploads"
         self.outputs_root: Path = self.project_root / "outputs"
+        self.resources_root: Path = self.backend_root / "resources"
         self.max_upload_size_mb: int = 100
         self.api_prefix: str = "/api/v1"
         self.app_env: str = os.getenv("APP_ENV", "dev")
@@ -45,6 +47,45 @@ class Settings:
 
         # NMRServer 外部服务配置
         self.nmr_server_base_url: str = os.getenv("NMR_SERVER_BASE_URL", "http://100.84.59.58:8080")
+
+        # LLM 配置
+        self.llm_model: str = os.getenv("LLM_MODEL", "deepseek-chat")
+        self.llm_api_key: str = os.getenv("LLM_API_KEY", "")
+        self.llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.agicto.cn/v1")
+        self.llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
+        self.llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
+        self.llm_timeout: int = int(os.getenv("LLM_TIMEOUT", "60"))
+        self.llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
+
+        # GPC 兼容配置
+        self.spectrum_files_root: Path = Path(os.getenv("SPECTRUM_FILES_ROOT", r"E:\spectrum_files"))
+        self.analysis_results_root: Path = Path(os.getenv("ANALYSIS_RESULTS_PATH", str(self.outputs_root)))
+        self.calibration_curves_root: Path = Path(
+            os.getenv(
+                "CALIBRATION_CURVES_PATH",
+                str(self.spectrum_files_root / "gpc" / "calibration_curves_json"),
+            )
+        )
+        self.gpc_three_color_dir: Path = Path(
+            os.getenv(
+                "GPC_THREE_COLOR_DIR",
+                str(self.spectrum_files_root / "gpc" / "three_color_curve"),
+            )
+        )
+        self.gpc_comparison_pdf_dir: Path = Path(
+            os.getenv(
+                "GPC_COMPARISON_PDF_DIR",
+                str(self.spectrum_files_root / "gpc" / "spectrum"),
+            )
+        )
+
+        # 资源文件路径
+        self.acceptance_config_path: Path = self.resources_root / "config" / "acceptance.yaml"
+        self.solvent_impurities_path: Path = self.resources_root / "config" / "solvent_impurities.json"
+        self.raman_resources_root: Path = self.resources_root / "raman"
+        self.raman_checkpoints_root: Path = self.raman_resources_root / "checkpoints"
+        self.raman_database_root: Path = self.raman_resources_root / "database"
+        self.raman_tokenizer_root: Path = self.raman_resources_root / "moltokenizer"
 
     @property
     def mongodb_uri(self) -> str:
@@ -74,6 +115,19 @@ class Settings:
             f"amqp://{self.rabbitmq_username}:{self.rabbitmq_password}"
             f"@{self.rabbitmq_host}:{self.rabbitmq_port}{vhost}"
         )
+
+    @property
+    def llm_config(self) -> dict[str, object]:
+        """返回统一 LLM 配置。"""
+        return {
+            "model": self.llm_model,
+            "api_key": self.llm_api_key,
+            "base_url": self.llm_base_url,
+            "temperature": self.llm_temperature,
+            "max_tokens": self.llm_max_tokens,
+            "timeout": self.llm_timeout,
+            "max_retries": self.llm_max_retries,
+        }
 
 
 settings = Settings()

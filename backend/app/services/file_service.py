@@ -11,7 +11,7 @@ from fastapi import UploadFile
 
 from app.core.config import settings
 from app.infra.mongo import get_files_collection
-from app.models.files import UploadFileData
+from app.schemas.files import UploadFileData
 
 
 class FileService:

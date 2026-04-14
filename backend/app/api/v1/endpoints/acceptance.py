@@ -7,14 +7,14 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from app.models.acceptance import (
+from app.schemas.acceptance import (
     AcceptanceConfigData,
     AcceptanceRunCreateData,
     AcceptanceRunData,
     AcceptanceRunHistoryData,
     AcceptanceRunRequest,
 )
-from app.models.common import ApiResponse
+from app.schemas.common import ApiResponse
 from app.services.acceptance_service import acceptance_service
 
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])

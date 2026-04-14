@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.core.config import settings
-from app.models.common import ApiResponse
-from app.models.files import UploadFileData
+from app.schemas.common import ApiResponse
+from app.schemas.files import UploadFileData
 from app.services.file_service import FileService
 
 router = APIRouter(prefix="/files", tags=["files"])

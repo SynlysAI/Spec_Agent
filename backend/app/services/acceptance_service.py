@@ -14,7 +14,7 @@ from uuid import uuid4
 import yaml
 
 from app.core.config import settings
-from app.models.acceptance import (
+from app.schemas.acceptance import (
     AcceptanceRunHistoryItem,
     AcceptanceRunData,
     AcceptanceRunItem,
@@ -51,7 +51,7 @@ class AcceptanceService:
     """提供验收配置读取、批次执行与结果查询能力。"""
 
     def __init__(self) -> None:
-        self.config_path = settings.project_root / "backend" / "config" / "acceptance.yaml"
+        self.config_path = settings.acceptance_config_path
         self._run_store: dict[str, AcceptanceRunData] = {}
         self._lock = threading.Lock()
 

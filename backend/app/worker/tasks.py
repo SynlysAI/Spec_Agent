@@ -2,42 +2,25 @@
 
 from __future__ import annotations
 
-import importlib
-import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import torch
+
 from app.core.config import settings
 from app.infra.mongo import get_files_collection, get_results_collection, get_tasks_collection
+from app.modules.gpc.workflow import run_gpc_analysis
+from app.modules.ir_raman.agent import run_ir_raman_analysis_from_file
+from app.modules.nmr.service import (
+    build_analysis_report,
+    build_peak_detection_result,
+    build_summary_rows,
+    run_integration_analysis,
+)
+from app.modules.nmr.workflow import _compute_nmr_qa_metrics
 from app.worker.celery_app import celery_app
-
-
-BACKEND_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _import_backend_module(module_name: str) -> Any:
-    """导入 backend 顶层模块，必要时自动修复 sys.path 后重试。
-
-    Args:
-        module_name: 需要导入的模块路径，如 agents.langraph_gpc_agent。
-
-    Returns:
-        已导入的模块对象。
-    """
-    try:
-        return importlib.import_module(module_name)
-    except ModuleNotFoundError as exc:
-        top_level_name = module_name.split(".")[0]
-        missing_name = getattr(exc, "name", "")
-        if missing_name not in {top_level_name, module_name}:
-            raise
-
-        backend_root = str(BACKEND_ROOT)
-        if backend_root not in sys.path:
-            sys.path.insert(0, backend_root)
-        return importlib.import_module(module_name)
 
 
 def _to_basic(value: Any) -> Any:
@@ -258,8 +241,6 @@ def _execute_gpc(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     output_dir = settings.outputs_root / "tasks" / task_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    gpc_module = _import_backend_module("agents.langraph_gpc_agent")
-    run_gpc_analysis = getattr(gpc_module, "run_gpc_analysis")
     source_file_name = str(params.get("source_file_name") or "").strip() or None
     if not source_file_name and input_data.get("input_type") == "file_id":
         file_id = str(input_data.get("file_id") or "").strip()
@@ -305,12 +286,6 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     output_dir = settings.outputs_root / "tasks" / task_id
     output_dir.mkdir(parents=True, exist_ok=True)
     nmr_folder_path = _prepare_nmr_input_path(task_id=task_id, input_path=input_path)
-
-    nmr_service = _import_backend_module("services.nmr_service")
-    build_peak_detection_result = getattr(nmr_service, "build_peak_detection_result")
-    run_integration_analysis = getattr(nmr_service, "run_integration_analysis")
-    build_summary_rows = getattr(nmr_service, "build_summary_rows")
-    build_analysis_report = getattr(nmr_service, "build_analysis_report")
 
     detection_range_mode = "全谱" if params.get("detection_range_mode", "full") == "full" else "自定义范围"
     peak_detection_params = {
@@ -360,9 +335,7 @@ def _execute_nmr(task_id: str, input_data: dict[str, Any], params: dict[str, Any
     )
     qa_metrics: dict[str, Any] = {}
     try:
-        nmr_agent_module = _import_backend_module("agents.langraph_nmr_agent")
-        compute_nmr_qa_metrics = getattr(nmr_agent_module, "_compute_nmr_qa_metrics")
-        qa_metrics = compute_nmr_qa_metrics(
+        qa_metrics = _compute_nmr_qa_metrics(
             input_path=nmr_folder_path,
             structured_data={"nmr_results": nmr_results, "summary_rows": summary_rows},
             baseline_degree=int(params.get("baseline_degree", 3) or 3),
@@ -397,14 +370,6 @@ def _execute_ir_raman(task_id: str, input_data: dict[str, Any], params: dict[str
     if not Path(input_path).is_file():
         raise ValueError("IR/Raman 输入必须是谱图文件路径")
 
-    try:
-        agent_module = _import_backend_module("agents.ir_raman_agent")
-    except ModuleNotFoundError as exc:
-        raise ValueError(
-            "IR/Raman 依赖缺失，请安装 numpy/torch/pyyaml 等依赖后重试"
-        ) from exc
-    run_from_file = getattr(agent_module, "run_ir_raman_analysis_from_file")
-
     spectype = str(params.get("spectype") or "ir").lower()
     mode = str(params.get("mode") or "greedy_decode")
     k = int(params.get("k") or 3)
@@ -415,17 +380,16 @@ def _execute_ir_raman(task_id: str, input_data: dict[str, Any], params: dict[str
 
     device = None
     if device_name in {"cpu", "cuda"}:
-        torch_module = importlib.import_module("torch")
-        if device_name == "cuda" and not torch_module.cuda.is_available():
-            device = torch_module.device("cpu")
+        if device_name == "cuda" and not torch.cuda.is_available():
+            device = torch.device("cpu")
         else:
-            device = torch_module.device(device_name)
+            device = torch.device(device_name)
 
     output_dir = settings.outputs_root / "tasks" / task_id
     output_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / f"{Path(input_path).stem}_{spectype}_report.md"
 
-    result = run_from_file(
+    result = run_ir_raman_analysis_from_file(
         spectrum_file=input_path,
         spectype=spectype,
         mode=mode,

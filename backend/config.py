@@ -1,41 +1,15 @@
+"""旧目录结构兼容配置层。"""
+
+from __future__ import annotations
+
 import logging
-import os
 import platform
-from pathlib import Path
 
-from dotenv import load_dotenv
-
-ROOT_DIR = Path(__file__).resolve().parent
-
-# 根据操作系统加载对应的 env 文件
-if platform.system() == "Windows":  # Windows
-    env_file = ROOT_DIR / ".env"
-else:  # Linux/MacOS
-    env_file = ROOT_DIR / "linux.env"
-    
-if env_file.exists():
-    load_dotenv(env_file)
-else:
-    # Fallback to default .env if specific one doesn't exist
-    load_dotenv(ROOT_DIR / ".env")
+from app.core.config import settings
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _resolve_path(env_name: str, default_relative_path: str) -> str:
-    raw_value = os.getenv(env_name)
-    path = Path(raw_value) if raw_value else ROOT_DIR / default_relative_path
-    return str(path)
-
-
-def setup_matplotlib_font():
-    """统一配置 Matplotlib 中文字体，适配 Windows / Linux 环境。"""
-
+def setup_matplotlib_font() -> None:
+    """统一配置 Matplotlib 中文字体。"""
     import matplotlib
 
     if platform.system() == "Windows":
@@ -45,8 +19,8 @@ def setup_matplotlib_font():
     matplotlib.rcParams["axes.unicode_minus"] = False
 
 
-def setup_logging(log_level=logging.INFO, logger_name="spec_agent"):
-    """统一主项目日志格式，避免重复注册 handler。"""
+def setup_logging(log_level: int = logging.INFO, logger_name: str = "spec_agent") -> logging.Logger:
+    """统一日志初始化，兼容旧模块调用方式。"""
     logger = logging.getLogger(logger_name)
     logger.setLevel(log_level)
 
@@ -62,73 +36,55 @@ def setup_logging(log_level=logging.INFO, logger_name="spec_agent"):
     return logger
 
 
-def _build_global_config():
-    """谱图解析全局配置"""
-    spectrum_files_root = os.getenv("SPECTRUM_FILES_ROOT", r"E:\spectrum_files")
-    database_path = os.getenv("SPECTRUM_DB_PATH", r"E:\spectrum_dbs\spectrum.db")
-    outputs_dir = _resolve_path("OUTPUTS_PATH", str(ROOT_DIR.parent / "outputs"))
-    calibration_curves = os.path.join(spectrum_files_root, "gpc", "calibration_curves_json")
-
-    data_storage = {
-        "calibration_curves": _resolve_path("CALIBRATION_CURVES_PATH", calibration_curves),
-        "sample_data": _resolve_path("SAMPLE_DATA_PATH", spectrum_files_root),
-        "analysis_results": _resolve_path("ANALYSIS_RESULTS_PATH", outputs_dir),
-    }
-
+def _build_global_config() -> dict[str, object]:
+    """构建旧模块兼容使用的全局配置字典。"""
     return {
         "app_name": "Spec_Agent 智能分析平台",
-        "version": os.getenv("SPEC_AGENT_VERSION", "1.0.0"),
-        "server_host": os.getenv("SPEC_AGENT_HOST", "0.0.0.0"),
-        "server_port": int(os.getenv("SPEC_AGENT_PORT", "8501")),
-        "share": _env_bool("SPEC_AGENT_SHARE", False),
-        "root_dir": str(ROOT_DIR),
+        "version": "1.0.0",
+        "server_host": "0.0.0.0",
+        "server_port": 8501,
+        "share": False,
+        "root_dir": str(settings.backend_root),
         "database": {
-            "type": os.getenv("APP_DB_TYPE", "sqlite"),
-            "path": database_path,
+            "type": "sqlite",
+            "path": "",
             "postgresql": {
-                "host": os.getenv("DB_HOST", "localhost"),
-                "port": int(os.getenv("DB_PORT", "5432")),
-                "user": os.getenv("DB_USER", "postgres"),
-                "password": os.getenv("DB_PASSWORD", "password"),
-                "database": os.getenv("DB_NAME", "spec_agent_db"),
+                "host": "localhost",
+                "port": 5432,
+                "user": "postgres",
+                "password": "password",
+                "database": "spec_agent_db",
             },
         },
-        "data_storage": data_storage,
+        "data_storage": {
+            "calibration_curves": str(settings.calibration_curves_root),
+            "sample_data": str(settings.spectrum_files_root),
+            "analysis_results": str(settings.analysis_results_root),
+        },
         "paths": {
-            "outputs": outputs_dir,
-            "gpc_results": os.path.join(outputs_dir, "gpc_results"),
-            "nmr_results": os.path.join(outputs_dir, "nmr_results"),
-            "raman_results": os.path.join(outputs_dir, "raman_results"),
-            # 示例的NMR核磁实验数据
-            "nmr_dataset": _resolve_path(
-                "NMR_DATASET_PATH",
-                os.path.join(spectrum_files_root, "nmr", "20250804")
-            ),
-            "gpc_three_color_dir": os.getenv(
-                "GPC_THREE_COLOR_DIR",
-                os.path.join(spectrum_files_root, "gpc", "three_color_curve"),
-            ),
-            # GPC 对比用：在目录中按样品名匹配测试报告 PDF（与 GPCValidator.process_gpc_data 一致）
-            "gpc_comparison_pdf_dir": os.getenv(
-                "GPC_COMPARISON_PDF_DIR",
-                os.path.join(spectrum_files_root, "gpc", "spectrum"),
-            ),
-            "spectrum_files_root": spectrum_files_root,
+            "outputs": str(settings.outputs_root),
+            "gpc_results": str(settings.outputs_root / "gpc_results"),
+            "nmr_results": str(settings.outputs_root / "nmr_results"),
+            "raman_results": str(settings.outputs_root / "raman_results"),
+            "nmr_dataset": str(settings.spectrum_files_root / "nmr" / "20250804"),
+            "gpc_three_color_dir": str(settings.gpc_three_color_dir),
+            "gpc_comparison_pdf_dir": str(settings.gpc_comparison_pdf_dir),
+            "spectrum_files_root": str(settings.spectrum_files_root),
         },
         "services": {
-            "nmr_server_base_url": os.getenv("NMR_SERVER_BASE_URL", "http://100.84.59.58:8080"),
+            "nmr_server_base_url": settings.nmr_server_base_url,
         },
-        "llm": {
-            "model": os.getenv("LLM_MODEL", "deepseek-chat"),
-            "api_key": os.getenv("LLM_API_KEY", ""),
-            "base_url": os.getenv("LLM_BASE_URL", "https://api.agicto.cn/v1"),
-            "temperature": float(os.getenv("LLM_TEMPERATURE", "0.7")),
-            "max_tokens": int(os.getenv("LLM_MAX_TOKENS", "8192")),
-            "timeout": int(os.getenv("LLM_TIMEOUT", "60")),
-            "max_retries": int(os.getenv("LLM_MAX_RETRIES", "2")),
+        "llm": settings.llm_config.copy(),
+        "resources": {
+            "backend_root": str(settings.backend_root),
+            "resources_root": str(settings.resources_root),
+            "acceptance_config": str(settings.acceptance_config_path),
+            "solvent_impurities": str(settings.solvent_impurities_path),
+            "raman_checkpoints_root": str(settings.raman_checkpoints_root),
+            "raman_database_root": str(settings.raman_database_root),
+            "raman_tokenizer_root": str(settings.raman_tokenizer_root),
         },
     }
 
 
-# 模块级应用配置单例（PEP 8：模块常量使用全大写命名）
 GLOBAL_CONFIG = _build_global_config()
