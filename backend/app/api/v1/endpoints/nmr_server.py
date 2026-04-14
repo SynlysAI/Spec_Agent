@@ -12,7 +12,11 @@ from app.schemas.nmr_server import (
     NmrServerReverseRequest,
     NmrServerSearchRequest,
 )
-from app.services.nmr_server_service import nmr_server_service
+from app.services.nmr_server_service import (
+    NmrServerBusinessError,
+    NmrServerProtocolError,
+    nmr_server_service,
+)
 
 router = APIRouter(prefix="/nmrserver", tags=["nmrserver"])
 
@@ -28,7 +32,7 @@ def nmrserver_forward(payload: NmrServerForwardRequest) -> ApiResponse[NmrServer
         raise HTTPException(status_code=504, detail="NMRServer 请求超时") from exc
     except requests.exceptions.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"NMRServer 请求失败: {exc}") from exc
-    except RuntimeError as exc:
+    except (NmrServerBusinessError, NmrServerProtocolError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return ApiResponse(code=0, message="ok", data=NmrServerResultData(items=items))
@@ -52,7 +56,7 @@ def nmrserver_reverse(payload: NmrServerReverseRequest) -> ApiResponse[NmrServer
         raise HTTPException(status_code=504, detail="NMRServer 请求超时") from exc
     except requests.exceptions.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"NMRServer 请求失败: {exc}") from exc
-    except RuntimeError as exc:
+    except (NmrServerBusinessError, NmrServerProtocolError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return ApiResponse(code=0, message="ok", data=NmrServerResultData(items=items))
@@ -76,7 +80,7 @@ def nmrserver_search(payload: NmrServerSearchRequest) -> ApiResponse[NmrServerRe
         raise HTTPException(status_code=504, detail="NMRServer 请求超时") from exc
     except requests.exceptions.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"NMRServer 请求失败: {exc}") from exc
-    except RuntimeError as exc:
+    except (NmrServerBusinessError, NmrServerProtocolError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return ApiResponse(code=0, message="ok", data=NmrServerResultData(items=items))

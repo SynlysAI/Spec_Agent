@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -14,6 +16,43 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 
 
+def _resolve_request_id(request: Request) -> str:
+    """解析请求追踪 ID。
+
+    Args:
+        request: 当前请求对象。
+
+    Returns:
+        请求追踪 ID；若请求头未提供则自动生成。
+    """
+    header_request_id = request.headers.get("x-request-id")
+    if header_request_id:
+        return header_request_id
+    return uuid4().hex
+
+
+def _map_http_error(status_code: int) -> tuple[int, str]:
+    """映射 HTTP 状态到统一错误语义。
+
+    Args:
+        status_code: HTTP 状态码。
+
+    Returns:
+        业务错误码与错误消息元组。
+    """
+    if status_code == 400:
+        return 40001, "invalid parameter"
+    if status_code == 404:
+        return 40401, "resource not found"
+    if status_code == 422:
+        return 42201, "validation failed"
+    if status_code == 502:
+        return 50201, "upstream service error"
+    if status_code == 504:
+        return 50401, "upstream timeout"
+    return 50001, "internal error"
+
+
 def create_app() -> FastAPI:
     """创建 FastAPI 应用实例。"""
     app = FastAPI(
@@ -23,7 +62,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -47,14 +86,20 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     Returns:
         统一错误响应。
     """
+    request_id = _resolve_request_id(request)
     return JSONResponse(
         status_code=422,
         content={
-            "code": 40001,
-            "message": "invalid parameter",
-            "data": {"errors": exc.errors(), "path": str(request.url.path)},
-            "request_id": None,
+            "code": 42201,
+            "message": "validation failed",
+            "data": {
+                "detail": "request validation failed",
+                "errors": exc.errors(),
+                "path": str(request.url.path),
+            },
+            "request_id": request_id,
         },
+        headers={"X-Request-Id": request_id},
     )
 
 
@@ -68,15 +113,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     Returns:
         统一错误响应。
     """
-    if exc.status_code == 404:
-        code = 40401
-        message = "task not found"
-    elif exc.status_code == 400:
-        code = 40001
-        message = "invalid parameter"
-    else:
-        code = 50001
-        message = "internal error"
+    code, message = _map_http_error(exc.status_code)
+    request_id = _resolve_request_id(request)
 
     detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
     return JSONResponse(
@@ -85,8 +123,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
             "code": code,
             "message": message,
             "data": {"detail": detail, "path": str(request.url.path)},
-            "request_id": None,
+            "request_id": request_id,
         },
+        headers={"X-Request-Id": request_id},
     )
 
 
@@ -100,14 +139,16 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     Returns:
         统一错误响应。
     """
+    request_id = _resolve_request_id(request)
     return JSONResponse(
         status_code=500,
         content={
             "code": 50001,
             "message": "internal error",
             "data": {"detail": str(exc), "path": str(request.url.path)},
-            "request_id": None,
+            "request_id": request_id,
         },
+        headers={"X-Request-Id": request_id},
     )
 
 

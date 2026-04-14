@@ -14,8 +14,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```bash
 cd E:/xx_project/Spec_Agent/backend
 conda activate Spec_Agent
-celery -A app.worker.celery_app.celery_app worker --loglevel=info -Q spec_agent -P solo
+python -m celery -A app.worker.celery_app:celery_app worker --loglevel=info -Q spec_agent -P solo
 ```
+
+推荐使用 `python -m celery` 形式，避免 Windows 下 `celery.exe` 入口脚本的模块路径差异问题。
 
 ## 环境变量（可选）
 

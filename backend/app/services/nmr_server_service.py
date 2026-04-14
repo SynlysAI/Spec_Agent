@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 import requests
+from requests import Session
 
 from app.core.config import settings
+
+
+class NmrServerProtocolError(RuntimeError):
+    """NMRServer 协议错误。"""
+
+
+class NmrServerBusinessError(RuntimeError):
+    """NMRServer 业务错误。"""
 
 
 class NmrServerService:
@@ -12,6 +21,9 @@ class NmrServerService:
 
     def __init__(self) -> None:
         self.base_url = settings.nmr_server_base_url
+        self.connect_timeout = 10
+        self.read_timeout = 350
+        self.session: Session = requests.Session()
 
     def _post(self, payload: dict) -> list[dict]:
         """调用外部 NMRServer 统一入口并解析结果。
@@ -22,16 +34,35 @@ class NmrServerService:
         Returns:
             外部服务返回的结果项列表。
         """
-        response = requests.post(
+        response = self.session.post(
             f"{self.base_url}/sync_nmr_service_mcp",
             json=payload,
-            timeout=360,
+            timeout=(self.connect_timeout, self.read_timeout),
         )
         response.raise_for_status()
-        result = response.json()
-        if result.get("code") != 0 or "data" not in result:
-            raise RuntimeError(result.get("msg", "NMRServer 返回异常"))
-        return result["data"]["result"]["data"]
+        try:
+            result = response.json()
+        except ValueError as exc:
+            raise NmrServerProtocolError("NMRServer 返回非 JSON 响应") from exc
+
+        if not isinstance(result, dict):
+            raise NmrServerProtocolError("NMRServer 返回结构不是对象")
+
+        if result.get("code") != 0:
+            raise NmrServerBusinessError(result.get("msg", "NMRServer 业务返回异常"))
+
+        data_wrapper = result.get("data")
+        if not isinstance(data_wrapper, dict):
+            raise NmrServerProtocolError("NMRServer 返回缺少 data 对象")
+
+        result_wrapper = data_wrapper.get("result")
+        if not isinstance(result_wrapper, dict):
+            raise NmrServerProtocolError("NMRServer 返回缺少 data.result 对象")
+
+        items = result_wrapper.get("data")
+        if not isinstance(items, list):
+            raise NmrServerProtocolError("NMRServer 返回缺少 data.result.data 列表")
+        return items
 
     @staticmethod
     def _parse_float_list(raw_text: str) -> list[float]:

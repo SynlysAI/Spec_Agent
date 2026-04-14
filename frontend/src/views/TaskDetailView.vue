@@ -1,9 +1,18 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
-import { getTaskArtifacts, getTaskResult, getTaskStatus, previewSpectrum } from '../api/specAgentApi'
+import {
+  getApiBaseUrl,
+  getApiErrorMessage,
+  getTaskArtifacts,
+  getTaskResult,
+  getTaskStatus,
+  isRequestCanceled,
+  previewSpectrum,
+} from '../api/specAgentApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +24,10 @@ const resultData = ref(null)
 const artifactItems = ref([])
 const previewLoading = ref(false)
 const previewData = ref(null)
+const activeRequestController = ref(null)
+const pollingTimer = ref(null)
+const pollingAttempt = ref(0)
+const isUnmounted = ref(false)
 
 const structuredData = computed(() => resultData.value?.result?.structured_data || {})
 const resultMetadata = computed(() => resultData.value?.result?.metadata || {})
@@ -23,8 +36,11 @@ const isGpcTask = computed(() => statusData.value?.task_type === 'gpc_analysis')
 const isIrRamanTask = computed(() =>
   ['ir_analysis', 'raman_analysis'].includes(String(statusData.value?.task_type || '')),
 )
+const isRunningStatus = computed(() =>
+  ['PENDING', 'QUEUED', 'RUNNING'].includes(String(statusData.value?.status || '')),
+)
 const imageArtifacts = computed(() => artifactItems.value.filter((item) => item.file_type === 'image'))
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1'
+const apiBaseUrl = getApiBaseUrl()
 const backendOrigin = new URL(apiBaseUrl).origin
 const treeProps = {
   children: 'children',
@@ -292,12 +308,69 @@ function isSuccess() {
 }
 
 /**
+ * 清理请求控制器。
+ */
+function clearActiveController() {
+  activeRequestController.value = null
+}
+
+/**
+ * 清理轮询定时器。
+ */
+function clearPollingTimer() {
+  if (!pollingTimer.value) {
+    return
+  }
+  clearTimeout(pollingTimer.value)
+  pollingTimer.value = null
+}
+
+/**
+ * 取消当前进行中的请求。
+ */
+function cancelActiveRequest() {
+  if (!activeRequestController.value) {
+    return
+  }
+  activeRequestController.value.abort()
+  clearActiveController()
+}
+
+/**
+ * 计算轮询间隔时长（毫秒）。
+ *
+ * Args:
+ *   attempt: 轮询尝试次数。
+ *
+ * Returns:
+ *   退避后的轮询间隔。
+ */
+function getPollingIntervalMs(attempt) {
+  const intervals = [2000, 3000, 5000, 8000, 12000]
+  return intervals[Math.min(Math.max(attempt, 0), intervals.length - 1)]
+}
+
+/**
+ * 计划下一次轮询。
+ */
+function scheduleNextPolling() {
+  clearPollingTimer()
+  if (isUnmounted.value || !isRunningStatus.value) {
+    return
+  }
+  const waitMs = getPollingIntervalMs(pollingAttempt.value)
+  pollingTimer.value = setTimeout(() => {
+    fetchDetail({ silent: true, source: 'polling' })
+  }, waitMs)
+}
+
+/**
  * 自动加载任务输入谱图预览。
  *
  * Returns:
  *   Promise<void>
  */
-async function fetchSourcePreview() {
+async function fetchSourcePreview(signal) {
   previewData.value = null
   if (!isSuccess()) {
     return
@@ -316,8 +389,11 @@ async function fetchSourcePreview() {
 
   previewLoading.value = true
   try {
-    previewData.value = await previewSpectrum(formData)
-  } catch (_error) {
+    previewData.value = await previewSpectrum(formData, { signal })
+  } catch (error) {
+    if (isRequestCanceled(error)) {
+      return
+    }
     previewData.value = null
   } finally {
     previewLoading.value = false
@@ -330,24 +406,73 @@ async function fetchSourcePreview() {
  * Returns:
  *   Promise<void>
  */
-async function fetchDetail() {
-  loading.value = true
+async function fetchDetail(options = {}) {
+  const silentMode = Boolean(options.silent)
+  if (!silentMode) {
+    loading.value = true
+  }
+  clearPollingTimer()
+  cancelActiveRequest()
+  const controller = new AbortController()
+  activeRequestController.value = controller
+
   try {
-    const [status, result, artifacts] = await Promise.all([
-      getTaskStatus(taskId.value),
-      getTaskResult(taskId.value),
-      getTaskArtifacts(taskId.value),
-    ])
+    const status = await getTaskStatus(taskId.value, { signal: controller.signal })
     statusData.value = status
-    resultData.value = result
-    artifactItems.value = artifacts.items || []
-    await fetchSourcePreview()
+    const shouldLoadFullData = ['SUCCESS', 'FAILED'].includes(String(status?.status || ''))
+    if (shouldLoadFullData) {
+      const result = await getTaskResult(taskId.value, { signal: controller.signal })
+      resultData.value = result
+      const artifacts = await getTaskArtifacts(taskId.value, { signal: controller.signal })
+      artifactItems.value = artifacts.items || []
+      await fetchSourcePreview(controller.signal)
+    } else {
+      resultData.value = null
+      artifactItems.value = []
+      previewData.value = null
+    }
+
+    if (isRunningStatus.value) {
+      pollingAttempt.value += 1
+      scheduleNextPolling()
+    } else {
+      pollingAttempt.value = 0
+    }
+  } catch (error) {
+    if (!isRequestCanceled(error)) {
+      ElMessage.error(getApiErrorMessage(error))
+    }
   } finally {
-    loading.value = false
+    if (activeRequestController.value === controller) {
+      clearActiveController()
+    }
+    if (!silentMode) {
+      loading.value = false
+    }
   }
 }
 
-onMounted(fetchDetail)
+/**
+ * 手动刷新任务详情。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function refreshDetail() {
+  pollingAttempt.value = 0
+  await fetchDetail({ silent: false, source: 'manual' })
+}
+
+onMounted(() => {
+  pollingAttempt.value = 0
+  fetchDetail({ silent: false, source: 'init' })
+})
+
+onBeforeUnmount(() => {
+  isUnmounted.value = true
+  clearPollingTimer()
+  cancelActiveRequest()
+})
 </script>
 
 <template>
@@ -360,7 +485,7 @@ onMounted(fetchDetail)
             <el-icon><ArrowLeft /></el-icon>
             返回任务中心
           </el-button>
-          <el-button type="primary" plain @click="fetchDetail">刷新</el-button>
+          <el-button type="primary" plain @click="refreshDetail">刷新</el-button>
         </div>
       </div>
       <div class="panel-body" v-loading="loading">

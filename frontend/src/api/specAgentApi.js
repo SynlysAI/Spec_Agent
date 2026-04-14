@@ -1,68 +1,265 @@
-﻿import axios from 'axios'
+import axios from 'axios'
+
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
+const REQUEST_TIMEOUT_MS = 60000
+
+/**
+ * 生成请求追踪 ID。
+ *
+ * Returns:
+ *   可用于 X-Request-Id 请求头的追踪字符串。
+ */
+function generateRequestId() {
+  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+/**
+ * 解析并归一化 API 基础地址。
+ *
+ * Returns:
+ *   规范化后的 API 基础地址。
+ */
+function resolveApiBaseUrl() {
+  const rawBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+  if (!rawBaseUrl) {
+    return DEFAULT_API_BASE_URL
+  }
+  return rawBaseUrl.replace(/\/+$/, '')
+}
+
+const resolvedBaseUrl = resolveApiBaseUrl()
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1',
-  timeout: 60000,
+  baseURL: resolvedBaseUrl,
+  timeout: REQUEST_TIMEOUT_MS,
 })
 
+/**
+ * 创建标准化 API 错误对象。
+ *
+ * Args:
+ *   options: 错误对象构造参数。
+ *
+ * Returns:
+ *   统一格式的错误对象。
+ */
+function createApiError(options) {
+  const error = new Error(options.message || '请求失败')
+  error.name = 'ApiError'
+  error.kind = options.kind || 'unknown'
+  error.code = options.code ?? null
+  error.status = options.status ?? null
+  error.requestId = options.requestId || null
+  error.detail = options.detail || null
+  error.path = options.path || null
+  error.errors = Array.isArray(options.errors) ? options.errors : null
+  error.original = options.original || null
+  return error
+}
+
+/**
+ * 统一解包后端响应。
+ *
+ * Args:
+ *   response: Axios 响应对象。
+ *
+ * Returns:
+ *   业务响应 data。
+ */
 function unwrapResponse(response) {
-  const payload = response.data || {}
+  const payload = response?.data || {}
   if (payload.code !== 0) {
-    throw new Error(payload.message || '请求失败')
+    throw createApiError({
+      kind: 'api_business',
+      message: payload.message || '请求失败',
+      code: payload.code,
+      status: response?.status || null,
+      requestId: payload.request_id || response?.headers?.['x-request-id'] || null,
+      detail: payload?.data?.detail || null,
+      path: payload?.data?.path || null,
+      errors: payload?.data?.errors || null,
+      original: payload,
+    })
   }
   return payload.data
 }
 
+apiClient.interceptors.request.use((config) => {
+  const requestId = generateRequestId()
+  const headers = config.headers || {}
+  headers['X-Request-Id'] = requestId
+  config.headers = headers
+  config.metadata = {
+    ...(config.metadata || {}),
+    requestId,
+    startedAt: Date.now(),
+  }
+  return config
+})
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.name === 'CanceledError') {
+      return Promise.reject(
+        createApiError({
+          kind: 'canceled',
+          message: '请求已取消',
+          original: error,
+        }),
+      )
+    }
+
+    const responseData = error?.response?.data || {}
+    const responseStatus = error?.response?.status || null
+    const requestId =
+      responseData?.request_id ||
+      error?.response?.headers?.['x-request-id'] ||
+      error?.config?.metadata?.requestId ||
+      null
+
+    if (!error?.response) {
+      if (error?.code === 'ECONNABORTED') {
+        return Promise.reject(
+          createApiError({
+            kind: 'timeout',
+            message: '请求超时，请稍后重试',
+            requestId,
+            original: error,
+          }),
+        )
+      }
+      return Promise.reject(
+        createApiError({
+          kind: 'network',
+          message: '网络异常，请检查网络连接',
+          requestId,
+          original: error,
+        }),
+      )
+    }
+
+    const apiMessage = responseData?.message || '请求失败'
+    return Promise.reject(
+      createApiError({
+        kind: 'http',
+        message: apiMessage,
+        code: responseData?.code ?? null,
+        status: responseStatus,
+        requestId,
+        detail: responseData?.data?.detail || null,
+        path: responseData?.data?.path || null,
+        errors: responseData?.data?.errors || null,
+        original: error,
+      }),
+    )
+  },
+)
+
 /**
- * 解析 Axios 异常并提取可读错误信息。
+ * 解析 API 异常并提取可读错误信息。
  *
  * Args:
- *   error: Axios 抛出的异常对象。
+ *   error: API 抛出的异常对象。
  *
  * Returns:
  *   适合界面提示的错误字符串。
  */
 export function getApiErrorMessage(error) {
-  const responseData = error?.response?.data
-  if (responseData?.message) {
-    const detail = responseData?.data?.detail
-    if (detail) {
-      return `${responseData.message}: ${detail}`
-    }
-    const firstValidationError = responseData?.data?.errors?.[0]?.msg
-    if (firstValidationError) {
-      return `${responseData.message}: ${firstValidationError}`
-    }
-    return responseData.message
+  if (!error) {
+    return '请求失败'
   }
-  if (error?.message) {
+
+  if (error.kind === 'canceled') {
+    return '请求已取消'
+  }
+  if (error.kind === 'timeout') {
+    return '请求超时，请稍后重试'
+  }
+  if (error.kind === 'network') {
+    return '网络异常，请检查网络连接'
+  }
+
+  const firstValidationError = error?.errors?.[0]?.msg
+  if (firstValidationError) {
+    return `${error.message}: ${firstValidationError}`
+  }
+
+  if (error?.detail) {
+    return `${error.message}: ${error.detail}`
+  }
+
+  if (typeof error.message === 'string' && error.message.trim()) {
     return error.message
   }
   return '请求失败'
 }
 
-export async function listTasks(params) {
-  const response = await apiClient.get('/tasks', { params })
+/**
+ * 判断错误是否属于请求取消。
+ *
+ * Args:
+ *   error: 待判断的异常对象。
+ *
+ * Returns:
+ *   是否为取消请求异常。
+ */
+export function isRequestCanceled(error) {
+  return error?.kind === 'canceled'
+}
+
+/**
+ * 获取 API 基础地址。
+ *
+ * Returns:
+ *   规范化后的 API 基础地址。
+ */
+export function getApiBaseUrl() {
+  return resolvedBaseUrl
+}
+
+/**
+ * 生成 HTTP 请求配置对象。
+ *
+ * Args:
+ *   options: 传输层配置。
+ *
+ * Returns:
+ *   Axios 请求配置。
+ */
+function buildRequestConfig(options = {}) {
+  const config = {}
+  if (options.params) {
+    config.params = options.params
+  }
+  if (options.signal) {
+    config.signal = options.signal
+  }
+  return config
+}
+
+export async function listTasks(params, options = {}) {
+  const response = await apiClient.get('/tasks', buildRequestConfig({ params, ...options }))
   return unwrapResponse(response)
 }
 
-export async function createGpcTask(payload) {
-  const response = await apiClient.post('/tasks/gpc', payload)
+export async function createGpcTask(payload, options = {}) {
+  const response = await apiClient.post('/tasks/gpc', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function createNmrTask(payload) {
-  const response = await apiClient.post('/tasks/nmr', payload)
+export async function createNmrTask(payload, options = {}) {
+  const response = await apiClient.post('/tasks/nmr', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function createIrTask(payload) {
-  const response = await apiClient.post('/tasks/ir', payload)
+export async function createIrTask(payload, options = {}) {
+  const response = await apiClient.post('/tasks/ir', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function createRamanTask(payload) {
-  const response = await apiClient.post('/tasks/raman', payload)
+export async function createRamanTask(payload, options = {}) {
+  const response = await apiClient.post('/tasks/raman', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
@@ -75,33 +272,33 @@ export async function createRamanTask(payload) {
  * Returns:
  *   谱图预览结果对象。
  */
-export async function previewSpectrum(formData) {
-  const response = await apiClient.post('/spectra/preview', formData)
+export async function previewSpectrum(formData, options = {}) {
+  const response = await apiClient.post('/spectra/preview', formData, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function nmrserverForward(payload) {
-  const response = await apiClient.post('/nmrserver/forward', payload)
+export async function nmrserverForward(payload, options = {}) {
+  const response = await apiClient.post('/nmrserver/forward', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function nmrserverReverse(payload) {
-  const response = await apiClient.post('/nmrserver/reverse', payload)
+export async function nmrserverReverse(payload, options = {}) {
+  const response = await apiClient.post('/nmrserver/reverse', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function nmrserverSearch(payload) {
-  const response = await apiClient.post('/nmrserver/search', payload)
+export async function nmrserverSearch(payload, options = {}) {
+  const response = await apiClient.post('/nmrserver/search', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function getTaskStatus(taskId) {
-  const response = await apiClient.get(`/tasks/${taskId}`)
+export async function getTaskStatus(taskId, options = {}) {
+  const response = await apiClient.get(`/tasks/${taskId}`, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function getTaskResult(taskId) {
-  const response = await apiClient.get(`/tasks/${taskId}/result`)
+export async function getTaskResult(taskId, options = {}) {
+  const response = await apiClient.get(`/tasks/${taskId}/result`, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
@@ -114,18 +311,18 @@ export async function getTaskResult(taskId) {
  * Returns:
  *   任务产物对象。
  */
-export async function getTaskArtifacts(taskId) {
-  const response = await apiClient.get(`/tasks/${taskId}/artifacts`)
+export async function getTaskArtifacts(taskId, options = {}) {
+  const response = await apiClient.get(`/tasks/${taskId}/artifacts`, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
-export async function uploadFile(file, bizType) {
+export async function uploadFile(file, bizType, options = {}) {
   const formData = new FormData()
   formData.append('file', file)
   if (bizType) {
     formData.append('biz_type', bizType)
   }
-  const response = await apiClient.post('/files/upload', formData)
+  const response = await apiClient.post('/files/upload', formData, buildRequestConfig(options))
   const data = unwrapResponse(response)
   const normalizedFileName = data?.file_name || data?.filename || ''
   return {
@@ -141,8 +338,8 @@ export async function uploadFile(file, bizType) {
  * Returns:
  *   分析类型列表数据。
  */
-export async function listDialogueAnalysisTypes() {
-  const response = await apiClient.get('/dialogue/analysis-types')
+export async function listDialogueAnalysisTypes(options = {}) {
+  const response = await apiClient.get('/dialogue/analysis-types', buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
@@ -155,8 +352,9 @@ export async function listDialogueAnalysisTypes() {
  * Returns:
  *   报告列表数据。
  */
-export async function listDialogueReports(analysisType) {
+export async function listDialogueReports(analysisType, options = {}) {
   const response = await apiClient.get('/dialogue/reports', {
+    ...buildRequestConfig(options),
     params: { analysis_type: analysisType, limit: 30 },
   })
   return unwrapResponse(response)
@@ -171,8 +369,8 @@ export async function listDialogueReports(analysisType) {
  * Returns:
  *   问答响应数据。
  */
-export async function dialogueChat(payload) {
-  const response = await apiClient.post('/dialogue/chat', payload)
+export async function dialogueChat(payload, options = {}) {
+  const response = await apiClient.post('/dialogue/chat', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
@@ -182,8 +380,8 @@ export async function dialogueChat(payload) {
  * Returns:
  *   验收配置数据。
  */
-export async function getAcceptanceConfig() {
-  const response = await apiClient.get('/acceptance/config')
+export async function getAcceptanceConfig(options = {}) {
+  const response = await apiClient.get('/acceptance/config', buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
@@ -196,10 +394,14 @@ export async function getAcceptanceConfig() {
  * Returns:
  *   运行创建结果。
  */
-export async function createAcceptanceRun(spectrumTypes) {
-  const response = await apiClient.post('/acceptance/run', {
-    spectrum_types: spectrumTypes,
-  })
+export async function createAcceptanceRun(spectrumTypes, options = {}) {
+  const response = await apiClient.post(
+    '/acceptance/run',
+    {
+      spectrum_types: spectrumTypes,
+    },
+    buildRequestConfig(options),
+  )
   return unwrapResponse(response)
 }
 
@@ -212,8 +414,8 @@ export async function createAcceptanceRun(spectrumTypes) {
  * Returns:
  *   批次运行数据。
  */
-export async function getAcceptanceRun(runId) {
-  const response = await apiClient.get(`/acceptance/run/${runId}`)
+export async function getAcceptanceRun(runId, options = {}) {
+  const response = await apiClient.get(`/acceptance/run/${runId}`, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 
@@ -226,8 +428,11 @@ export async function getAcceptanceRun(runId) {
  * Returns:
  *   历史批次列表数据。
  */
-export async function getAcceptanceRuns(limit = 20) {
-  const response = await apiClient.get('/acceptance/runs', { params: { limit } })
+export async function getAcceptanceRuns(limit = 20, options = {}) {
+  const response = await apiClient.get('/acceptance/runs', {
+    ...buildRequestConfig(options),
+    params: { limit },
+  })
   return unwrapResponse(response)
 }
 

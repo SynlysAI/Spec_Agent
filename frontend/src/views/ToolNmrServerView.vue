@@ -2,7 +2,13 @@
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import NmrStickChart from '../components/NmrStickChart.vue'
-import { getApiErrorMessage, nmrserverForward, nmrserverReverse, nmrserverSearch } from '../api/specAgentApi'
+import {
+  getApiBaseUrl,
+  getApiErrorMessage,
+  nmrserverForward,
+  nmrserverReverse,
+  nmrserverSearch,
+} from '../api/specAgentApi'
 
 const activeMainTab = ref('forward')
 const forwardSpectrumTab = ref('c13')
@@ -38,7 +44,7 @@ const searchForm = reactive({
 })
 
 const forwardExampleSmiles = ['CCO', 'C(C[C@H]1CCCc2ccccc21)=C1CC1', 'C1=CC=CC=C1'].join('\n')
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1'
+const apiBaseUrl = getApiBaseUrl()
 
 /**
  * 将原始预测结果拆分为 13C 与 1H 化学位移列表。
