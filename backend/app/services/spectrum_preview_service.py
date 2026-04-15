@@ -128,7 +128,14 @@ class SpectrumPreviewService:
         ext = Path(filename).suffix.lower()
         inferred = (spectype or "auto").lower()
         if inferred == "auto":
-            inferred = "nmr" if ext == ".zip" else "ir"
+            if ext == ".zip":
+                inferred = "nmr"
+            elif ext in {".txt", ".csv"}:
+                inferred = "lcms"
+            elif ext == ".arw":
+                inferred = "gpc"
+            else:
+                inferred = "ir"
 
         if inferred == "nmr" and ext == ".zip":
             with tempfile.TemporaryDirectory(prefix="nmr_preview_") as temp_dir:
@@ -185,6 +192,8 @@ class SpectrumPreviewService:
                 inferred = "gpc"
             elif source_path.suffix.lower() == ".zip":
                 inferred = "nmr"
+            elif source_path.suffix.lower() in {".txt", ".csv"}:
+                inferred = "lcms"
             else:
                 inferred = "ir"
 

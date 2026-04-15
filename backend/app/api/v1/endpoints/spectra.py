@@ -23,7 +23,7 @@ def preview_spectrum(
 
     Args:
         file: 上传文件对象，可选。
-        spectype: 谱图类型（auto/ir/raman/gpc/nmr）。
+        spectype: 谱图类型（auto/ir/raman/gpc/nmr/lcms）。
         file_id: 上传文件 ID，可选。
         input_path: 本地路径，可选。
         max_points: 预览最大点数。

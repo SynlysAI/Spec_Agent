@@ -20,6 +20,7 @@ from app.modules.nmr.service import (
     run_integration_analysis,
 )
 from app.modules.nmr.workflow import _compute_nmr_qa_metrics
+from app.services.lcms_service import lcms_service
 from app.worker.celery_app import celery_app
 
 
@@ -146,6 +147,14 @@ def _sanitize_ir_raman_structured_data(structured_data: dict[str, Any]) -> dict[
         "mode": _to_basic(structured_data.get("mode")),
         "x0": _to_basic(structured_data.get("x0")),
         "x1": _to_basic(structured_data.get("x1")),
+        "raw_output": _to_basic(structured_data.get("raw_output")),
+    }
+
+
+def _sanitize_lcms_structured_data(structured_data: dict[str, Any]) -> dict[str, Any]:
+    """清洗 LCMS 结构化数据。"""
+    return {
+        "predicted_mass": _to_basic(structured_data.get("predicted_mass")),
         "raw_output": _to_basic(structured_data.get("raw_output")),
     }
 
@@ -419,6 +428,68 @@ def _execute_ir_raman(task_id: str, input_data: dict[str, Any], params: dict[str
     }
 
 
+def _execute_lcms(task_id: str, input_data: dict[str, Any], _params: dict[str, Any]) -> dict[str, Any]:
+    """执行 LCMS 实际分析。
+
+    Args:
+        task_id: 任务 ID。
+        input_data: 任务输入对象。
+        _params: LCMS 参数（当前版本未使用）。
+
+    Returns:
+        统一结果对象，包含 structured_data、text_report、metadata。
+    """
+    input_path = _resolve_input_path(input_data)
+    input_file = Path(input_path)
+    if not input_file.is_file():
+        raise ValueError("LCMS 输入必须是文件路径")
+
+    output_dir = settings.outputs_root / "tasks" / task_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    infer_result = lcms_service.infer_mass(input_path)
+    predicted_mass = (
+        infer_result.get("predicted_mass")
+        if isinstance(infer_result, dict)
+        else None
+    )
+    if predicted_mass is None and isinstance(infer_result, dict):
+        predicted_mass = infer_result.get("mass")
+    if predicted_mass is None and isinstance(infer_result, dict):
+        predicted_mass = infer_result.get("molecular_weight")
+    if predicted_mass is None:
+        raise ValueError("LCMS 返回中未找到分子量字段")
+
+    try:
+        normalized_mass: float | str = float(predicted_mass)
+    except (TypeError, ValueError):
+        normalized_mass = str(predicted_mass)
+
+    text_report = f"LCMS 分析完成。\n\n预测分子量: {normalized_mass}"
+    report_path = output_dir / "lcms_report.md"
+    report_path.write_text(
+        "# LCMS 分析报告\n\n"
+        f"- 任务ID: {task_id}\n"
+        f"- 输入文件: {input_file.name}\n"
+        f"- 预测分子量: {normalized_mass}\n",
+        encoding="utf-8",
+    )
+
+    return {
+        "structured_data": _sanitize_lcms_structured_data(
+            {"predicted_mass": normalized_mass, "raw_output": infer_result}
+        ),
+        "text_report": text_report,
+        "metadata": _to_basic(
+            {
+                "spectrum_type": "lcms",
+                "input_path": str(input_file),
+                "report_path": str(report_path),
+            }
+        ),
+    }
+
+
 def _prepare_nmr_input_path(task_id: str, input_path: str) -> str:
     """将 NMR 输入路径标准化为可分析的目录路径。
 
@@ -470,6 +541,8 @@ def execute_analysis_task(task_id: str) -> None:
             result_payload = _execute_nmr(task_id=task_id, input_data=input_data, params=params)
         elif task_type in {"ir_analysis", "raman_analysis"}:
             result_payload = _execute_ir_raman(task_id=task_id, input_data=input_data, params=params)
+        elif task_type == "lcms_analysis":
+            result_payload = _execute_lcms(task_id=task_id, input_data=input_data, _params=params)
         else:
             raise ValueError(f"不支持的任务类型: {task_type}")
 

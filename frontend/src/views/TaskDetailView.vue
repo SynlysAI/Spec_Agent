@@ -33,9 +33,18 @@ const structuredData = computed(() => resultData.value?.result?.structured_data 
 const resultMetadata = computed(() => resultData.value?.result?.metadata || {})
 const isNmrTask = computed(() => statusData.value?.task_type === 'nmr_analysis')
 const isGpcTask = computed(() => statusData.value?.task_type === 'gpc_analysis')
+const isLcmsTask = computed(() => statusData.value?.task_type === 'lcms_analysis')
 const isIrRamanTask = computed(() =>
   ['ir_analysis', 'raman_analysis'].includes(String(statusData.value?.task_type || '')),
 )
+const lcmsPredictedMass = computed(() => {
+  const mass = structuredData.value?.predicted_mass
+  if (mass === undefined || mass === null || mass === '') {
+    return '-'
+  }
+  const numericMass = Number(mass)
+  return Number.isFinite(numericMass) ? numericMass.toFixed(4) : String(mass)
+})
 const isRunningStatus = computed(() =>
   ['PENDING', 'QUEUED', 'RUNNING'].includes(String(statusData.value?.status || '')),
 )
@@ -122,6 +131,13 @@ const previewAxisConfig = computed(() => {
     return {
       xAxisName: '时间 (min)',
       yAxisName: '信号强度 (μRIU)',
+      inverseXAxis: false,
+    }
+  }
+  if (spectype === 'lcms') {
+    return {
+      xAxisName: 'm/z',
+      yAxisName: '信号强度',
       inverseXAxis: false,
     }
   }
@@ -378,7 +394,7 @@ async function fetchSourcePreview(signal) {
   const metadata = resultData.value?.result?.metadata || {}
   const inputPath = metadata.input_path
   const spectrumType = String(metadata.spectrum_type || '').toLowerCase()
-  if (!inputPath || !['ir', 'raman', 'gpc', 'nmr'].includes(spectrumType)) {
+  if (!inputPath || !['ir', 'raman', 'gpc', 'nmr', 'lcms'].includes(spectrumType)) {
     return
   }
 
@@ -581,6 +597,14 @@ onBeforeUnmount(() => {
               </template>
             </el-table-column>
           </el-table>
+        </template>
+
+        <template v-if="isSuccess() && isLcmsTask">
+          <h4 style="margin: 8px 0">LCMS 结果概览</h4>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="预测分子量">{{ lcmsPredictedMass }}</el-descriptions-item>
+            <el-descriptions-item label="任务类型">LCMS</el-descriptions-item>
+          </el-descriptions>
         </template>
 
         <template v-if="isSuccess() && isIrRamanTask">

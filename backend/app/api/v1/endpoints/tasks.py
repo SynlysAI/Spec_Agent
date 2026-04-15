@@ -9,6 +9,7 @@ from app.schemas.tasks import (
     TaskArtifactsData,
     CreateGpcTaskRequest,
     CreateIrRamanTaskRequest,
+    CreateLcmsTaskRequest,
     CreateNmrTaskRequest,
     CreateTaskData,
     TaskKind,
@@ -124,6 +125,29 @@ def create_raman_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTa
             task_type="raman_analysis",
             input_data=payload.input.model_dump(),
             params=params,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
+    return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.post("/lcms", response_model=ApiResponse[CreateTaskData])
+def create_lcms_task(payload: CreateLcmsTaskRequest) -> ApiResponse[CreateTaskData]:
+    """创建 LCMS 分析任务。
+
+    Args:
+        payload: LCMS 任务请求模型。
+
+    Returns:
+        任务创建响应。
+    """
+    try:
+        entity = task_service.create_task(
+            task_type="lcms_analysis",
+            input_data=payload.input.model_dump(),
+            params=payload.params.model_dump(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

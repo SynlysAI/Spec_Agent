@@ -43,6 +43,7 @@ class TaskService:
             "nmr_analysis": "t_nmr",
             "ir_analysis": "t_ir",
             "raman_analysis": "t_raman",
+            "lcms_analysis": "t_lcms",
         }
         prefix = prefix_map.get(task_type, "t_task")
         task_id = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"

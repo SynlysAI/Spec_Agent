@@ -43,6 +43,9 @@ RABBITMQ_VHOST=/
 - `POST /api/v1/files/upload`
 - `POST /api/v1/tasks/gpc`
 - `POST /api/v1/tasks/nmr`
+- `POST /api/v1/tasks/ir`
+- `POST /api/v1/tasks/raman`
+- `POST /api/v1/tasks/lcms`
 - `GET /api/v1/tasks/{task_id}`
 - `GET /api/v1/tasks/{task_id}/result`
 

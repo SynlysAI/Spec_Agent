@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
+const DEFAULT_API_BASE_URL = 'http://100.123.43.65:8000/api/v1'
 const REQUEST_TIMEOUT_MS = 60000
 
 /**
@@ -260,6 +260,11 @@ export async function createIrTask(payload, options = {}) {
 
 export async function createRamanTask(payload, options = {}) {
   const response = await apiClient.post('/tasks/raman', payload, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+export async function createLcmsTask(payload, options = {}) {
+  const response = await apiClient.post('/tasks/lcms', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 

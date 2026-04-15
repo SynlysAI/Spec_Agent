@@ -19,7 +19,7 @@ def upload_file(file: UploadFile = File(...), biz_type: str | None = Form(defaul
     函数名称: upload_file
     参数说明:
     - file: 上传文件对象。
-    - biz_type: 业务类型（gpc/nmr/ir/raman），可选。
+    - biz_type: 业务类型（gpc/nmr/ir/raman/lcms），可选。
     """
     _validate_upload(file=file, biz_type=biz_type)
     saved = FileService.save_upload_file(upload_file=file)
@@ -32,7 +32,7 @@ def _validate_upload(file: UploadFile, biz_type: str | None) -> None:
     函数名称: _validate_upload
     参数说明:
     - file: 上传文件对象。
-    - biz_type: 业务类型（gpc/nmr/ir/raman）。
+    - biz_type: 业务类型（gpc/nmr/ir/raman/lcms）。
     """
     filename = file.filename or ""
     if not filename:
@@ -46,9 +46,10 @@ def _validate_upload(file: UploadFile, biz_type: str | None) -> None:
         "nmr": {".txt", ".csv", ".zip"},
         "ir": {".txt", ".csv"},
         "raman": {".txt", ".csv"},
+        "lcms": {".txt", ".csv"},
     }
     if biz_type not in allowed_map:
-        raise HTTPException(status_code=400, detail="biz_type 仅支持 gpc/nmr/ir/raman")
+        raise HTTPException(status_code=400, detail="biz_type 仅支持 gpc/nmr/ir/raman/lcms")
 
     allowed = allowed_map[biz_type]
     if suffix not in allowed:

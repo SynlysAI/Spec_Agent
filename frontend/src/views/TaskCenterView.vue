@@ -96,6 +96,7 @@ onMounted(fetchTasks)
             <el-option label="nmr_analysis" value="nmr_analysis" />
             <el-option label="ir_analysis" value="ir_analysis" />
             <el-option label="raman_analysis" value="raman_analysis" />
+            <el-option label="lcms_analysis" value="lcms_analysis" />
           </el-select>
         </el-form-item>
       </el-form>

@@ -47,6 +47,7 @@ class Settings:
 
         # NMRServer 外部服务配置
         self.nmr_server_base_url: str = os.getenv("NMR_SERVER_BASE_URL", "http://100.84.59.58:8080")
+        self.lcms_infer_url: str = os.getenv("LCMS_INFER_URL", "http://100.84.59.58:9999/infer")
 
         # LLM 配置
         self.llm_model: str = os.getenv("LLM_MODEL", "deepseek-chat")
