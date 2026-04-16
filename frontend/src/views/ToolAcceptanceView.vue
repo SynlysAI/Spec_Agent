@@ -1,6 +1,5 @@
-﻿<script setup>
+<script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   buildAcceptanceReportUrl,
@@ -9,9 +8,9 @@ import {
   getAcceptanceRun,
   getAcceptanceRuns,
   getApiErrorMessage,
+  getStaticBaseUrl,
 } from '../api/specAgentApi'
 
-const router = useRouter()
 const loadingConfig = ref(false)
 const creatingRun = ref(false)
 const loadingHistory = ref(false)
@@ -21,6 +20,8 @@ const runFinal = ref(null)
 const historyItems = ref([])
 const activeRunId = ref('')
 const pollingTimer = ref(null)
+const detailVisible = ref(false)
+const activeSample = ref(null)
 
 const selectedTypes = ref([])
 
@@ -46,6 +47,17 @@ const aggregateNmr = computed(() => aggregate.value.nmr || {})
 const aggregateGpc = computed(() => aggregate.value.gpc || {})
 const aggregateIr = computed(() => aggregate.value.ir || {})
 const aggregateRaman = computed(() => aggregate.value.raman || {})
+const activeArtifacts = computed(() => {
+  const baseUrl = getStaticBaseUrl()
+  return (activeSample.value?.artifacts || []).map((artifact) => ({
+    ...artifact,
+    absolute_url: String(artifact?.url || '').startsWith('http')
+      ? artifact.url
+      : `${baseUrl}${artifact?.url || ''}`,
+  }))
+})
+const activeMetrics = computed(() => activeSample.value?.metrics || {})
+const hasRunDetails = computed(() => Array.isArray(runFinal.value?.results) && runFinal.value.results.length > 0)
 
 /**
  * 格式化指标显示值。
@@ -66,17 +78,19 @@ function formatMetric(value, digits = 2, suffix = '') {
 }
 
 /**
- * 打开任务详情页（新窗口）。
+ * 将指标对象转成可展示数组。
  *
  * Args:
- *   taskId: 任务 ID。
+ *   metrics: 指标对象。
+ *
+ * Returns:
+ *   指标数组。
  */
-function openTaskDetail(taskId) {
-  if (!taskId) {
-    return
-  }
-  const detailUrl = router.resolve({ path: `/tasks/detail/${taskId}` }).href
-  window.open(detailUrl, '_blank')
+function toMetricEntries(metrics) {
+  return Object.entries(metrics || {}).map(([key, value]) => ({
+    key,
+    value: Array.isArray(value) ? value.join(', ') : String(value),
+  }))
 }
 
 /**
@@ -103,6 +117,24 @@ function openHistoryReport(runId) {
 }
 
 /**
+ * 打开样本详情抽屉。
+ *
+ * Args:
+ *   sample: 样本结果对象。
+ */
+function openSampleDetail(sample) {
+  activeSample.value = sample || null
+  detailVisible.value = true
+}
+
+/**
+ * 关闭样本详情抽屉。
+ */
+function closeSampleDetail() {
+  detailVisible.value = false
+}
+
+/**
  * 加载历史批次详情。
  *
  * Args:
@@ -117,6 +149,7 @@ async function openHistoryRun(runId) {
   }
   activeRunId.value = runId
   runFinal.value = null
+  activeSample.value = null
   await refreshRun()
 }
 
@@ -176,6 +209,7 @@ async function startRun() {
     const data = await createAcceptanceRun(selectedTypes.value)
     activeRunId.value = data.run_id
     runFinal.value = null
+    activeSample.value = null
     runSummary.value = {
       run_id: data.run_id,
       status: data.status || 'RUNNING',
@@ -311,7 +345,7 @@ onBeforeUnmount(() => {
               :closable="false"
               show-icon
               title="说明"
-              description="该模块会按样本配置自动创建任务并轮询状态，结果会生成 Markdown 报告。"
+              description="该模块会按样本配置直接批量执行解析并汇总结果，完成后生成 Markdown 报告。"
             />
           </el-card>
         </el-col>
@@ -434,22 +468,83 @@ onBeforeUnmount(() => {
         <div class="report-line">
           <el-button type="primary" plain @click="downloadReport">下载批量验收报告</el-button>
         </div>
-        <el-table :data="runFinal.results || []" size="small" border max-height="420">
+
+        <el-alert
+          v-if="!hasRunDetails"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="历史详情降级"
+          description="该历史批次仅存在 Markdown 报告，没有结构化快照，因此只展示批次摘要。"
+          class="fallback-alert"
+        />
+
+        <el-table v-else :data="runFinal.results || []" size="small" border max-height="420">
           <el-table-column prop="spectrum_type" label="类型" width="90" />
           <el-table-column prop="sample_name" label="样本" min-width="220" />
           <el-table-column prop="status" label="状态" width="100" />
           <el-table-column prop="duration_seconds" label="耗时(s)" width="110" />
-          <el-table-column prop="task_id" label="任务ID" min-width="240" />
+          <el-table-column prop="sample_execution_id" label="样本执行ID" min-width="160" />
           <el-table-column prop="error_message" label="错误信息" min-width="220" />
           <el-table-column label="操作" width="110" fixed="right">
             <template #default="scope">
-              <el-button link type="primary" @click="openTaskDetail(scope.row.task_id)">详情</el-button>
+              <el-button link type="primary" @click="openSampleDetail(scope.row)">详情</el-button>
             </template>
           </el-table-column>
         </el-table>
       </el-card>
     </div>
   </div>
+
+  <el-drawer
+    v-model="detailVisible"
+    title="样本详情"
+    size="45%"
+    destroy-on-close
+    @close="closeSampleDetail"
+  >
+    <template v-if="activeSample">
+      <el-descriptions :column="1" border class="detail-section">
+        <el-descriptions-item label="样本执行ID">{{ activeSample.sample_execution_id || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="类型">{{ activeSample.spectrum_type || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="样本">{{ activeSample.sample_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="路径">{{ activeSample.sample_path || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ activeSample.status || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="耗时(s)">{{ formatMetric(activeSample.duration_seconds, 2) }}</el-descriptions-item>
+        <el-descriptions-item label="错误信息">{{ activeSample.error_message || '-' }}</el-descriptions-item>
+      </el-descriptions>
+
+      <div class="detail-section">
+        <div class="detail-title">关键指标</div>
+        <el-empty v-if="toMetricEntries(activeMetrics).length === 0" description="无可展示指标" :image-size="72" />
+        <el-table v-else :data="toMetricEntries(activeMetrics)" size="small" border>
+          <el-table-column prop="key" label="指标" width="180" />
+          <el-table-column prop="value" label="取值" />
+        </el-table>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-title">文本报告</div>
+        <el-empty v-if="!activeSample.text_report" description="无文本报告" :image-size="72" />
+        <pre v-else class="report-preview">{{ activeSample.text_report }}</pre>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-title">产物文件</div>
+        <el-empty v-if="activeArtifacts.length === 0" description="无产物文件" :image-size="72" />
+        <el-table v-else :data="activeArtifacts" size="small" border>
+          <el-table-column prop="name" label="文件名" min-width="200" />
+          <el-table-column prop="file_type" label="类型" width="100" />
+          <el-table-column prop="relative_path" label="相对路径" min-width="220" />
+          <el-table-column label="操作" width="100">
+            <template #default="scope">
+              <el-link :href="scope.row.absolute_url" target="_blank" type="primary">打开</el-link>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </template>
+  </el-drawer>
 </template>
 
 <style scoped>
@@ -504,7 +599,33 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
   color: #5f6d84;
 }
+
+.fallback-alert {
+  margin-bottom: 12px;
+}
+
+.detail-section {
+  margin-bottom: 18px;
+}
+
+.detail-title {
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #2b3447;
+}
+
+.report-preview {
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  margin: 0;
+  background: #f7f9fc;
+  border: 1px solid #d8e1ef;
+  border-radius: 6px;
+  color: #2b3447;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 </style>
-
-
-

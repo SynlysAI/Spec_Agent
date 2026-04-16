@@ -1,6 +1,21 @@
 import axios from 'axios'
 
-const DEFAULT_API_BASE_URL = 'http://100.123.43.65:8000/api/v1'
+/**
+ * 生成默认 API 基础地址。
+ *
+ * Returns:
+ *   基于当前页面地址推导的 API 基础地址。
+ */
+function resolveDefaultApiBaseUrl() {
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:8000/api/v1'
+  }
+  const protocol = window.location.protocol || 'http:'
+  const hostname = window.location.hostname || '127.0.0.1'
+  return `${protocol}//${hostname}:8000/api/v1`
+}
+
+const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl()
 const REQUEST_TIMEOUT_MS = 60000
 
 /**
@@ -216,6 +231,16 @@ export function isRequestCanceled(error) {
  */
 export function getApiBaseUrl() {
   return resolvedBaseUrl
+}
+
+/**
+ * 获取静态产物基础地址。
+ *
+ * Returns:
+ *   不带 `/api/v1` 的服务基础地址。
+ */
+export function getStaticBaseUrl() {
+  return resolvedBaseUrl.replace(/\/api\/v1\/?$/, '')
 }
 
 /**

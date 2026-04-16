@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
 import threading
 import time
-import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -15,13 +16,14 @@ import yaml
 
 from app.core.config import settings
 from app.schemas.acceptance import (
-    AcceptanceRunHistoryItem,
     AcceptanceRunData,
+    AcceptanceRunHistoryItem,
     AcceptanceRunItem,
     AcceptanceRunSummary,
     AcceptanceTypeConfig,
 )
-from app.services.task_service import task_service
+from app.schemas.tasks import TaskArtifactItem
+from app.services.analysis_executor import execute_analysis_sync
 
 TYPE_LABELS = {
     "nmr": "NMR 核磁",
@@ -123,7 +125,7 @@ class AcceptanceService:
             data = self._run_store.get(run_id)
             if data:
                 return data.model_copy(deep=True)
-        return self._load_run_from_report(run_id)
+        return self._load_run_snapshot(run_id=run_id)
 
     def list_runs(self, limit: int = 20) -> list[AcceptanceRunHistoryItem]:
         """查询验收批次历史列表。
@@ -141,28 +143,27 @@ class AcceptanceService:
         with self._lock:
             current_runs = list(self._run_store.values())
         for run_data in current_runs:
-            history.append(
-                AcceptanceRunHistoryItem(
-                    run_id=run_data.run_id,
-                    status=run_data.status,
-                    started_at=run_data.started_at,
-                    finished_at=run_data.finished_at,
-                    selected_types=list(run_data.selected_types),
-                    summary=run_data.summary,
-                    report_exists=bool(run_data.report_path and Path(run_data.report_path).exists()),
-                )
-            )
+            history.append(self._to_history_item(run_data=run_data))
             known_run_ids.add(run_data.run_id)
 
         report_dir = settings.outputs_root / "acceptance"
         if report_dir.exists() and report_dir.is_dir():
+            snapshot_files = sorted(report_dir.glob("acc_*.json"), key=lambda path: path.name, reverse=True)
+            for snapshot_file in snapshot_files:
+                run_id = snapshot_file.stem
+                if run_id in known_run_ids:
+                    continue
+                run_data = self._load_run_snapshot(run_id=run_id)
+                if run_data:
+                    history.append(self._to_history_item(run_data=run_data))
+                    known_run_ids.add(run_id)
+
             report_files = sorted(report_dir.glob("acc_*.md"), key=lambda path: path.name, reverse=True)
             for report_file in report_files:
                 run_id = report_file.stem
                 if run_id in known_run_ids:
                     continue
-                parsed = self._parse_report_file(report_file=report_file)
-                history.append(parsed)
+                history.append(self._parse_report_file(report_file=report_file))
 
         history.sort(
             key=lambda item: self._parse_datetime_text(item.started_at) or datetime.min,
@@ -197,7 +198,7 @@ class AcceptanceService:
         success_count = 0
         failed_count = 0
         for index, sample in enumerate(all_samples, start=1):
-            item = self._execute_single_sample(sample=sample)
+            item = self._execute_single_sample(run_id=run_id, sample=sample)
             if item.status == "SUCCESS":
                 success_count += 1
             else:
@@ -211,105 +212,79 @@ class AcceptanceService:
                 run_data.summary.success = success_count
                 run_data.summary.failed = failed_count
                 run_data.summary.progress = progress
+                run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
 
         self._finish_run(run_id=run_id, status="FINISHED", start_time=start_time)
 
-    def _execute_single_sample(self, sample: AcceptanceSample) -> AcceptanceRunItem:
+    def _execute_single_sample(self, run_id: str, sample: AcceptanceSample) -> AcceptanceRunItem:
         """执行单样本验收。
 
         Args:
+            run_id: 批次运行 ID。
             sample: 验收样本。
 
         Returns:
             单样本执行结果。
         """
-        created_at = time.time()
+        started_at = time.time()
+        sample_execution_id = f"{sample.spectrum_type}_{uuid4().hex[:8]}"
+        output_dir = settings.outputs_root / "acceptance" / run_id / sample_execution_id
         try:
             payload = self._build_task_payload(sample=sample)
-            created = task_service.create_task(
+            result_payload = execute_analysis_sync(
                 task_type=payload["task_type"],
                 input_data=payload["input"],
                 params=payload["params"],
+                output_dir=output_dir,
             )
-            task_id = str(created.get("task_id", ""))
-            timeout_seconds = int(payload.get("timeout_seconds", 240))
-            final_status = self._poll_task(task_id=task_id, timeout_seconds=timeout_seconds)
-            duration = time.time() - created_at
-            if final_status == "SUCCESS":
-                metrics = self._extract_sample_metrics(task_id=task_id, spectrum_type=sample.spectrum_type)
-                return AcceptanceRunItem(
-                    spectrum_type=sample.spectrum_type,
-                    sample_name=sample.sample_name,
-                    sample_path=sample.sample_path,
-                    task_id=task_id,
-                    status="SUCCESS",
-                    duration_seconds=duration,
-                    metrics=metrics,
-                    error_message=None,
-                )
-
-            task_data = task_service.get_task_status(task_id=task_id)
-            detail = None
-            if task_data and task_data.error:
-                detail = str(task_data.error.get("detail"))
+            metrics = self._extract_sample_metrics(
+                result_payload=result_payload,
+                spectrum_type=sample.spectrum_type,
+            )
             return AcceptanceRunItem(
+                sample_execution_id=sample_execution_id,
                 spectrum_type=sample.spectrum_type,
                 sample_name=sample.sample_name,
                 sample_path=sample.sample_path,
-                task_id=task_id,
-                status="FAILED",
-                duration_seconds=duration,
-                metrics={},
-                error_message=detail or "task failed",
+                status="SUCCESS",
+                duration_seconds=time.time() - started_at,
+                metrics=metrics,
+                text_report=str(result_payload.get("text_report", "")),
+                artifacts=[
+                    TaskArtifactItem(**artifact)
+                    if isinstance(artifact, dict)
+                    else artifact
+                    for artifact in result_payload.get("artifacts", [])
+                ],
+                error_message=None,
             )
         except Exception as exc:
             return AcceptanceRunItem(
+                sample_execution_id=sample_execution_id,
                 spectrum_type=sample.spectrum_type,
                 sample_name=sample.sample_name,
                 sample_path=sample.sample_path,
-                task_id="",
                 status="FAILED",
-                duration_seconds=time.time() - created_at,
+                duration_seconds=time.time() - started_at,
                 metrics={},
+                text_report="",
+                artifacts=self._load_artifacts_from_dir(output_dir=output_dir),
                 error_message=str(exc),
             )
 
-    @staticmethod
-    def _poll_task(task_id: str, timeout_seconds: int = 240) -> str:
-        """轮询任务状态直到结束。
-
-        Args:
-            task_id: 任务 ID。
-            timeout_seconds: 超时时间。
-
-        Returns:
-            最终任务状态。
-        """
-        start_time = time.time()
-        while True:
-            task_data = task_service.get_task_status(task_id=task_id)
-            if not task_data:
-                return "FAILED"
-            if task_data.status in {"SUCCESS", "FAILED"}:
-                return task_data.status
-            if time.time() - start_time > timeout_seconds:
-                return "FAILED"
-            time.sleep(1.0)
-
-    def _build_task_payload(self, sample: AcceptanceSample) -> dict:
-        """构建批量验收任务参数。
+    def _build_task_payload(self, sample: AcceptanceSample) -> dict[str, Any]:
+        """构建批量验收执行参数。
 
         Args:
             sample: 验收样本。
 
         Returns:
-            任务入参字典。
+            执行入参字典。
         """
         spectrum_type = sample.spectrum_type
         if spectrum_type == "gpc":
             return {
                 "task_type": TYPE_TO_TASK_KIND[spectrum_type],
-                "timeout_seconds": 240,
                 "input": {"input_type": "file_path", "input_path": sample.sample_path, "file_id": None},
                 "params": {
                     "detect_mode": "auto",
@@ -322,7 +297,6 @@ class AcceptanceService:
         if spectrum_type == "nmr":
             return {
                 "task_type": TYPE_TO_TASK_KIND[spectrum_type],
-                "timeout_seconds": 240,
                 "input": {"input_type": "folder_path", "input_path": sample.sample_path, "file_id": None},
                 "params": {
                     "nucleus": "1H",
@@ -343,7 +317,6 @@ class AcceptanceService:
             }
         return {
             "task_type": TYPE_TO_TASK_KIND[spectrum_type],
-            "timeout_seconds": 240,
             "input": {"input_type": "file_path", "input_path": sample.sample_path, "file_id": None},
             "params": {
                 "spectype": spectrum_type,
@@ -382,9 +355,6 @@ class AcceptanceService:
                 if not root_dir.exists() or not root_dir.is_dir():
                     continue
                 for pattern in patterns:
-                    # GPC 需兼容两种组织形态：
-                    # 1) 根目录下直接放谱图文件；
-                    # 2) 样品目录中再包含谱图文件。
                     sample_paths.extend([item for item in root_dir.rglob(pattern) if item.is_file()])
         else:
             if not patterns:
@@ -408,7 +378,7 @@ class AcceptanceService:
         samples.sort(key=lambda item: item.sample_name)
         return samples
 
-    def _load_config(self) -> dict:
+    def _load_config(self) -> dict[str, Any]:
         """加载验收配置文件。
 
         Returns:
@@ -456,7 +426,7 @@ class AcceptanceService:
             run_data.summary.progress = progress
 
     def _finish_run(self, run_id: str, status: str, start_time: float) -> None:
-        """结束批次运行并保存摘要报告。
+        """结束批次运行并保存结果文件。
 
         Args:
             run_id: 批次运行 ID。
@@ -475,9 +445,10 @@ class AcceptanceService:
             run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
             report_path = self._save_markdown_report(run_data=run_data)
             run_data.report_path = str(report_path)
+            self._save_run_snapshot(run_data=run_data)
 
     @staticmethod
-    def _build_aggregate_metrics(results: list[AcceptanceRunItem]) -> dict:
+    def _build_aggregate_metrics(results: list[AcceptanceRunItem]) -> dict[str, Any]:
         """构建验收指标汇总。
 
         Args:
@@ -577,21 +548,16 @@ class AcceptanceService:
             },
         }
 
-    def _extract_sample_metrics(self, task_id: str, spectrum_type: str) -> dict[str, Any]:
+    def _extract_sample_metrics(self, result_payload: dict[str, Any], spectrum_type: str) -> dict[str, Any]:
         """提取单样本可聚合指标。
 
         Args:
-            task_id: 任务 ID。
+            result_payload: 同步执行结果。
             spectrum_type: 谱图类型。
 
         Returns:
             指标字典。
         """
-        result_data = task_service.get_task_result(task_id=task_id)
-        if not result_data or result_data.status != "SUCCESS" or not result_data.result:
-            return {}
-
-        result_payload = result_data.result or {}
         metadata = result_payload.get("metadata", {}) or {}
         qa_metrics = metadata.get("qa_metrics", {}) if isinstance(metadata, dict) else {}
         if isinstance(qa_metrics, dict) and qa_metrics:
@@ -764,17 +730,33 @@ class AcceptanceService:
                 "",
                 "## 样本明细",
                 "",
-                "| 类型 | 样本 | 状态 | 耗时(s) | 任务ID | 错误 |",
+                "| 类型 | 样本 | 状态 | 耗时(s) | 样本执行ID | 错误 |",
                 "| --- | --- | --- | --- | --- | --- |",
             ]
         )
         for item in run_data.results:
             lines.append(
                 f"| {item.spectrum_type} | {item.sample_name} | {item.status} | "
-                f"{item.duration_seconds:.1f} | {item.task_id} | {item.error_message or ''} |"
+                f"{item.duration_seconds:.1f} | {item.sample_execution_id} | {item.error_message or ''} |"
             )
         file_path.write_text("\n".join(lines), encoding="utf-8")
         return file_path
+
+    def _save_run_snapshot(self, run_data: AcceptanceRunData) -> Path:
+        """保存批次结构化快照。
+
+        Args:
+            run_data: 批次运行数据。
+
+        Returns:
+            快照文件路径。
+        """
+        snapshot_path = settings.outputs_root / "acceptance" / f"{run_data.run_id}.json"
+        snapshot_path.write_text(
+            json.dumps(run_data.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return snapshot_path
 
     @staticmethod
     def _format_number(value: Any, digits: int, suffix: str = "") -> str:
@@ -792,16 +774,23 @@ class AcceptanceService:
             return "N/A"
         return f"{parsed:.1f}%"
 
-
-    def _load_run_from_report(self, run_id: str) -> AcceptanceRunData | None:
-        """从历史报告文件加载批次基础信息。
+    def _load_run_snapshot(self, run_id: str) -> AcceptanceRunData | None:
+        """从历史快照或报告文件加载批次信息。
 
         Args:
             run_id: 批次运行 ID。
 
         Returns:
-            运行数据对象；若报告不存在则返回 None。
+            运行数据对象；若文件不存在则返回 None。
         """
+        snapshot_path = settings.outputs_root / "acceptance" / f"{run_id}.json"
+        if snapshot_path.exists() and snapshot_path.is_file():
+            try:
+                data = json.loads(snapshot_path.read_text(encoding="utf-8"))
+                return AcceptanceRunData(**data)
+            except Exception:
+                pass
+
         report_path = settings.outputs_root / "acceptance" / f"{run_id}.md"
         if not report_path.exists() or not report_path.is_file():
             return None
@@ -856,7 +845,7 @@ class AcceptanceService:
     @staticmethod
     def _extract_line_value(content: str, key: str) -> str:
         """从 Markdown 列表行中提取键对应的值。"""
-        pattern = re.compile(rf"-\\s*{re.escape(key)}\\s*[:：]\\s*(.+)")
+        pattern = re.compile(rf"-\s*{re.escape(key)}\s*[:：]\s*(.+)")
         match = pattern.search(content)
         if not match:
             return ""
@@ -867,7 +856,7 @@ class AcceptanceService:
         raw = self._extract_line_value(content, key)
         if not raw:
             return 0
-        digits_match = re.search(r"[-+]?\\d+", raw)
+        digits_match = re.search(r"[-+]?\d+", raw)
         if not digits_match:
             return 0
         return int(digits_match.group(0))
@@ -877,7 +866,7 @@ class AcceptanceService:
         raw = self._extract_line_value(content, key)
         if not raw:
             return 0.0
-        number_match = re.search(r"[-+]?\\d+(?:\\.\\d+)?", raw)
+        number_match = re.search(r"[-+]?\d+(?:\.\d+)?", raw)
         if not number_match:
             return 0.0
         return float(number_match.group(0))
@@ -894,6 +883,61 @@ class AcceptanceService:
             except ValueError:
                 continue
         return None
+
+    def _to_history_item(self, run_data: AcceptanceRunData) -> AcceptanceRunHistoryItem:
+        """将运行对象转换为历史列表项。
+
+        Args:
+            run_data: 批次运行对象。
+
+        Returns:
+            历史列表项。
+        """
+        return AcceptanceRunHistoryItem(
+            run_id=run_data.run_id,
+            status=run_data.status,
+            started_at=run_data.started_at,
+            finished_at=run_data.finished_at,
+            selected_types=list(run_data.selected_types),
+            summary=run_data.summary,
+            report_exists=bool(run_data.report_path and Path(run_data.report_path).exists()),
+        )
+
+    def _load_artifacts_from_dir(self, output_dir: Path) -> list[TaskArtifactItem]:
+        """从输出目录读取已有产物。
+
+        Args:
+            output_dir: 输出目录。
+
+        Returns:
+            产物列表。
+        """
+        if not output_dir.exists() or not output_dir.is_dir():
+            return []
+
+        items: list[TaskArtifactItem] = []
+        for file_path in sorted(output_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            suffix = file_path.suffix.lower()
+            if suffix in {".png", ".jpg", ".jpeg", ".svg"}:
+                file_type = "image"
+            elif suffix in {".txt", ".md", ".json", ".csv"}:
+                file_type = "text"
+            elif suffix in {".pdf"}:
+                file_type = "pdf"
+            else:
+                file_type = "other"
+            relative_path = file_path.relative_to(settings.outputs_root).as_posix()
+            items.append(
+                TaskArtifactItem(
+                    name=file_path.name,
+                    relative_path=relative_path,
+                    file_type=file_type,
+                    url=f"/static/outputs/{relative_path}",
+                )
+            )
+        return items
 
 
 acceptance_service = AcceptanceService()
