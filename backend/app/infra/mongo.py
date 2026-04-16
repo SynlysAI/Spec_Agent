@@ -61,3 +61,12 @@ def get_files_collection() -> Collection:
     """
     return get_database()["files"]
 
+
+def get_acceptance_runs_collection() -> Collection:
+    """获取 acceptance_runs 集合。
+
+    函数名称: get_acceptance_runs_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["acceptance_runs"]

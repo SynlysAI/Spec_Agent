@@ -15,6 +15,7 @@ from uuid import uuid4
 import yaml
 
 from app.core.config import settings
+from app.infra.mongo import get_acceptance_runs_collection
 from app.schemas.acceptance import (
     AcceptanceRunData,
     AcceptanceRunHistoryItem,
@@ -57,6 +58,15 @@ class AcceptanceService:
         self.config_path = settings.acceptance_config_path
         self._run_store: dict[str, AcceptanceRunData] = {}
         self._lock = threading.Lock()
+        self._ensure_indexes()
+
+    @staticmethod
+    def _ensure_indexes() -> None:
+        """初始化 acceptance_runs 索引。"""
+        collection = get_acceptance_runs_collection()
+        collection.create_index("run_id", unique=True)
+        collection.create_index("started_at")
+        collection.create_index("status")
 
     def get_config_summary(self) -> tuple[Path, list[AcceptanceTypeConfig], int]:
         """读取配置并返回样本摘要。
@@ -113,6 +123,7 @@ class AcceptanceService:
         )
         with self._lock:
             self._run_store[run_id] = run_data
+        self._save_run_record(run_data=run_data)
 
         thread = threading.Thread(target=self._run_batch, args=(run_id,), daemon=True)
         thread.start()
@@ -131,6 +142,9 @@ class AcceptanceService:
             data = self._run_store.get(run_id)
             if data:
                 return data.model_copy(deep=True)
+        record = self._load_run_record(run_id=run_id)
+        if record:
+            return record
         return self._load_run_snapshot(run_id=run_id)
 
     def list_runs(self, limit: int = 20) -> list[AcceptanceRunHistoryItem]:
@@ -149,6 +163,15 @@ class AcceptanceService:
         with self._lock:
             current_runs = list(self._run_store.values())
         for run_data in current_runs:
+            history.append(self._to_history_item(run_data=run_data))
+            known_run_ids.add(run_data.run_id)
+
+        collection = get_acceptance_runs_collection()
+        cursor = collection.find({}, {"_id": 0}).sort([("started_at", -1)]).limit(safe_limit * 3)
+        for doc in cursor:
+            run_data = self._deserialize_run_data(doc)
+            if not run_data or run_data.run_id in known_run_ids:
+                continue
             history.append(self._to_history_item(run_data=run_data))
             known_run_ids.add(run_data.run_id)
 
@@ -382,6 +405,8 @@ class AcceptanceService:
             run_data.summary.failed = failed
             run_data.summary.progress = progress
             run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
+            snapshot = run_data.model_copy(deep=True)
+        self._save_run_record(run_data=snapshot)
 
     def _build_task_payload(self, sample: AcceptanceSample) -> dict[str, Any]:
         """构建批量验收执行参数。
@@ -610,6 +635,8 @@ class AcceptanceService:
             run_data.summary.success = success
             run_data.summary.failed = failed
             run_data.summary.progress = progress
+            snapshot = run_data.model_copy(deep=True)
+        self._save_run_record(run_data=snapshot)
 
     def _finish_run(self, run_id: str, status: str, start_time: float) -> None:
         """结束批次运行并保存结果文件。
@@ -632,6 +659,8 @@ class AcceptanceService:
             report_path = self._save_markdown_report(run_data=run_data)
             run_data.report_path = str(report_path)
             self._save_run_snapshot(run_data=run_data)
+            snapshot = run_data.model_copy(deep=True)
+        self._save_run_record(run_data=snapshot)
 
     @staticmethod
     def _build_aggregate_metrics(results: list[AcceptanceRunItem]) -> dict[str, Any]:
@@ -1023,6 +1052,72 @@ class AcceptanceService:
             results=[],
             report_path=str(report_path),
         )
+
+    def _save_run_record(self, run_data: AcceptanceRunData) -> None:
+        """将批次记录持久化到 acceptance_runs 集合。
+
+        Args:
+            run_data: 批次运行数据。
+        """
+        collection = get_acceptance_runs_collection()
+        payload = run_data.model_dump(mode="json")
+        payload["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload["execution_config"] = self._build_execution_config(selected_types=run_data.selected_types)
+        collection.update_one(
+            {"run_id": run_data.run_id},
+            {"$set": payload},
+            upsert=True,
+        )
+
+    def _load_run_record(self, run_id: str) -> AcceptanceRunData | None:
+        """从 acceptance_runs 集合读取批次记录。
+
+        Args:
+            run_id: 批次运行 ID。
+
+        Returns:
+            批次运行对象，不存在时返回 None。
+        """
+        collection = get_acceptance_runs_collection()
+        doc = collection.find_one({"run_id": run_id}, {"_id": 0})
+        return self._deserialize_run_data(doc)
+
+    @staticmethod
+    def _deserialize_run_data(doc: dict[str, Any] | None) -> AcceptanceRunData | None:
+        """将 Mongo 文档反序列化为批次运行对象。
+
+        Args:
+            doc: Mongo 文档。
+
+        Returns:
+            批次运行对象，不可用时返回 None。
+        """
+        if not isinstance(doc, dict):
+            return None
+        normalized = dict(doc)
+        normalized.pop("updated_at", None)
+        normalized.pop("execution_config", None)
+        try:
+            return AcceptanceRunData(**normalized)
+        except Exception:
+            return None
+
+    def _build_execution_config(self, selected_types: list[str]) -> dict[str, str]:
+        """构建本次批次的执行模式快照。
+
+        Args:
+            selected_types: 执行类型列表。
+
+        Returns:
+            `谱图类型 -> 执行模式` 映射。
+        """
+        config = self._load_config()
+        samples_config = config.get("samples", {}) or {}
+        result: dict[str, str] = {}
+        for spectrum_type in selected_types:
+            type_config = samples_config.get(spectrum_type, {}) or {}
+            result[spectrum_type] = self._get_execution_mode(type_config=type_config)
+        return result
 
     def _parse_report_file(self, report_file: Path) -> AcceptanceRunHistoryItem:
         """解析验收报告文件，提取历史展示信息。
