@@ -30,7 +30,7 @@ const typeOptions = computed(() => {
   return items.map((item) => ({
     label: item.label,
     value: item.spectrum_type,
-    count: item.sample_count,
+    countLabel: item.execution_mode === 'remote_summary' ? '远程' : String(item.sample_count ?? 0),
   }))
 })
 
@@ -165,7 +165,7 @@ async function loadConfig() {
     configData.value = await getAcceptanceConfig()
     if (selectedTypes.value.length === 0) {
       selectedTypes.value = (configData.value?.items || [])
-        .filter((item) => item.sample_count > 0)
+        .filter((item) => item.execution_mode === 'remote_summary' || item.sample_count > 0)
         .map((item) => item.spectrum_type)
     }
   } catch (error) {
@@ -302,10 +302,26 @@ onBeforeUnmount(() => {
                 <div class="config-path">配置文件：{{ configData?.config_path || '-' }}</div>
                 <el-table :data="configData?.items || []" size="small" border>
                   <el-table-column prop="label" label="类型" min-width="120" />
-                  <el-table-column prop="sample_count" label="样本数" width="90" />
+                  <el-table-column label="执行模式" width="120">
+                    <template #default="scope">
+                      <el-tag
+                        size="small"
+                        :type="scope.row.execution_mode === 'remote_summary' ? 'warning' : 'success'"
+                      >
+                        {{ scope.row.execution_mode === 'remote_summary' ? '远程汇总' : '本地执行' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="样本数" width="90">
+                    <template #default="scope">
+                      {{ scope.row.execution_mode === 'remote_summary' ? '/' : (scope.row.sample_count ?? 0) }}
+                    </template>
+                  </el-table-column>
                   <el-table-column label="目录">
                     <template #default="scope">
-                      <span class="path-text">{{ (scope.row.dirs || []).join('；') || '-' }}</span>
+                      <span class="path-text">
+                        {{ scope.row.execution_mode === 'remote_summary' ? '远程脚本执行，不扫描本地目录' : ((scope.row.dirs || []).join('；') || '-') }}
+                      </span>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -330,7 +346,7 @@ onBeforeUnmount(() => {
                   <el-option
                     v-for="item in typeOptions"
                     :key="item.value"
-                    :label="`${item.label}（${item.count}）`"
+                    :label="`${item.label}（${item.countLabel}）`"
                     :value="item.value"
                   />
                 </el-select>
@@ -459,8 +475,10 @@ onBeforeUnmount(() => {
               <div>样本数：{{ aggregateRaman.sample_count || 0 }}</div>
               <div>任务成功率：{{ formatMetric(aggregateRaman.task_success_rate, 1, '%') }}</div>
               <div>已标注样本：{{ aggregateRaman.labeled_count || 0 }}</div>
-              <div>Top1准确率：{{ formatMetric((aggregateRaman.top1_accuracy ?? null) !== null ? aggregateRaman.top1_accuracy * 100 : null, 1, '%') }}</div>
-              <div>Recall@3：{{ formatMetric((aggregateRaman.recall_at_3 ?? null) !== null ? aggregateRaman.recall_at_3 * 100 : null, 1, '%') }}</div>
+              <div>EMR / Top1准确率：{{ formatMetric((aggregateRaman.top1_accuracy ?? null) !== null ? aggregateRaman.top1_accuracy * 100 : null, 1, '%') }}</div>
+              <div>Micro-F1：{{ formatMetric(aggregateRaman.micro_f1, 4) }}</div>
+              <div>Samples Avg F1：{{ formatMetric(aggregateRaman.samples_avg_f1, 4) }}</div>
+              <div>Element Accuracy：{{ formatMetric((aggregateRaman.element_accuracy ?? null) !== null ? aggregateRaman.element_accuracy * 100 : null, 1, '%') }}</div>
             </el-card>
           </el-col>
         </el-row>

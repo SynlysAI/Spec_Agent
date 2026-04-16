@@ -24,6 +24,7 @@ from app.schemas.acceptance import (
 )
 from app.schemas.tasks import TaskArtifactItem
 from app.services.analysis_executor import execute_analysis_sync
+from app.services.remote_acceptance_service import remote_acceptance_service
 
 TYPE_LABELS = {
     "nmr": "NMR 核磁",
@@ -69,7 +70,11 @@ class AcceptanceService:
         items: list[AcceptanceTypeConfig] = []
         for spectrum_type in ("nmr", "gpc", "ir", "raman"):
             type_config = samples_config.get(spectrum_type, {}) or {}
-            samples = self._scan_samples(spectrum_type=spectrum_type, type_config=type_config)
+            execution_mode = self._get_execution_mode(type_config=type_config)
+            samples = [] if execution_mode == "remote_summary" else self._scan_samples(
+                spectrum_type=spectrum_type,
+                type_config=type_config,
+            )
             dirs = [str(item) for item in type_config.get("dirs", []) if str(item).strip()]
             count = len(samples)
             total_samples += count
@@ -77,6 +82,7 @@ class AcceptanceService:
                 AcceptanceTypeConfig(
                     spectrum_type=spectrum_type,
                     label=TYPE_LABELS[spectrum_type],
+                    execution_mode=execution_mode,
                     sample_count=count,
                     dirs=dirs,
                 )
@@ -186,33 +192,56 @@ class AcceptanceService:
 
         config = self._load_config()
         all_samples: list[AcceptanceSample] = []
+        remote_types: list[tuple[str, dict[str, Any]]] = []
         for spectrum_type in selected_types:
             type_config = (config.get("samples", {}) or {}).get(spectrum_type, {}) or {}
+            if self._get_execution_mode(type_config=type_config) == "remote_summary":
+                remote_types.append((spectrum_type, type_config))
+                continue
             all_samples.extend(self._scan_samples(spectrum_type=spectrum_type, type_config=type_config))
 
-        self._update_run_summary(run_id=run_id, total=len(all_samples), success=0, failed=0, progress=0)
-        if not all_samples:
+        total_work = len(all_samples) + len(remote_types)
+        self._update_run_summary(run_id=run_id, total=total_work, success=0, failed=0, progress=0)
+        if total_work == 0:
             self._finish_run(run_id=run_id, status="FINISHED", start_time=start_time)
             return
 
         success_count = 0
         failed_count = 0
-        for index, sample in enumerate(all_samples, start=1):
+        processed_count = 0
+        for spectrum_type, type_config in remote_types:
+            item = self._execute_remote_summary_type(
+                run_id=run_id,
+                spectrum_type=spectrum_type,
+                type_config=type_config,
+            )
+            if item.status == "SUCCESS":
+                success_count += 1
+            else:
+                failed_count += 1
+            processed_count += 1
+            self._append_run_item(
+                run_id=run_id,
+                item=item,
+                success=success_count,
+                failed=failed_count,
+                progress=int(processed_count / total_work * 100),
+            )
+
+        for sample in all_samples:
             item = self._execute_single_sample(run_id=run_id, sample=sample)
             if item.status == "SUCCESS":
                 success_count += 1
             else:
                 failed_count += 1
-            progress = int(index / len(all_samples) * 100)
-            with self._lock:
-                run_data = self._run_store.get(run_id)
-                if not run_data:
-                    return
-                run_data.results.append(item)
-                run_data.summary.success = success_count
-                run_data.summary.failed = failed_count
-                run_data.summary.progress = progress
-                run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
+            processed_count += 1
+            self._append_run_item(
+                run_id=run_id,
+                item=item,
+                success=success_count,
+                failed=failed_count,
+                progress=int(processed_count / total_work * 100),
+            )
 
         self._finish_run(run_id=run_id, status="FINISHED", start_time=start_time)
 
@@ -272,6 +301,88 @@ class AcceptanceService:
                 error_message=str(exc),
             )
 
+    def _execute_remote_summary_type(
+        self,
+        run_id: str,
+        spectrum_type: str,
+        type_config: dict[str, Any],
+    ) -> AcceptanceRunItem:
+        """执行远程汇总类型验收。
+
+        Args:
+            run_id: 批次运行 ID。
+            spectrum_type: 谱图类型。
+            type_config: 类型配置。
+
+        Returns:
+            远程汇总结果。
+        """
+        started_at = time.time()
+        sample_execution_id = f"{spectrum_type}_{uuid4().hex[:8]}"
+        try:
+            remote_payload = remote_acceptance_service.run_remote_summary(type_config=type_config)
+            metrics = self._build_remote_summary_metrics(
+                spectrum_type=spectrum_type,
+                payload=remote_payload,
+            )
+            sample_count = int(remote_payload.get("sample_count") or 0)
+            report_text = self._build_remote_summary_text_report(
+                spectrum_type=spectrum_type,
+                payload=remote_payload,
+            )
+            return AcceptanceRunItem(
+                sample_execution_id=sample_execution_id,
+                spectrum_type=spectrum_type,
+                sample_name=f"{TYPE_LABELS.get(spectrum_type, spectrum_type)} 远程汇总",
+                sample_path=str(((type_config or {}).get("remote", {}) or {}).get("script") or ""),
+                status="SUCCESS" if remote_payload.get("success", False) else "FAILED",
+                duration_seconds=time.time() - started_at,
+                metrics=metrics,
+                text_report=report_text,
+                artifacts=[],
+                error_message=None if remote_payload.get("success", False) else str(remote_payload.get("error_message") or "remote summary failed"),
+            )
+        except Exception as exc:
+            return AcceptanceRunItem(
+                sample_execution_id=sample_execution_id,
+                spectrum_type=spectrum_type,
+                sample_name=f"{TYPE_LABELS.get(spectrum_type, spectrum_type)} 远程汇总",
+                sample_path=str(((type_config or {}).get("remote", {}) or {}).get("script") or ""),
+                status="FAILED",
+                duration_seconds=time.time() - started_at,
+                metrics={},
+                text_report="",
+                artifacts=[],
+                error_message=str(exc),
+            )
+
+    def _append_run_item(
+        self,
+        run_id: str,
+        item: AcceptanceRunItem,
+        success: int,
+        failed: int,
+        progress: int,
+    ) -> None:
+        """向批次结果中追加一条执行结果。
+
+        Args:
+            run_id: 批次运行 ID。
+            item: 样本结果项。
+            success: 当前成功数。
+            failed: 当前失败数。
+            progress: 当前进度。
+        """
+        with self._lock:
+            run_data = self._run_store.get(run_id)
+            if not run_data:
+                return
+            run_data.results.append(item)
+            run_data.summary.success = success
+            run_data.summary.failed = failed
+            run_data.summary.progress = progress
+            run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
+
     def _build_task_payload(self, sample: AcceptanceSample) -> dict[str, Any]:
         """构建批量验收执行参数。
 
@@ -328,6 +439,19 @@ class AcceptanceService:
                 "device": "auto",
             },
         }
+
+    @staticmethod
+    def _get_execution_mode(type_config: dict[str, Any]) -> str:
+        """获取执行模式。
+
+        Args:
+            type_config: 类型配置。
+
+        Returns:
+            执行模式字符串。
+        """
+        mode = str((type_config or {}).get("execution_mode") or "local").strip().lower()
+        return mode if mode in {"local", "remote_summary"} else "local"
 
     def _scan_samples(self, spectrum_type: str, type_config: dict) -> list[AcceptanceSample]:
         """扫描指定类型样本路径。
@@ -389,6 +513,68 @@ class AcceptanceService:
         content = self.config_path.read_text(encoding="utf-8")
         data = yaml.safe_load(content) or {}
         return data if isinstance(data, dict) else {"samples": {}}
+
+    def _build_remote_summary_metrics(self, spectrum_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """将远程汇总 JSON 转为统一指标格式。
+
+        Args:
+            spectrum_type: 谱图类型。
+            payload: 远程汇总结果。
+
+        Returns:
+            指标字典。
+        """
+        aggregate = payload.get("aggregate_metrics", {}) or {}
+        metrics: dict[str, Any] = {
+            "remote_sample_count": [int(payload.get("sample_count") or 0)],
+        }
+        if spectrum_type == "raman":
+            exact_match_rate = self._safe_float(payload.get("exact_match_rate"))
+            element_accuracy = self._safe_float(payload.get("element_accuracy"))
+            micro_avg = aggregate.get("micro_avg", {}) if isinstance(aggregate, dict) else {}
+            samples_avg = aggregate.get("samples_avg", {}) if isinstance(aggregate, dict) else {}
+            macro_avg = aggregate.get("macro_avg", {}) if isinstance(aggregate, dict) else {}
+            if exact_match_rate is not None:
+                metrics["top1_accuracy"] = [exact_match_rate]
+            if element_accuracy is not None:
+                metrics["element_accuracy"] = [element_accuracy]
+            micro_f1 = self._safe_float((micro_avg or {}).get("f1_score"))
+            samples_f1 = self._safe_float((samples_avg or {}).get("f1_score"))
+            macro_f1 = self._safe_float((macro_avg or {}).get("f1_score"))
+            if micro_f1 is not None:
+                metrics["micro_f1"] = [micro_f1]
+            if samples_f1 is not None:
+                metrics["samples_avg_f1"] = [samples_f1]
+            if macro_f1 is not None:
+                metrics["macro_f1"] = [macro_f1]
+        return metrics
+
+    def _build_remote_summary_text_report(self, spectrum_type: str, payload: dict[str, Any]) -> str:
+        """构建远程汇总文本报告。
+
+        Args:
+            spectrum_type: 谱图类型。
+            payload: 远程汇总结果。
+
+        Returns:
+            文本报告字符串。
+        """
+        aggregate = payload.get("aggregate_metrics", {}) or {}
+        lines = [
+            f"## {TYPE_LABELS.get(spectrum_type, spectrum_type)} 远程汇总结果",
+            "",
+            f"- success: {payload.get('success')}",
+            f"- sample_count: {payload.get('sample_count')}",
+            f"- duration_seconds: {payload.get('duration_seconds')}",
+            f"- exact_match_rate: {payload.get('exact_match_rate')}",
+            f"- element_accuracy: {payload.get('element_accuracy')}",
+            "",
+            "### aggregate_metrics",
+        ]
+        if isinstance(aggregate, dict):
+            for key, value in aggregate.items():
+                lines.append(f"- {key}: {json.dumps(value, ensure_ascii=False)}")
+        return "\n".join(lines)
 
     @staticmethod
     def _normalize_types(spectrum_types: list[str] | None) -> list[str]:
@@ -503,6 +689,31 @@ class AcceptanceService:
                 [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("pdi_rd_pct", [])) if value is not None]
             )
 
+        raman_top1_accuracy: list[float] = []
+        raman_micro_f1: list[float] = []
+        raman_samples_avg_f1: list[float] = []
+        raman_element_accuracy: list[float] = []
+        raman_remote_sample_count = 0
+        for item in raman_items:
+            metrics = item.metrics or {}
+            raman_top1_accuracy.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("top1_accuracy", [])) if value is not None]
+            )
+            raman_micro_f1.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("micro_f1", [])) if value is not None]
+            )
+            raman_samples_avg_f1.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("samples_avg_f1", [])) if value is not None]
+            )
+            raman_element_accuracy.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("element_accuracy", [])) if value is not None]
+            )
+            remote_count_values = [
+                value for value in (AcceptanceService._safe_float(v) for v in metrics.get("remote_sample_count", [])) if value is not None
+            ]
+            if remote_count_values:
+                raman_remote_sample_count += int(remote_count_values[0])
+
         return {
             "thresholds": thresholds,
             "nmr": {
@@ -540,10 +751,13 @@ class AcceptanceService:
                 "sample_f1_avg": None,
             },
             "raman": {
-                "sample_count": len(raman_items),
+                "sample_count": raman_remote_sample_count or len(raman_items),
                 "task_success_rate": _rate(raman_items),
-                "labeled_count": 0,
-                "top1_accuracy": None,
+                "labeled_count": raman_remote_sample_count or 0,
+                "top1_accuracy": AcceptanceService._avg(raman_top1_accuracy),
+                "micro_f1": AcceptanceService._avg(raman_micro_f1),
+                "samples_avg_f1": AcceptanceService._avg(raman_samples_avg_f1),
+                "element_accuracy": AcceptanceService._avg(raman_element_accuracy),
                 "recall_at_3": None,
             },
         }
@@ -726,6 +940,9 @@ class AcceptanceService:
                 f"- 任务成功率: {self._format_percent(raman_metrics.get('task_success_rate'))}",
                 f"- 已标注样本: {raman_metrics.get('labeled_count', 0)}",
                 f"- Top1准确率: {self._format_percent(raman_metrics.get('top1_accuracy'))}",
+                f"- Micro-F1: {self._format_number(raman_metrics.get('micro_f1'), 4)}",
+                f"- Samples Avg F1: {self._format_number(raman_metrics.get('samples_avg_f1'), 4)}",
+                f"- Element Accuracy: {self._format_percent(raman_metrics.get('element_accuracy'))}",
                 f"- Recall@3: {self._format_percent(raman_metrics.get('recall_at_3'))}",
                 "",
                 "## 样本明细",
