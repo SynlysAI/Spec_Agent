@@ -58,7 +58,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Spec_Agent Backend",
         version="0.1.0",
-        description="Spec_Agent 重构项目后端服务（P0）。",
+        description="Spec_Agent 表征实验谱图分析。",
     )
     app.add_middleware(
         CORSMiddleware,

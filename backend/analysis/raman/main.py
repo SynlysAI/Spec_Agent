@@ -19,7 +19,7 @@ RAMAN_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "rama
 IR_RETRIEVAL_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "ir_retrieval.pth")
 IR_FG_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "ir_fg.pth")
 RAMAN_RETRIEVAL_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "raman_retrieval.pth")
-
+RAMAN_FG_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "raman_fg.pth")
 
 def seed_everything(seed):
     import random
@@ -53,7 +53,7 @@ def main(spectrum, x0, x1, device, spectype='raman', mode='greedy_decode', k=3, 
     if mode == 'greedy_decode':
         model, src_length = make_model(181, depth=4, d_model=512, mode=mode)
         if spectype == 'raman':
-            checkpoint = ''
+            raise ValueError("暂不支持Raman的greedy_decode模式")
         if spectype == 'ir':
             checkpoint = IR_CHECKPOINT
         model = load_net_state(model, torch.load(checkpoint, map_location=device, weights_only=True)['model_state']).to(device)
@@ -94,12 +94,12 @@ def main(spectrum, x0, x1, device, spectype='raman', mode='greedy_decode', k=3, 
         model = resnet(**model_params).eval()
         if spectype == 'ir':
             checkpoint = IR_FG_CHECKPOINT
-            model = load_net_state(model, torch.load(checkpoint, map_location=device, weights_only=True)).to(device)
-            output = model(spectrum.float())
-            output = output.greater_equal(0.5).squeeze()
-            output = [fg_list[i] for i in range(len(output)) if output[i]]
         else:
-            output = []
+            checkpoint = RAMAN_FG_CHECKPOINT
+        model = load_net_state(model, torch.load(checkpoint, map_location=device, weights_only=True)).to(device)
+        output = model(spectrum.float())
+        output = output.greater_equal(0.5).squeeze()
+        output = [fg_list[i] for i in range(len(output)) if output[i]]
     else:
         output = []
     return output

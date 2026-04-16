@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Spec_Agent Backend",
-    "description": "Spec_Agent 重构项目后端服务（P0）。",
+    "description": "Spec_Agent 表征实验谱图分析后端服务。",
     "version": "0.1.0"
   },
   "paths": {
