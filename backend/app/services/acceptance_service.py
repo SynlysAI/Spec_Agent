@@ -31,6 +31,7 @@ TYPE_LABELS = {
     "gpc": "GPC 凝胶色谱",
     "ir": "IR 红外",
     "raman": "Raman 拉曼",
+    "lcms": "LCMS 质谱",
 }
 
 TYPE_TO_TASK_KIND = {
@@ -38,6 +39,7 @@ TYPE_TO_TASK_KIND = {
     "gpc": "gpc_analysis",
     "ir": "ir_analysis",
     "raman": "raman_analysis",
+    "lcms": "lcms_analysis",
 }
 
 
@@ -75,7 +77,7 @@ class AcceptanceService:
         samples_config = config.get("samples", {})
         total_samples = 0
         items: list[AcceptanceTypeConfig] = []
-        for spectrum_type in ("nmr", "gpc", "ir", "raman"):
+        for spectrum_type in ("nmr", "gpc", "ir", "raman", "lcms"):
             type_config = samples_config.get(spectrum_type, {}) or {}
             execution_mode = self._get_execution_mode(type_config=type_config)
             samples = [] if execution_mode == "remote_summary" else self._scan_samples(
@@ -454,6 +456,14 @@ class AcceptanceService:
                     "internal_standard_prefer": ["solvent", "tms"],
                 },
             }
+        if spectrum_type == "lcms":
+            return {
+                "task_type": TYPE_TO_TASK_KIND[spectrum_type],
+                "input": {"input_type": "file_path", "input_path": sample.sample_path, "file_id": None},
+                "params": {
+                    "source_file_name": sample.sample_name,
+                },
+            }
         return {
             "task_type": TYPE_TO_TASK_KIND[spectrum_type],
             "input": {"input_type": "file_path", "input_path": sample.sample_path, "file_id": None},
@@ -615,10 +625,10 @@ class AcceptanceService:
             过滤后的类型列表。
         """
         if not spectrum_types:
-            return ["nmr", "gpc", "ir", "raman"]
+            return ["nmr", "gpc", "ir", "raman", "lcms"]
         valid_set = set(TYPE_LABELS.keys())
         normalized = [str(item).lower() for item in spectrum_types if str(item).lower() in valid_set]
-        return normalized or ["nmr", "gpc", "ir", "raman"]
+        return normalized or ["nmr", "gpc", "ir", "raman", "lcms"]
 
     def _update_run_summary(self, run_id: str, total: int, success: int, failed: int, progress: int) -> None:
         """更新批次汇总信息。
@@ -690,6 +700,7 @@ class AcceptanceService:
         gpc_items = _slice("gpc")
         ir_items = _slice("ir")
         raman_items = _slice("raman")
+        lcms_items = _slice("lcms")
 
         nmr_baseline_rmse: list[float] = []
         nmr_solvent_ppm_errors: list[float] = []
@@ -742,6 +753,20 @@ class AcceptanceService:
             if remote_count_values:
                 raman_remote_sample_count += int(remote_count_values[0])
 
+        lcms_mass_abs_error: list[float] = []
+        lcms_mass_rd_pct: list[float] = []
+        lcms_labeled_count = 0
+        for item in lcms_items:
+            metrics = item.metrics or {}
+            lcms_mass_abs_error.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("mass_abs_error", [])) if value is not None]
+            )
+            lcms_mass_rd_pct.extend(
+                [value for value in (AcceptanceService._safe_float(v) for v in metrics.get("mass_rd_pct", [])) if value is not None]
+            )
+            if metrics.get("labeled_count"):
+                lcms_labeled_count += int(sum(metrics.get("labeled_count", [])))
+
         return {
             "thresholds": thresholds,
             "nmr": {
@@ -788,6 +813,15 @@ class AcceptanceService:
                 "element_accuracy": AcceptanceService._avg(raman_element_accuracy),
                 "recall_at_3": None,
             },
+            "lcms": {
+                "sample_count": len(lcms_items),
+                "task_success_rate": _rate(lcms_items),
+                "labeled_count": lcms_labeled_count,
+                "mass_abs_error_count": len(lcms_mass_abs_error),
+                "mass_abs_error_avg": AcceptanceService._avg(lcms_mass_abs_error),
+                "mass_rd_pct_count": len(lcms_mass_rd_pct),
+                "mass_rd_pct_avg": AcceptanceService._avg(lcms_mass_rd_pct),
+            },
         }
 
     def _extract_sample_metrics(self, result_payload: dict[str, Any], spectrum_type: str) -> dict[str, Any]:
@@ -817,6 +851,13 @@ class AcceptanceService:
                 val = self._safe_float(qa_metrics.get(key))
                 if val is not None:
                     metrics[key] = [val]
+            if spectrum_type == "lcms":
+                for key in ("mass_abs_error", "mass_rd_pct"):
+                    val = self._safe_float(qa_metrics.get(key))
+                    if val is not None:
+                        metrics[key] = [val]
+                if qa_metrics.get("labeled"):
+                    metrics["labeled_count"] = [1]
             if metrics:
                 return metrics
 
@@ -935,6 +976,7 @@ class AcceptanceService:
         gpc_metrics = aggregate_metrics.get("gpc", {}) if isinstance(aggregate_metrics, dict) else {}
         ir_metrics = aggregate_metrics.get("ir", {}) if isinstance(aggregate_metrics, dict) else {}
         raman_metrics = aggregate_metrics.get("raman", {}) if isinstance(aggregate_metrics, dict) else {}
+        lcms_metrics = aggregate_metrics.get("lcms", {}) if isinstance(aggregate_metrics, dict) else {}
 
         lines.extend(
             [
@@ -972,6 +1014,13 @@ class AcceptanceService:
                 f"- Samples Avg F1: {self._format_number(raman_metrics.get('samples_avg_f1'), 4)}",
                 f"- Element Accuracy: {self._format_percent(raman_metrics.get('element_accuracy'))}",
                 f"- Recall@3: {self._format_percent(raman_metrics.get('recall_at_3'))}",
+                "",
+                "### LCMS（分子量指标）",
+                f"- 样本数: {lcms_metrics.get('sample_count', 0)}",
+                f"- 任务成功率: {self._format_percent(lcms_metrics.get('task_success_rate'))}",
+                f"- 已标注样本: {lcms_metrics.get('labeled_count', 0)}",
+                f"- 绝对误差均值: {self._format_number(lcms_metrics.get('mass_abs_error_avg'), 4)}",
+                f"- 相对误差均值: {self._format_number(lcms_metrics.get('mass_rd_pct_avg'), 2, '%')}",
                 "",
                 "## 样本明细",
                 "",

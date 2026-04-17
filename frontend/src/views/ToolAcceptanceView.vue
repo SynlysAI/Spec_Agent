@@ -47,6 +47,7 @@ const aggregateNmr = computed(() => aggregate.value.nmr || {})
 const aggregateGpc = computed(() => aggregate.value.gpc || {})
 const aggregateIr = computed(() => aggregate.value.ir || {})
 const aggregateRaman = computed(() => aggregate.value.raman || {})
+const aggregateLcms = computed(() => aggregate.value.lcms || {})
 const activeArtifacts = computed(() => {
   const baseUrl = getStaticBaseUrl()
   return (activeSample.value?.artifacts || []).map((artifact) => ({
@@ -434,8 +435,8 @@ onBeforeUnmount(() => {
         </template>
         <el-divider content-position="left">验收指标汇总</el-divider>
 
-        <el-row :gutter="12" class="aggregate-row">
-          <el-col :span="6">
+        <div class="aggregate-grid">
+          <div>
             <el-card shadow="never" class="aggregate-card">
               <template #header><span>NMR（可自动计算）</span></template>
               <div>样本数：{{ aggregateNmr.sample_count || 0 }}</div>
@@ -445,8 +446,8 @@ onBeforeUnmount(() => {
               <div>溶剂峰ppm误差均值：{{ formatMetric(aggregateNmr.solvent_ppm_error_avg, 4) }}</div>
               <div>溶剂峰达标率：{{ formatMetric(aggregateNmr.solvent_ppm_error_pass_rate, 1, '%') }}</div>
             </el-card>
-          </el-col>
-          <el-col :span="6">
+          </div>
+          <div>
             <el-card shadow="never" class="aggregate-card">
               <template #header><span>GPC（分子量偏差验收）</span></template>
               <div>样本数：{{ aggregateGpc.sample_count || 0 }}</div>
@@ -458,8 +459,8 @@ onBeforeUnmount(() => {
               <div>PDI偏差均值：{{ formatMetric(aggregateGpc.pdi_rd_avg, 2, '%') }}（n={{ aggregateGpc.pdi_rd_count || 0 }}）</div>
               <div>PDI达标率：{{ formatMetric(aggregateGpc.pdi_rd_pass_rate, 1, '%') }}</div>
             </el-card>
-          </el-col>
-          <el-col :span="6">
+          </div>
+          <div>
             <el-card shadow="never" class="aggregate-card">
               <template #header><span>IR（标签指标）</span></template>
               <div>样本数：{{ aggregateIr.sample_count || 0 }}</div>
@@ -468,8 +469,8 @@ onBeforeUnmount(() => {
               <div>Micro-F1：{{ formatMetric(aggregateIr.micro_f1, 4) }}</div>
               <div>样本平均F1：{{ formatMetric(aggregateIr.sample_f1_avg, 4) }}</div>
             </el-card>
-          </el-col>
-          <el-col :span="6">
+          </div>
+          <div>
             <el-card shadow="never" class="aggregate-card">
               <template #header><span>Raman（标签指标）</span></template>
               <div>样本数：{{ aggregateRaman.sample_count || 0 }}</div>
@@ -480,8 +481,18 @@ onBeforeUnmount(() => {
               <div>Samples Avg F1：{{ formatMetric(aggregateRaman.samples_avg_f1, 4) }}</div>
               <div>Element Accuracy：{{ formatMetric((aggregateRaman.element_accuracy ?? null) !== null ? aggregateRaman.element_accuracy * 100 : null, 1, '%') }}</div>
             </el-card>
-          </el-col>
-        </el-row>
+          </div>
+          <div>
+            <el-card shadow="never" class="aggregate-card">
+              <template #header><span>LCMS（分子量指标）</span></template>
+              <div>样本数：{{ aggregateLcms.sample_count || 0 }}</div>
+              <div>任务成功率：{{ formatMetric(aggregateLcms.task_success_rate, 1, '%') }}</div>
+              <div>已标注样本：{{ aggregateLcms.labeled_count || 0 }}</div>
+              <div>绝对误差均值：{{ formatMetric(aggregateLcms.mass_abs_error_avg, 4) }}</div>
+              <div>相对误差均值：{{ formatMetric(aggregateLcms.mass_rd_pct_avg, 2, '%') }}</div>
+            </el-card>
+          </div>
+        </div>
 
         <div class="report-line">
           <el-button type="primary" plain @click="downloadReport">下载批量验收报告</el-button>
@@ -608,6 +619,13 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 
+.aggregate-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .aggregate-card {
   font-size: 13px;
   line-height: 1.8;
@@ -645,5 +663,23 @@ onBeforeUnmount(() => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@media (max-width: 1600px) {
+  .aggregate-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .aggregate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .aggregate-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

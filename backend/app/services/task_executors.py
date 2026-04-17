@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import zipfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from app.core.config import settings
 from app.infra.repositories import FileRepository
@@ -162,6 +165,81 @@ def sanitize_lcms_structured_data(structured_data: dict[str, Any]) -> dict[str, 
         "predicted_mass": _to_basic(structured_data.get("predicted_mass")),
         "raw_output": _to_basic(structured_data.get("raw_output")),
     }
+
+
+def resolve_lcms_label_candidates(input_file: Path) -> list[Path]:
+    """解析 LCMS 标签候选路径。"""
+    stem = input_file.stem
+    default_root = settings.spectrum_files_root / "acceptance" / "labels" / "lcms"
+    candidates = [
+        input_file.with_suffix(".label.json"),
+        input_file.with_suffix(".label.yaml"),
+        input_file.with_suffix(".label.yml"),
+        input_file.parent / f"{stem}.label.json",
+        input_file.parent / f"{stem}.label.yaml",
+        input_file.parent / f"{stem}.label.yml",
+        default_root / f"{stem}.label.json",
+        default_root / f"{stem}.label.yaml",
+        default_root / f"{stem}.label.yml",
+    ]
+    unique_candidates: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def load_lcms_label(input_file: Path) -> dict[str, Any] | None:
+    """读取 LCMS 标签文件。"""
+    for candidate in resolve_lcms_label_candidates(input_file=input_file):
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        try:
+            if candidate.suffix.lower() == ".json":
+                payload = json.loads(candidate.read_text(encoding="utf-8"))
+            else:
+                payload = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                payload["_label_file"] = str(candidate)
+                return payload
+        except Exception:
+            continue
+    return None
+
+
+def build_lcms_qa_metrics(input_file: Path, predicted_mass: float | str) -> dict[str, Any]:
+    """构建 LCMS 验收指标。"""
+    qa_metrics: dict[str, Any] = {"labeled": False}
+    label_payload = load_lcms_label(input_file=input_file)
+    if not label_payload:
+        return qa_metrics
+
+    target_mass = (
+        label_payload.get("true_mass")
+        or label_payload.get("target_mass")
+        or label_payload.get("molecular_weight")
+        or label_payload.get("mass")
+    )
+    try:
+        target_mass_value = float(target_mass)
+        predicted_mass_value = float(predicted_mass)
+    except (TypeError, ValueError):
+        return qa_metrics
+
+    if abs(target_mass_value) < 1e-12:
+        return qa_metrics
+
+    qa_metrics["labeled"] = True
+    qa_metrics["label_file"] = str(label_payload.get("_label_file") or "")
+    qa_metrics["target_mass"] = target_mass_value
+    qa_metrics["predicted_mass"] = predicted_mass_value
+    qa_metrics["mass_abs_error"] = abs(predicted_mass_value - target_mass_value)
+    qa_metrics["mass_rd_pct"] = abs((predicted_mass_value - target_mass_value) / target_mass_value) * 100.0
+    return qa_metrics
 
 
 def pick_internal_standard_idx(integration_regions: list[Any], prefer: list[str] | None) -> int | None:
@@ -414,11 +492,17 @@ class LcmsTaskExecutor(BaseTaskExecutor):
             f"- 预测分子量: {normalized_mass}\n",
             encoding="utf-8",
         )
+        qa_metrics = build_lcms_qa_metrics(input_file=input_file, predicted_mass=normalized_mass)
         return {
             "structured_data": sanitize_lcms_structured_data({"predicted_mass": normalized_mass, "raw_output": infer_result}),
             "text_report": text_report,
             "metadata": _to_basic(
-                {"spectrum_type": "lcms", "input_path": str(input_file), "report_path": str(report_path)}
+                {
+                    "spectrum_type": "lcms",
+                    "input_path": str(input_file),
+                    "report_path": str(report_path),
+                    "qa_metrics": qa_metrics,
+                }
             ),
         }
 
