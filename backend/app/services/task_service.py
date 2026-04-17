@@ -8,7 +8,8 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.config import settings
-from app.infra.mongo import get_files_collection, get_results_collection, get_tasks_collection
+from app.infra.repositories import FileRepository, ResultRepository, TaskRepository
+from app.schemas.task_runtime import TaskErrorInfo, TaskRecord
 from app.schemas.tasks import (
     TaskArtifactItem,
     TaskArtifactsData,
@@ -49,40 +50,32 @@ class TaskService:
         task_id = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
         now = datetime.now()
 
-        task_doc = {
-            "task_id": task_id,
-            "task_type": task_type,
-            "status": "PENDING",
-            "progress": 0,
-            "message": "task created",
-            "input": input_data,
-            "params": params,
-            "result_ref": None,
-            "error": None,
-            "created_at": now,
-            "updated_at": now,
-        }
-        get_tasks_collection().insert_one(task_doc)
+        task_record = TaskRecord(
+            task_id=task_id,
+            task_type=task_type,
+            status="PENDING",
+            progress=0,
+            message="task created",
+            input=input_data,
+            params=params,
+            result_ref=None,
+            error=None,
+            created_at=now,
+            updated_at=now,
+        )
+        TaskRepository.create(task_record)
 
         try:
             execute_analysis_task.apply_async(args=[task_id], queue=settings.celery_task_queue)
-            get_tasks_collection().update_one(
-                {"task_id": task_id},
-                {"$set": {"status": "QUEUED", "progress": 5, "message": "queued", "updated_at": datetime.now()}},
-            )
+            TaskRepository.update(task_id, status="QUEUED", progress=5, message="queued")
             return {"task_id": task_id, "task_type": task_type, "status": "QUEUED"}
         except Exception as exc:
-            get_tasks_collection().update_one(
-                {"task_id": task_id},
-                {
-                    "$set": {
-                        "status": "FAILED",
-                        "progress": 100,
-                        "message": "queue dispatch failed",
-                        "error": {"detail": str(exc)},
-                        "updated_at": datetime.now(),
-                    }
-                },
+            TaskRepository.update(
+                task_id,
+                status="FAILED",
+                progress=100,
+                message="queue dispatch failed",
+                error=TaskErrorInfo(detail=str(exc)),
             )
             return {"task_id": task_id, "task_type": task_type, "status": "FAILED"}
 
@@ -94,10 +87,10 @@ class TaskService:
         参数说明:
         - task_id: 任务ID。
         """
-        task = get_tasks_collection().find_one({"task_id": task_id}, {"_id": 0})
-        if not task:
+        task_record = TaskRepository.find_by_task_id(task_id)
+        if not task_record:
             return None
-        return TaskStatusData(**task)
+        return TaskStatusData(**task_record.model_dump(mode="python"))
 
     @staticmethod
     def list_tasks(
@@ -125,15 +118,8 @@ class TaskService:
         if task_type:
             query["task_type"] = task_type
 
-        collection = get_tasks_collection()
-        total = collection.count_documents(query)
-        cursor = (
-            collection.find(query, {"_id": 0})
-            .sort([("created_at", -1)])
-            .skip((safe_page - 1) * safe_size)
-            .limit(safe_size)
-        )
-        items = [TaskListItem(**doc) for doc in cursor]
+        total, task_records = TaskRepository.list_paginated(query=query, page=safe_page, page_size=safe_size)
+        items = [TaskListItem(**record.model_dump(mode="python")) for record in task_records]
         return TaskListData(total=total, page=safe_page, page_size=safe_size, items=items)
 
     @staticmethod
@@ -144,13 +130,13 @@ class TaskService:
         参数说明:
         - task_id: 任务ID。
         """
-        task = get_tasks_collection().find_one({"task_id": task_id}, {"_id": 0})
-        if not task:
+        task_record = TaskRepository.find_by_task_id(task_id)
+        if not task_record:
             return None
 
-        status = task["status"]
+        status = task_record.status
         if status == "FAILED":
-            err = task.get("error") or {}
+            err = task_record.error.model_dump(mode="python") if task_record.error else {}
             return TaskResultData(
                 task_id=task_id,
                 status=status,
@@ -164,18 +150,18 @@ class TaskService:
         if status != "SUCCESS":
             return TaskResultData(task_id=task_id, status=status, result=None)
 
-        result_ref = task.get("result_ref")
+        result_ref = task_record.result_ref
         if not result_ref:
             return TaskResultData(task_id=task_id, status=status, result=None)
 
-        result_doc = get_results_collection().find_one({"result_id": result_ref}, {"_id": 0})
-        if not result_doc:
+        result_record = ResultRepository.find_by_result_id(result_ref)
+        if not result_record:
             return TaskResultData(task_id=task_id, status=status, result=None)
 
         payload = {
-            "structured_data": result_doc.get("structured_data", {}),
-            "text_report": result_doc.get("text_report", ""),
-            "metadata": result_doc.get("metadata", {}),
+            "structured_data": result_record.structured_data,
+            "text_report": result_record.text_report,
+            "metadata": result_record.metadata,
         }
         return TaskResultData(task_id=task_id, status=status, result=payload)
 
@@ -229,8 +215,8 @@ class TaskService:
         input_type = input_data.get("input_type")
         if input_type == "file_id":
             file_id = input_data.get("file_id")
-            file_doc = get_files_collection().find_one({"file_id": file_id}, {"_id": 0})
-            if not file_doc:
+            file_record = FileRepository.find_by_file_id(file_id)
+            if not file_record:
                 raise ValueError("file_id 不存在")
             return
 

@@ -5,10 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
-from app.infra.mongo import get_results_collection, get_tasks_collection
-from app.modules.common.llm_service import create_llm_client
+from app.infra.repositories import ResultRepository, TaskRepository
 from app.schemas.dialogue import DialogueReportItem
 
 ANALYSIS_TYPE_LABELS = {
@@ -37,14 +34,13 @@ class DialogueService:
         Returns:
             分析类型列表，每项包含编码、中文名称和报告数量。
         """
-        task_collection = get_tasks_collection()
         items: list[dict[str, Any]] = []
         for analysis_type, label in ANALYSIS_TYPE_LABELS.items():
             if analysis_type == "none":
                 items.append({"analysis_type": analysis_type, "label": label, "report_count": 0})
                 continue
             task_type = ANALYSIS_TYPE_TO_TASK_KIND[analysis_type]
-            report_count = task_collection.count_documents(
+            report_count = TaskRepository.count(
                 {"task_type": task_type, "status": "SUCCESS", "result_ref": {"$ne": None}}
             )
             items.append({"analysis_type": analysis_type, "label": label, "report_count": int(report_count)})
@@ -64,23 +60,18 @@ class DialogueService:
         if analysis_type not in ANALYSIS_TYPE_TO_TASK_KIND:
             return []
         task_type = ANALYSIS_TYPE_TO_TASK_KIND[analysis_type]
-        tasks_cursor = (
-            get_tasks_collection()
-            .find(
-                {"task_type": task_type, "status": "SUCCESS", "result_ref": {"$ne": None}},
-                {"_id": 0, "task_id": 1, "result_ref": 1, "created_at": 1},
-            )
-            .sort([("created_at", -1)])
-            .limit(max(limit, 1))
+        tasks_cursor = TaskRepository.find_many(
+            query={"task_type": task_type, "status": "SUCCESS", "result_ref": {"$ne": None}},
+            projection={"_id": 0, "task_id": 1, "result_ref": 1, "created_at": 1},
+            limit=max(limit, 1),
         )
 
-        result_collection = get_results_collection()
         items: list[DialogueReportItem] = []
         for task_doc in tasks_cursor:
             result_ref = task_doc.get("result_ref")
             if not result_ref:
                 continue
-            result_doc = result_collection.find_one({"result_id": result_ref}, {"_id": 0, "text_report": 1})
+            result_doc = ResultRepository.find_raw(str(result_ref), {"_id": 0, "text_report": 1})
             text_report = str((result_doc or {}).get("text_report", "")).strip()
             snippet = text_report.replace("\n", " ")[:160]
             created_at = task_doc.get("created_at")
@@ -122,7 +113,7 @@ class DialogueService:
         """
         report_text = ""
         if report_id:
-            doc = get_results_collection().find_one({"result_id": report_id}, {"_id": 0, "text_report": 1})
+            doc = ResultRepository.find_raw(report_id, {"_id": 0, "text_report": 1})
             report_text = str((doc or {}).get("text_report", "")).strip()
 
         used_excerpt = DialogueService._extract_relevant_excerpt(report_text=report_text, question=question)
@@ -210,6 +201,9 @@ class DialogueService:
             LLM 回答文本，失败时返回空字符串。
         """
         try:
+            from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+            from app.modules.common.llm_service import create_llm_client
+
             llm_client = create_llm_client()
 
             merged_system_prompt = DialogueService._build_llm_system_prompt(

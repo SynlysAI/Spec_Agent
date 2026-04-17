@@ -1,2 +1,7 @@
-﻿.idea/
+.idea/
 .ide/
+.runtime/
+uploads/
+outputs/
+temp_remote/
+backend/.env

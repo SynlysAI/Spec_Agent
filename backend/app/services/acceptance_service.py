@@ -15,7 +15,7 @@ from uuid import uuid4
 import yaml
 
 from app.core.config import settings
-from app.infra.mongo import get_acceptance_runs_collection
+from app.infra.repositories import AcceptanceRunRepository
 from app.schemas.acceptance import (
     AcceptanceRunData,
     AcceptanceRunHistoryItem,
@@ -63,7 +63,7 @@ class AcceptanceService:
     @staticmethod
     def _ensure_indexes() -> None:
         """初始化 acceptance_runs 索引。"""
-        collection = get_acceptance_runs_collection()
+        collection = AcceptanceRunRepository.collection()
         collection.create_index("run_id", unique=True)
         collection.create_index("started_at")
         collection.create_index("status")
@@ -166,7 +166,7 @@ class AcceptanceService:
             history.append(self._to_history_item(run_data=run_data))
             known_run_ids.add(run_data.run_id)
 
-        collection = get_acceptance_runs_collection()
+        collection = AcceptanceRunRepository.collection()
         cursor = collection.find({}, {"_id": 0}).sort([("started_at", -1)]).limit(safe_limit * 3)
         for doc in cursor:
             run_data = self._deserialize_run_data(doc)
@@ -1059,7 +1059,7 @@ class AcceptanceService:
         Args:
             run_data: 批次运行数据。
         """
-        collection = get_acceptance_runs_collection()
+        collection = AcceptanceRunRepository.collection()
         payload = run_data.model_dump(mode="json")
         payload["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         payload["execution_config"] = self._build_execution_config(selected_types=run_data.selected_types)
@@ -1078,7 +1078,7 @@ class AcceptanceService:
         Returns:
             批次运行对象，不存在时返回 None。
         """
-        collection = get_acceptance_runs_collection()
+        collection = AcceptanceRunRepository.collection()
         doc = collection.find_one({"run_id": run_id}, {"_id": 0})
         return self._deserialize_run_data(doc)
 

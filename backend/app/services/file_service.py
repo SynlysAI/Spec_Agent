@@ -10,8 +10,9 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.core.config import settings
-from app.infra.mongo import get_files_collection
+from app.infra.repositories import FileRepository
 from app.schemas.files import UploadFileData
+from app.schemas.task_runtime import FileRecord
 
 
 class FileService:
@@ -46,17 +47,13 @@ class FileService:
             file_name=file_name,
             file_size=file_size,
             file_ext=file_ext,
-            storage_path=str(Path("uploads") / sub_dir / target_name).replace("\\", "/"),
+            storage_path=target_path.relative_to(settings.project_root).as_posix(),
             sha256=file_hash,
         )
-        get_files_collection().update_one(
-            {"file_id": payload.file_id},
-            {
-                "$set": {
-                    **payload.model_dump(),
-                    "created_at": datetime.now(),
-                }
-            },
-            upsert=True,
+        FileRepository.save(
+            FileRecord(
+                **payload.model_dump(),
+                created_at=datetime.now(),
+            )
         )
         return payload

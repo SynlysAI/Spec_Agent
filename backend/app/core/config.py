@@ -23,31 +23,38 @@ class Settings:
     def __init__(self) -> None:
         self.project_root: Path = Path(__file__).resolve().parents[3]
         self.backend_root: Path = self.project_root / "backend"
-        self.upload_root: Path = self.project_root / "uploads"
-        self.outputs_root: Path = self.project_root / "outputs"
+        self.runtime_root: Path = Path(
+            os.getenv("SPEC_AGENT_RUNTIME_ROOT", str(self.project_root / ".runtime"))
+        )
+        self.upload_root: Path = Path(
+            os.getenv("SPEC_AGENT_UPLOAD_ROOT", str(self.runtime_root / "uploads"))
+        )
+        self.outputs_root: Path = Path(
+            os.getenv("SPEC_AGENT_OUTPUT_ROOT", str(self.runtime_root / "outputs"))
+        )
         self.resources_root: Path = self.backend_root / "resources"
         self.max_upload_size_mb: int = 100
         self.api_prefix: str = "/api/v1"
         self.app_env: str = os.getenv("APP_ENV", "dev")
 
         # MongoDB 配置
-        self.mongodb_host: str = os.getenv("MONGODB_HOST", "100.84.59.58")
-        self.mongodb_port: int = int(os.getenv("MONGODB_PORT", "27018"))
-        self.mongodb_username: str = os.getenv("MONGODB_USERNAME", "admin")
-        self.mongodb_password: str = os.getenv("MONGODB_PASSWORD", "password123")
+        self.mongodb_host: str = os.getenv("MONGODB_HOST", "127.0.0.1")
+        self.mongodb_port: int = int(os.getenv("MONGODB_PORT", "27017"))
+        self.mongodb_username: str = os.getenv("MONGODB_USERNAME", "")
+        self.mongodb_password: str = os.getenv("MONGODB_PASSWORD", "")
         self.mongodb_database: str = os.getenv("MONGODB_DATABASE", "spec_agent")
 
         # RabbitMQ 配置
-        self.rabbitmq_host: str = os.getenv("RABBITMQ_HOST", "100.84.59.58")
+        self.rabbitmq_host: str = os.getenv("RABBITMQ_HOST", "127.0.0.1")
         self.rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
-        self.rabbitmq_username: str = os.getenv("RABBITMQ_USERNAME", "admin")
-        self.rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "password123")
+        self.rabbitmq_username: str = os.getenv("RABBITMQ_USERNAME", "guest")
+        self.rabbitmq_password: str = os.getenv("RABBITMQ_PASSWORD", "guest")
         self.rabbitmq_vhost: str = os.getenv("RABBITMQ_VHOST", "/")
         self.celery_task_queue: str = os.getenv("CELERY_TASK_QUEUE", "spec_agent")
 
         # NMRServer 外部服务配置
-        self.nmr_server_base_url: str = os.getenv("NMR_SERVER_BASE_URL", "http://100.84.59.58:8080")
-        self.lcms_infer_url: str = os.getenv("LCMS_INFER_URL", "http://100.84.59.58:9999/infer")
+        self.nmr_server_base_url: str = os.getenv("NMR_SERVER_BASE_URL", "http://127.0.0.1:8080")
+        self.lcms_infer_url: str = os.getenv("LCMS_INFER_URL", "http://127.0.0.1:9999/infer")
 
         # LLM 配置
         self.llm_model: str = os.getenv("LLM_MODEL", "deepseek-chat")
@@ -59,7 +66,9 @@ class Settings:
         self.llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
 
         # GPC 兼容配置
-        self.spectrum_files_root: Path = Path(os.getenv("SPECTRUM_FILES_ROOT", r"E:\spectrum_files"))
+        self.spectrum_files_root: Path = Path(
+            os.getenv("SPECTRUM_FILES_ROOT", str(self.project_root / "sample_data"))
+        )
         self.analysis_results_root: Path = Path(os.getenv("ANALYSIS_RESULTS_PATH", str(self.outputs_root)))
         self.calibration_curves_root: Path = Path(
             os.getenv(
@@ -87,6 +96,8 @@ class Settings:
         self.raman_checkpoints_root: Path = self.raman_resources_root / "checkpoints"
         self.raman_database_root: Path = self.raman_resources_root / "database"
         self.raman_tokenizer_root: Path = self.raman_resources_root / "moltokenizer"
+        self.upload_root.mkdir(parents=True, exist_ok=True)
+        self.outputs_root.mkdir(parents=True, exist_ok=True)
 
     @property
     def mongodb_uri(self) -> str:
@@ -96,10 +107,13 @@ class Settings:
         参数说明:
         - self: 配置对象实例。
         """
-        return (
-            f"mongodb://{self.mongodb_username}:{self.mongodb_password}"
-            f"@{self.mongodb_host}:{self.mongodb_port}"
-        )
+        credential = ""
+        if self.mongodb_username:
+            credential = self.mongodb_username
+            if self.mongodb_password:
+                credential = f"{credential}:{self.mongodb_password}"
+            credential = f"{credential}@"
+        return f"mongodb://{credential}{self.mongodb_host}:{self.mongodb_port}"
 
     @property
     def rabbitmq_broker_url(self) -> str:

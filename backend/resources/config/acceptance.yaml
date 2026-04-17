@@ -1,0 +1,46 @@
+samples:
+  nmr:
+    execution_mode: local
+    dirs:
+      - E:/spectrum_files/acceptance/nmr
+  gpc:
+    execution_mode: local
+    dirs:
+      - E:/spectrum_files/acceptance/gpc
+    patterns:
+      - "*.arw"
+  ir:
+    execution_mode: local
+    dirs:
+      - E:/spectrum_files/acceptance/ir
+    patterns:
+      - "*.txt"
+      - "*.csv"
+
+    # 远程汇总执行示例
+    # 说明：
+    # 1. execution_mode 改成 remote_summary 后，表示 IR 不再本地逐样本执行。
+    # 2. 通过 SSH 调用远程脚本，只回传汇总指标结果。
+    # 3. 本地不保存各样本产物，仅保留批次级汇总信息。
+    #
+    # execution_mode: remote_summary
+    # remote:
+    #   host: 10.0.0.8
+    #   port: 22
+    #   user: tester
+    #   script: /data/spec_agent/run_ir_acceptance.sh
+    #   workdir: /data/spec_agent
+    #   timeout_seconds: 7200
+    #   env:
+    #     MODEL_ENV: prod
+    #     CUDA_VISIBLE_DEVICES: "0"
+  raman:
+    execution_mode: remote_summary
+    remote:
+      host: 10.26.15.56
+      port: 42336
+      user: lyt
+      password: lyt!@2025
+      script: run_raman_acceptance_json.sh
+      workdir: /home/lyt/projects/sub_id-main
+      timeout_seconds: 7200
