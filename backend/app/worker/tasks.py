@@ -62,3 +62,15 @@ def execute_analysis_task(task_id: str) -> None:
         _update_task(task_id, status="SUCCESS", progress=100, message="finished", result_ref=result_id, error=None)
     except Exception as exc:
         _update_task(task_id, status="FAILED", progress=100, message="failed", error=TaskErrorInfo(detail=str(exc)))
+
+
+@celery_app.task(name="app.worker.tasks.execute_acceptance_run_task")
+def execute_acceptance_run_task(run_id: str) -> None:
+    """执行批量验收批次。
+
+    Args:
+        run_id: 批量验收运行 ID。
+    """
+    from app.services.acceptance_service import acceptance_service
+
+    acceptance_service.run_batch(run_id=run_id)

@@ -56,37 +56,6 @@ const treeProps = {
   label: 'label',
 }
 
-const imageGroups = computed(() => {
-  const groups = {
-    raw: [],
-    process: [],
-    peak: [],
-    result: [],
-    other: [],
-  }
-  for (const item of imageArtifacts.value) {
-    const name = String(item.name || '').toLowerCase()
-    if (name.includes('raw') || name.includes('spectrum') || name.endsWith('.fid.png')) {
-      groups.raw.push(item)
-      continue
-    }
-    if (name.includes('processing') || name.includes('process') || name.includes('baseline') || name.includes('step')) {
-      groups.process.push(item)
-      continue
-    }
-    if (name.includes('peak') || name.includes('roi') || name.includes('integration_region') || name.includes('multiplet')) {
-      groups.peak.push(item)
-      continue
-    }
-    if (name.includes('result') || name.includes('detailed_gpc_plot') || name.includes('machine_curve') || name.includes('quant') || name.includes('fit')) {
-      groups.result.push(item)
-      continue
-    }
-    groups.other.push(item)
-  }
-  return groups
-})
-
 const gpcRows = computed(() => structuredData.value.analysis_results || [])
 const nmrRows = computed(() => structuredData.value.nmr_results || [])
 
@@ -663,138 +632,30 @@ onBeforeUnmount(() => {
 
         <template v-if="imageArtifacts.length > 0">
           <el-divider />
-          <h4 style="margin: 8px 0">分析图像产物</h4>
-          <el-tabs type="border-card">
-            <el-tab-pane label="原始谱图">
-              <el-row :gutter="12">
-                <el-col
-                  v-for="item in imageGroups.raw"
-                  :key="item.relative_path"
-                  :xs="24"
-                  :sm="12"
-                  :lg="8"
-                  style="margin-bottom: 12px"
-                >
-                  <el-card shadow="hover">
-                    <template #header>
-                      <div style="font-size: 13px; color: #3d5377; word-break: break-all">{{ item.name }}</div>
-                    </template>
-                    <el-image
-                      :src="buildImageUrl(item.url)"
-                      fit="contain"
-                      style="width: 100%; height: 220px; background: #f6f9ff"
-                      :preview-src-list="buildPreviewUrls(imageGroups.raw)"
-                      :initial-index="imageGroups.raw.findIndex((x) => x.relative_path === item.relative_path)"
-                    />
-                  </el-card>
-                </el-col>
-              </el-row>
-              <el-empty v-if="imageGroups.raw.length === 0" description="暂无原始谱图" />
-            </el-tab-pane>
-            <el-tab-pane label="处理步骤">
-              <el-row :gutter="12">
-                <el-col
-                  v-for="item in imageGroups.process"
-                  :key="item.relative_path"
-                  :xs="24"
-                  :sm="12"
-                  :lg="8"
-                  style="margin-bottom: 12px"
-                >
-                  <el-card shadow="hover">
-                    <template #header>
-                      <div style="font-size: 13px; color: #3d5377; word-break: break-all">{{ item.name }}</div>
-                    </template>
-                    <el-image
-                      :src="buildImageUrl(item.url)"
-                      fit="contain"
-                      style="width: 100%; height: 220px; background: #f6f9ff"
-                      :preview-src-list="buildPreviewUrls(imageGroups.process)"
-                      :initial-index="imageGroups.process.findIndex((x) => x.relative_path === item.relative_path)"
-                    />
-                  </el-card>
-                </el-col>
-              </el-row>
-              <el-empty v-if="imageGroups.process.length === 0" description="暂无处理步骤图" />
-            </el-tab-pane>
-            <el-tab-pane label="峰检测">
-              <el-row :gutter="12">
-                <el-col
-                  v-for="item in imageGroups.peak"
-                  :key="item.relative_path"
-                  :xs="24"
-                  :sm="12"
-                  :lg="8"
-                  style="margin-bottom: 12px"
-                >
-                  <el-card shadow="hover">
-                    <template #header>
-                      <div style="font-size: 13px; color: #3d5377; word-break: break-all">{{ item.name }}</div>
-                    </template>
-                    <el-image
-                      :src="buildImageUrl(item.url)"
-                      fit="contain"
-                      style="width: 100%; height: 220px; background: #f6f9ff"
-                      :preview-src-list="buildPreviewUrls(imageGroups.peak)"
-                      :initial-index="imageGroups.peak.findIndex((x) => x.relative_path === item.relative_path)"
-                    />
-                  </el-card>
-                </el-col>
-              </el-row>
-              <el-empty v-if="imageGroups.peak.length === 0" description="暂无峰检测图" />
-            </el-tab-pane>
-            <el-tab-pane label="结果图">
-              <el-row :gutter="12">
-                <el-col
-                  v-for="item in imageGroups.result"
-                  :key="item.relative_path"
-                  :xs="24"
-                  :sm="12"
-                  :lg="8"
-                  style="margin-bottom: 12px"
-                >
-                  <el-card shadow="hover">
-                    <template #header>
-                      <div style="font-size: 13px; color: #3d5377; word-break: break-all">{{ item.name }}</div>
-                    </template>
-                    <el-image
-                      :src="buildImageUrl(item.url)"
-                      fit="contain"
-                      style="width: 100%; height: 220px; background: #f6f9ff"
-                      :preview-src-list="buildPreviewUrls(imageGroups.result)"
-                      :initial-index="imageGroups.result.findIndex((x) => x.relative_path === item.relative_path)"
-                    />
-                  </el-card>
-                </el-col>
-              </el-row>
-              <el-empty v-if="imageGroups.result.length === 0" description="暂无结果图" />
-            </el-tab-pane>
-            <el-tab-pane label="全部图像">
-              <el-row :gutter="12">
-                <el-col
-                  v-for="item in imageArtifacts"
-                  :key="item.relative_path"
-                  :xs="24"
-                  :sm="12"
-                  :lg="8"
-                  style="margin-bottom: 12px"
-                >
-                  <el-card shadow="hover">
-                    <template #header>
-                      <div style="font-size: 13px; color: #3d5377; word-break: break-all">{{ item.name }}</div>
-                    </template>
-                    <el-image
-                      :src="buildImageUrl(item.url)"
-                      fit="contain"
-                      style="width: 100%; height: 220px; background: #f6f9ff"
-                      :preview-src-list="buildPreviewUrls(imageArtifacts)"
-                      :initial-index="imageArtifacts.findIndex((x) => x.relative_path === item.relative_path)"
-                    />
-                  </el-card>
-                </el-col>
-              </el-row>
-            </el-tab-pane>
-          </el-tabs>
+          <h4 style="margin: 8px 0">分析图像产物（{{ imageArtifacts.length }} 张）</h4>
+          <el-row :gutter="12">
+            <el-col
+              v-for="item in imageArtifacts"
+              :key="item.relative_path"
+              :xs="24"
+              :sm="12"
+              :lg="8"
+              style="margin-bottom: 12px"
+            >
+              <el-card shadow="hover">
+                <template #header>
+                  <div style="font-size: 13px; color: #3d5377; word-break: break-all">{{ item.name }}</div>
+                </template>
+                <el-image
+                  :src="buildImageUrl(item.url)"
+                  fit="contain"
+                  style="width: 100%; height: 220px; background: #f6f9ff"
+                  :preview-src-list="buildPreviewUrls(imageArtifacts)"
+                  :initial-index="imageArtifacts.findIndex((x) => x.relative_path === item.relative_path)"
+                />
+              </el-card>
+            </el-col>
+          </el-row>
         </template>
 
         <template v-if="isSuccess()">

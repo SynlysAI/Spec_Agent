@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -56,8 +55,6 @@ class AcceptanceService:
 
     def __init__(self) -> None:
         self.config_path = settings.acceptance_config_path
-        self._run_store: dict[str, AcceptanceRunData] = {}
-        self._lock = threading.Lock()
         self._ensure_indexes()
 
     @staticmethod
@@ -121,12 +118,31 @@ class AcceptanceService:
             results=[],
             report_path=None,
         )
-        with self._lock:
-            self._run_store[run_id] = run_data
         self._save_run_record(run_data=run_data)
 
-        thread = threading.Thread(target=self._run_batch, args=(run_id,), daemon=True)
-        thread.start()
+        from app.worker.tasks import execute_acceptance_run_task
+
+        try:
+            execute_acceptance_run_task.apply_async(args=[run_id], queue=settings.celery_task_queue)
+        except Exception as exc:
+            run_data.status = "FAILED"
+            run_data.finished_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            run_data.summary.progress = 100
+            run_data.results.append(
+                AcceptanceRunItem(
+                    sample_execution_id=f"dispatch_{uuid4().hex[:8]}",
+                    spectrum_type="system",
+                    sample_name="批量验收派发",
+                    sample_path="",
+                    status="FAILED",
+                    duration_seconds=0.0,
+                    metrics={},
+                    text_report="",
+                    artifacts=[],
+                    error_message=f"Celery 派发失败: {exc}",
+                )
+            )
+            self._save_run_record(run_data=run_data)
         return run_data
 
     def get_run(self, run_id: str) -> AcceptanceRunData | None:
@@ -138,10 +154,6 @@ class AcceptanceService:
         Returns:
             运行对象，不存在时返回 None。
         """
-        with self._lock:
-            data = self._run_store.get(run_id)
-            if data:
-                return data.model_copy(deep=True)
         record = self._load_run_record(run_id=run_id)
         if record:
             return record
@@ -159,12 +171,6 @@ class AcceptanceService:
         safe_limit = max(1, min(int(limit or 20), 200))
         history: list[AcceptanceRunHistoryItem] = []
         known_run_ids: set[str] = set()
-
-        with self._lock:
-            current_runs = list(self._run_store.values())
-        for run_data in current_runs:
-            history.append(self._to_history_item(run_data=run_data))
-            known_run_ids.add(run_data.run_id)
 
         collection = AcceptanceRunRepository.collection()
         cursor = collection.find({}, {"_id": 0}).sort([("started_at", -1)]).limit(safe_limit * 3)
@@ -200,18 +206,17 @@ class AcceptanceService:
         )
         return history[:safe_limit]
 
-    def _run_batch(self, run_id: str) -> None:
+    def run_batch(self, run_id: str) -> None:
         """后台执行批量验收任务。
 
         Args:
             run_id: 批次运行 ID。
         """
         start_time = time.time()
-        with self._lock:
-            run_data = self._run_store.get(run_id)
-            if not run_data:
-                return
-            selected_types = list(run_data.selected_types)
+        run_data = self._load_run_record(run_id=run_id)
+        if not run_data:
+            return
+        selected_types = list(run_data.selected_types)
 
         config = self._load_config()
         all_samples: list[AcceptanceSample] = []
@@ -396,17 +401,15 @@ class AcceptanceService:
             failed: 当前失败数。
             progress: 当前进度。
         """
-        with self._lock:
-            run_data = self._run_store.get(run_id)
-            if not run_data:
-                return
-            run_data.results.append(item)
-            run_data.summary.success = success
-            run_data.summary.failed = failed
-            run_data.summary.progress = progress
-            run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
-            snapshot = run_data.model_copy(deep=True)
-        self._save_run_record(run_data=snapshot)
+        run_data = self._load_run_record(run_id=run_id)
+        if not run_data:
+            return
+        run_data.results.append(item)
+        run_data.summary.success = success
+        run_data.summary.failed = failed
+        run_data.summary.progress = progress
+        run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
+        self._save_run_record(run_data=run_data)
 
     def _build_task_payload(self, sample: AcceptanceSample) -> dict[str, Any]:
         """构建批量验收执行参数。
@@ -456,7 +459,7 @@ class AcceptanceService:
             "input": {"input_type": "file_path", "input_path": sample.sample_path, "file_id": None},
             "params": {
                 "spectype": spectrum_type,
-                "mode": "retrieval" if spectrum_type == "raman" else "greedy_decode",
+                "mode": "function_groups" if spectrum_type == "raman" else "retrieval",
                 "k": 3,
                 "x0": 400,
                 "x1": 4000,
@@ -627,16 +630,14 @@ class AcceptanceService:
             failed: 失败数。
             progress: 当前进度。
         """
-        with self._lock:
-            run_data = self._run_store.get(run_id)
-            if not run_data:
-                return
-            run_data.summary.total = total
-            run_data.summary.success = success
-            run_data.summary.failed = failed
-            run_data.summary.progress = progress
-            snapshot = run_data.model_copy(deep=True)
-        self._save_run_record(run_data=snapshot)
+        run_data = self._load_run_record(run_id=run_id)
+        if not run_data:
+            return
+        run_data.summary.total = total
+        run_data.summary.success = success
+        run_data.summary.failed = failed
+        run_data.summary.progress = progress
+        self._save_run_record(run_data=run_data)
 
     def _finish_run(self, run_id: str, status: str, start_time: float) -> None:
         """结束批次运行并保存结果文件。
@@ -647,20 +648,18 @@ class AcceptanceService:
             start_time: 批次开始时间戳。
         """
         duration = time.time() - start_time
-        with self._lock:
-            run_data = self._run_store.get(run_id)
-            if not run_data:
-                return
-            run_data.status = status
-            run_data.summary.duration_seconds = duration
-            run_data.summary.progress = 100
-            run_data.finished_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
-            report_path = self._save_markdown_report(run_data=run_data)
-            run_data.report_path = str(report_path)
-            self._save_run_snapshot(run_data=run_data)
-            snapshot = run_data.model_copy(deep=True)
-        self._save_run_record(run_data=snapshot)
+        run_data = self._load_run_record(run_id=run_id)
+        if not run_data:
+            return
+        run_data.status = status
+        run_data.summary.duration_seconds = duration
+        run_data.summary.progress = 100
+        run_data.finished_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
+        report_path = self._save_markdown_report(run_data=run_data)
+        run_data.report_path = str(report_path)
+        self._save_run_snapshot(run_data=run_data)
+        self._save_run_record(run_data=run_data)
 
     @staticmethod
     def _build_aggregate_metrics(results: list[AcceptanceRunItem]) -> dict[str, Any]:
