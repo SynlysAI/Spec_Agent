@@ -41,6 +41,12 @@ RABBITMQ_VHOST=/
 
 - `GET /api/v1/health`
 - `POST /api/v1/files/upload`
+- `GET /api/v1/lab-collect/config`
+- `POST /api/v1/lab-collect/run`
+- `GET /api/v1/lab-collect/runs`
+- `GET /api/v1/lab-collect/run/{run_id}`
+- `GET /api/v1/lab-collect/samples`
+- `GET /api/v1/lab-collect/samples/{sample_id}`
 - `POST /api/v1/tasks/gpc`
 - `POST /api/v1/tasks/nmr`
 - `POST /api/v1/tasks/ir`
@@ -81,6 +87,7 @@ python scripts/run_regression.py
 - 当前后端主干目录已统一收敛到 `backend/app`。
 - `backend/app/schemas` 存放接口模型；`backend/app/modules` 作为业务模块兼容聚合层。
 - `backend/resources` 存放静态资源，如 `acceptance.yaml`、`solvent_impurities.json`、Raman 模型权重与数据库。
+- `backend/resources/config/lab_collectors.yaml` 用于配置 5 类实验仪器的远程共享目录与本地落盘目录。
 - 根级 `backend/config.py` 与 `backend/app/models` 仅保留兼容用途，后续新代码应优先使用 `app.core.config.settings`、`app.schemas.*`、`app.modules.*`。
 - 根级 `backend/agents`、`backend/services` 已缩减为历史遗留与少量兼容保留文件，不再承载主运行实现。
 - `GPC/NMR/IR/Raman` 任务能力已迁入本仓，运行时不再依赖源项目目录。

@@ -74,3 +74,15 @@ def execute_acceptance_run_task(run_id: str) -> None:
     from app.services.acceptance_service import acceptance_service
 
     acceptance_service.run_batch(run_id=run_id)
+
+
+@celery_app.task(name="app.worker.tasks.execute_lab_collect_run_task")
+def execute_lab_collect_run_task(run_id: str) -> None:
+    """执行实验室数据采集批次。
+
+    Args:
+        run_id: 采集批次 ID。
+    """
+    from app.services.lab_collect_service import lab_collect_service
+
+    lab_collect_service.run_collect(run_id=run_id)

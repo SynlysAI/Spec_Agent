@@ -5,6 +5,7 @@ import {
   DataAnalysis,
   Document,
   Files,
+  FolderOpened,
   Histogram,
   ChatLineRound,
   Monitor,
@@ -28,6 +29,9 @@ const activeMenu = computed(() => {
     return current
   }
   if (current.startsWith('/tools/')) {
+    return current
+  }
+  if (current.startsWith('/experiments/')) {
     return current
   }
   return current
@@ -126,10 +130,14 @@ function formatCurrentDate() {
           <el-icon><Document /></el-icon>
           <span>接口文档</span>
         </el-menu-item>
-        <el-menu-item index="/data" disabled>
-          <el-icon><Files /></el-icon>
-          <span>数据管理</span>
-        </el-menu-item>
+        <el-sub-menu index="/experiments">
+          <template #title>
+            <el-icon><FolderOpened /></el-icon>
+            <span>实验管理</span>
+          </template>
+          <el-menu-item index="/experiments/collect">数据采集</el-menu-item>
+          <el-menu-item index="/experiments/samples">样本管理</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/ops" disabled>
           <el-icon><Operation /></el-icon>
           <span>运维管理</span>

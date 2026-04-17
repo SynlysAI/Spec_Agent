@@ -10,6 +10,8 @@ import TaskSubmitLcmsView from '../views/TaskSubmitLcmsView.vue'
 import ToolNmrServerView from '../views/ToolNmrServerView.vue'
 import DialogueView from '../views/DialogueView.vue'
 import ToolAcceptanceView from '../views/ToolAcceptanceView.vue'
+import ExperimentCollectView from '../views/ExperimentCollectView.vue'
+import ExperimentSampleManageView from '../views/ExperimentSampleManageView.vue'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -23,6 +25,8 @@ const routes = [
   { path: '/tasks/center', component: TaskCenterView },
   { path: '/tasks/detail/:taskId', component: TaskDetailView, props: true },
   { path: '/dialogue', component: DialogueView },
+  { path: '/experiments/collect', component: ExperimentCollectView },
+  { path: '/experiments/samples', component: ExperimentSampleManageView },
   { path: '/tools/nmrserver', component: ToolNmrServerView },
   { path: '/tools/acceptance', component: ToolAcceptanceView },
 ]

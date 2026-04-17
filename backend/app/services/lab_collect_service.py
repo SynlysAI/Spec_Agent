@@ -1,0 +1,640 @@
+"""实验室数据采集服务。"""
+
+from __future__ import annotations
+
+import fnmatch
+import hashlib
+import json
+import re
+import shutil
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+from uuid import uuid4
+
+import yaml
+
+from app.core.config import settings
+from app.infra.repositories import (
+    LabCollectRunRepository,
+    SpectrumSampleFileRepository,
+    SpectrumSampleRepository,
+)
+from app.schemas.lab_collect import (
+    LabCollectConfigData,
+    LabCollectRunCreateData,
+    LabCollectRunError,
+    LabCollectRunRecord,
+    LabCollectRunSummary,
+    LabCollectorTypeConfig,
+    SpectrumSampleDetailData,
+    SpectrumSampleFileRecord,
+    SpectrumSampleListData,
+    SpectrumSampleListItem,
+    SpectrumSampleRecord,
+)
+
+
+TYPE_INPUT_KIND = {
+    "nmr": "folder_path",
+    "gpc": "file_path",
+    "ir": "file_path",
+    "raman": "file_path",
+    "lcms": "file_path",
+}
+
+
+@dataclass
+class CollectCandidate:
+    """待采集候选样本。"""
+
+    spectrum_type: str
+    source_date: str
+    sample_name: str
+    remote_path: Path
+    remote_date_dir: Path
+    sample_mode: str
+    local_root: Path
+    share_key: str
+    patterns: list[str]
+
+
+class LabCollectService:
+    """实验室共享目录采集服务。"""
+
+    def __init__(self) -> None:
+        self.config_path = settings.lab_collectors_config_path
+        self._ensure_indexes()
+
+    @staticmethod
+    def _ensure_indexes() -> None:
+        """初始化集合索引。"""
+        LabCollectRunRepository.collection().create_index("run_id", unique=True)
+        LabCollectRunRepository.collection().create_index([("created_at", -1)])
+        LabCollectRunRepository.collection().create_index([("status", 1), ("created_at", -1)])
+
+        SpectrumSampleRepository.collection().create_index("sample_key", unique=True)
+        SpectrumSampleRepository.collection().create_index(
+            [("spectrum_type", 1), ("source_date", -1), ("sample_name", 1)]
+        )
+        SpectrumSampleRepository.collection().create_index(
+            [("source_date", -1), ("spectrum_type", 1), ("sample_name_normalized", 1)]
+        )
+        SpectrumSampleRepository.collection().create_index([("latest_run_id", 1)])
+
+        SpectrumSampleFileRepository.collection().create_index(
+            [("sample_id", 1), ("relative_path", 1)],
+            unique=True,
+        )
+        SpectrumSampleFileRepository.collection().create_index([("sample_key", 1)])
+        SpectrumSampleFileRepository.collection().create_index([("spectrum_type", 1), ("file_ext", 1)])
+
+    def get_config_summary(self) -> LabCollectConfigData:
+        """读取采集配置摘要。"""
+        config = self._load_config()
+        items: list[LabCollectorTypeConfig] = []
+        for spectrum_type in ("nmr", "gpc", "ir", "raman", "lcms"):
+            item = (config.get("collectors", {}) or {}).get(spectrum_type, {}) or {}
+            items.append(
+                LabCollectorTypeConfig(
+                    spectrum_type=spectrum_type,
+                    enabled=bool(item.get("enabled", False)),
+                    share_key=str(item.get("share_key") or ""),
+                    remote_root=str(item.get("remote_root") or ""),
+                    local_root=str(item.get("local_root") or ""),
+                    sample_mode=str(item.get("sample_mode") or ("directory" if spectrum_type in {"nmr", "gpc"} else "file")),
+                    patterns=[str(pattern) for pattern in (item.get("patterns", []) or []) if str(pattern).strip()],
+                )
+            )
+        return LabCollectConfigData(config_path=str(self.config_path), items=items)
+
+    def create_run(
+        self,
+        collect_date: str | None,
+        date_from: str | None,
+        date_to: str | None,
+        spectrum_types: list[str] | None,
+    ) -> LabCollectRunCreateData:
+        """创建采集批次并异步执行。"""
+        selected_types = self._normalize_types(spectrum_types=spectrum_types)
+        trigger_mode = "single_date" if collect_date else "date_range"
+        normalized_from = collect_date or str(date_from)
+        normalized_to = collect_date or str(date_to)
+        config = self._load_config()
+        snapshot = {
+            spectrum_type: ((config.get("collectors", {}) or {}).get(spectrum_type, {}) or {})
+            for spectrum_type in selected_types
+        }
+        now = datetime.now()
+        run_id = f"lcr_{now.strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
+        run_record = LabCollectRunRecord(
+            run_id=run_id,
+            status="PENDING",
+            spectrum_types=selected_types,
+            date_from=normalized_from,
+            date_to=normalized_to,
+            trigger_mode=trigger_mode,
+            config_snapshot=snapshot,
+            summary=LabCollectRunSummary(),
+            errors=[],
+            started_at=None,
+            finished_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        LabCollectRunRepository.save(run_record)
+
+        from app.worker.tasks import execute_lab_collect_run_task
+
+        try:
+            execute_lab_collect_run_task.apply_async(args=[run_id], queue=settings.celery_task_queue)
+            run_record.status = "QUEUED"
+            run_record.updated_at = datetime.now()
+            LabCollectRunRepository.save(run_record)
+        except Exception as exc:
+            run_record.status = "FAILED"
+            run_record.finished_at = datetime.now()
+            run_record.updated_at = datetime.now()
+            run_record.summary.failed = 1
+            run_record.summary.progress = 100
+            run_record.errors.append(
+                LabCollectRunError(
+                    spectrum_type=selected_types[0] if selected_types else "nmr",
+                    source_date=normalized_from,
+                    remote_path="",
+                    sample_name="dispatch",
+                    error_message=f"Celery 派发失败: {exc}",
+                )
+            )
+            LabCollectRunRepository.save(run_record)
+        return LabCollectRunCreateData(run_id=run_id, status=run_record.status)
+
+    def get_run(self, run_id: str) -> LabCollectRunRecord | None:
+        """查询采集批次。"""
+        return LabCollectRunRepository.find_by_run_id(run_id)
+
+    def list_runs(self, limit: int = 20) -> list[LabCollectRunRecord]:
+        """查询采集批次列表。"""
+        safe_limit = max(1, min(int(limit or 20), 200))
+        return LabCollectRunRepository.list_recent(limit=safe_limit)
+
+    def list_samples(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        spectrum_type: str | None = None,
+        source_date: str | None = None,
+        sample_name: str | None = None,
+    ) -> SpectrumSampleListData:
+        """分页查询样本主档。"""
+        safe_page = max(1, int(page or 1))
+        safe_size = max(1, min(int(page_size or 20), 100))
+        query: dict[str, Any] = {}
+        if spectrum_type:
+            query["spectrum_type"] = str(spectrum_type).strip().lower()
+        if source_date:
+            query["source_date"] = str(source_date).strip()
+        if sample_name:
+            normalized = self._normalize_sample_name(sample_name)
+            query["sample_name_normalized"] = {"$regex": re.escape(normalized)}
+        total, records = SpectrumSampleRepository.list_paginated(query=query, page=safe_page, page_size=safe_size)
+        items = [
+            SpectrumSampleListItem(
+                sample_id=record.sample_id,
+                sample_key=record.sample_key,
+                spectrum_type=record.spectrum_type,
+                source_date=record.source_date,
+                sample_name=record.sample_name,
+                collect_status=record.collect_status,
+                latest_run_id=record.latest_run_id,
+                updated_at=record.updated_at,
+                analysis_input=record.analysis_input,
+            )
+            for record in records
+        ]
+        return SpectrumSampleListData(total=total, page=safe_page, page_size=safe_size, items=items)
+
+    def get_sample_detail(self, sample_id: str) -> SpectrumSampleDetailData | None:
+        """查询样本详情。"""
+        sample = SpectrumSampleRepository.find_by_sample_id(sample_id=sample_id)
+        if not sample:
+            return None
+        files = SpectrumSampleFileRepository.find_by_sample_id(sample_id=sample_id)
+        return SpectrumSampleDetailData(sample=sample, files=files)
+
+    def run_collect(self, run_id: str) -> None:
+        """执行采集批次。"""
+        run_record = LabCollectRunRepository.find_by_run_id(run_id=run_id)
+        if not run_record:
+            return
+        run_record.status = "RUNNING"
+        run_record.started_at = datetime.now()
+        run_record.updated_at = datetime.now()
+        LabCollectRunRepository.save(run_record)
+
+        dates = self._build_date_list(date_from=run_record.date_from, date_to=run_record.date_to)
+        candidates: list[CollectCandidate] = []
+        errors: list[LabCollectRunError] = []
+        for spectrum_type in run_record.spectrum_types:
+            try:
+                candidates.extend(self._scan_candidates(spectrum_type=spectrum_type, dates=dates))
+            except Exception as exc:
+                errors.append(
+                    LabCollectRunError(
+                        spectrum_type=spectrum_type,
+                        source_date=run_record.date_from,
+                        remote_path="",
+                        sample_name="scan",
+                        error_message=str(exc),
+                    )
+                )
+
+        run_record.summary.total_days = len(dates)
+        run_record.summary.total_candidates = len(candidates)
+        LabCollectRunRepository.save(run_record)
+
+        imported = 0
+        updated = 0
+        skipped = 0
+        failed = len(errors)
+        processed = 0
+        total_work = max(len(candidates), 1)
+
+        for candidate in candidates:
+            try:
+                existed = self._collect_single_candidate(run_id=run_id, candidate=candidate)
+                if existed:
+                    updated += 1
+                else:
+                    imported += 1
+            except Exception as exc:
+                failed += 1
+                errors.append(
+                    LabCollectRunError(
+                        spectrum_type=candidate.spectrum_type,
+                        source_date=candidate.source_date,
+                        remote_path=str(candidate.remote_path),
+                        sample_name=candidate.sample_name,
+                        error_message=str(exc),
+                    )
+                )
+            processed += 1
+            run_record = LabCollectRunRepository.find_by_run_id(run_id=run_id) or run_record
+            run_record.summary.imported = imported
+            run_record.summary.updated = updated
+            run_record.summary.skipped = skipped
+            run_record.summary.failed = failed
+            run_record.summary.progress = int(processed / total_work * 100)
+            run_record.errors = errors
+            run_record.updated_at = datetime.now()
+            LabCollectRunRepository.save(run_record)
+
+        run_record = LabCollectRunRepository.find_by_run_id(run_id=run_id) or run_record
+        run_record.status = "FAILED" if failed and not (imported or updated) else ("PARTIAL_SUCCESS" if failed else "SUCCESS")
+        run_record.summary.imported = imported
+        run_record.summary.updated = updated
+        run_record.summary.skipped = skipped
+        run_record.summary.failed = failed
+        run_record.summary.progress = 100
+        run_record.errors = errors
+        run_record.finished_at = datetime.now()
+        run_record.updated_at = datetime.now()
+        LabCollectRunRepository.save(run_record)
+
+    def _collect_single_candidate(self, run_id: str, candidate: CollectCandidate) -> bool:
+        """采集单个样本。"""
+        sample_key = f"{candidate.spectrum_type}:{candidate.source_date}:{candidate.sample_name}"
+        existed = SpectrumSampleRepository.find_by_sample_key(sample_key=sample_key)
+        sample_id = existed.sample_id if existed else f"sp_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
+        local_date_dir = candidate.local_root / candidate.source_date
+        local_date_dir.mkdir(parents=True, exist_ok=True)
+        local_sample_path = local_date_dir / candidate.sample_name
+
+        if local_sample_path.exists():
+            if local_sample_path.is_dir():
+                shutil.rmtree(local_sample_path)
+            else:
+                local_sample_path.unlink()
+
+        if candidate.sample_mode == "directory":
+            shutil.copytree(candidate.remote_path, local_sample_path)
+            local_files = [path for path in sorted(local_sample_path.rglob("*")) if path.is_file()]
+        else:
+            shutil.copy2(candidate.remote_path, local_sample_path)
+            local_files = [local_sample_path]
+
+        file_records, analysis_input, sample_meta, total_size = self._build_sample_files_and_meta(
+            sample_id=sample_id,
+            sample_key=sample_key,
+            candidate=candidate,
+            local_sample_path=local_sample_path,
+            local_files=local_files,
+        )
+
+        now = datetime.now()
+        sample_record = SpectrumSampleRecord(
+            sample_id=sample_id,
+            sample_key=sample_key,
+            spectrum_type=candidate.spectrum_type,
+            source_date=candidate.source_date,
+            sample_name=candidate.sample_name,
+            sample_name_normalized=self._normalize_sample_name(candidate.sample_name),
+            source={
+                "share_key": candidate.share_key,
+                "remote_date_dir": str(candidate.remote_date_dir),
+                "remote_sample_path": str(candidate.remote_path),
+                "identity_mode": "spectrum_type+source_date+sample_name",
+            },
+            storage={
+                "local_root": str(candidate.local_root),
+                "local_sample_path": str(local_sample_path),
+            },
+            analysis_input=analysis_input,
+            collect_status="SUCCESS",
+            collect_stats={
+                "file_count": len(file_records),
+                "primary_file_count": sum(1 for item in file_records if item.is_primary_input),
+                "total_size": total_size,
+            },
+            sample_meta=sample_meta,
+            latest_run_id=run_id,
+            collect_count=(existed.collect_count + 1) if existed else 1,
+            created_at=existed.created_at if existed else now,
+            updated_at=now,
+        )
+        SpectrumSampleRepository.save(sample_record)
+        SpectrumSampleFileRepository.replace_for_sample(sample_id=sample_id, file_records=file_records)
+        return existed is not None
+
+    def _build_sample_files_and_meta(
+        self,
+        sample_id: str,
+        sample_key: str,
+        candidate: CollectCandidate,
+        local_sample_path: Path,
+        local_files: list[Path],
+    ) -> tuple[list[SpectrumSampleFileRecord], dict[str, Any], dict[str, Any], int]:
+        """构建文件清单、分析输入和样本元数据。"""
+        total_size = 0
+        file_records: list[SpectrumSampleFileRecord] = []
+        copied_at = datetime.now()
+        primary_input_path = str(local_sample_path)
+        sample_meta: dict[str, Any] = {}
+        gpc_json_candidates: list[Path] = []
+        gpc_primary_arw: Path | None = None
+        gpc_validation_pdf: Path | None = None
+
+        for local_file in local_files:
+            total_size += int(local_file.stat().st_size)
+            relative_path = (
+                local_file.relative_to(local_sample_path).as_posix()
+                if local_sample_path.is_dir()
+                else local_file.name
+            )
+            remote_file_path = (
+                candidate.remote_path / relative_path
+                if candidate.sample_mode == "directory"
+                else candidate.remote_path
+            )
+            role = self._detect_file_role(
+                spectrum_type=candidate.spectrum_type,
+                local_file=local_file,
+                local_sample_path=local_sample_path,
+            )
+            is_primary_input = False
+            if candidate.spectrum_type == "gpc" and role == "primary_spectrum" and gpc_primary_arw is None:
+                gpc_primary_arw = local_file
+                is_primary_input = True
+            elif candidate.spectrum_type in {"ir", "raman", "lcms"} and role == "primary_spectrum":
+                is_primary_input = True
+                primary_input_path = str(local_file)
+            elif candidate.spectrum_type == "nmr":
+                primary_input_path = str(local_sample_path)
+
+            if candidate.spectrum_type == "gpc":
+                if role == "validation_pdf" and gpc_validation_pdf is None:
+                    gpc_validation_pdf = local_file
+                if role == "experiment_json":
+                    gpc_json_candidates.append(local_file)
+
+            file_records.append(
+                SpectrumSampleFileRecord(
+                    sample_file_id=f"spf_{uuid4().hex[:10]}",
+                    sample_id=sample_id,
+                    sample_key=sample_key,
+                    spectrum_type=candidate.spectrum_type,
+                    role=role,
+                    file_name=local_file.name,
+                    file_ext=local_file.suffix.lower(),
+                    relative_path=relative_path,
+                    remote_path=str(remote_file_path),
+                    local_path=str(local_file),
+                    file_size=int(local_file.stat().st_size),
+                    sha256=None,
+                    modified_at=datetime.fromtimestamp(local_file.stat().st_mtime),
+                    copied_at=copied_at,
+                    is_primary_input=is_primary_input,
+                )
+            )
+
+        if candidate.spectrum_type == "gpc":
+            if gpc_primary_arw is None:
+                raise ValueError(f"GPC 样本目录未找到 .arw 主文件: {local_sample_path}")
+            primary_input_path = str(gpc_primary_arw)
+            sample_meta = {
+                "input_kind": "folder",
+                "remote_sample_dir": str(candidate.remote_path),
+                "local_sample_dir": str(local_sample_path),
+                "primary_arw_name": gpc_primary_arw.name,
+                "primary_arw_path": str(gpc_primary_arw),
+                "validation_pdf_name": gpc_validation_pdf.name if gpc_validation_pdf else None,
+                "validation_pdf_path": str(gpc_validation_pdf) if gpc_validation_pdf else None,
+            }
+            self._append_gpc_experiment_json_meta(sample_meta=sample_meta, json_files=gpc_json_candidates)
+        elif candidate.spectrum_type == "nmr":
+            dir_names = sorted({path.parent.name for path in local_files if path.parent != local_sample_path})
+            sample_meta = {
+                "input_kind": "folder",
+                "remote_sample_dir": str(candidate.remote_path),
+                "local_sample_dir": str(local_sample_path),
+                "has_fid": any(path.name.lower() == "fid" for path in local_files),
+                "has_pdata": any("pdata" in path.parts for path in local_files),
+                "experiment_dir_names": dir_names,
+            }
+        else:
+            suffix = Path(primary_input_path).suffix.lower().lstrip(".")
+            sample_meta = {
+                "input_kind": "file",
+                "remote_file_path": str(candidate.remote_path),
+                "local_file_path": str(primary_input_path),
+                "file_format": suffix,
+            }
+
+        analysis_input = {
+            "input_type": TYPE_INPUT_KIND[candidate.spectrum_type],
+            "input_path": primary_input_path,
+        }
+        return file_records, analysis_input, sample_meta, total_size
+
+    @staticmethod
+    def _append_gpc_experiment_json_meta(sample_meta: dict[str, Any], json_files: list[Path]) -> None:
+        """将 GPC 实验参数 JSON 提升到 sample_meta。"""
+        if not json_files:
+            return
+        selected = LabCollectService._pick_gpc_experiment_json(json_files=json_files)
+        sample_meta["experiment_json_name"] = selected.name
+        sample_meta["experiment_json_path"] = str(selected)
+        try:
+            content = selected.read_text(encoding="utf-8-sig")
+            payload = json.loads(content)
+            if isinstance(payload, dict):
+                sample_meta["experiment_json_data"] = payload
+            else:
+                sample_meta["experiment_json_data"] = {"raw": payload}
+        except Exception as exc:
+            sample_meta["experiment_json_parse_error"] = str(exc)
+
+    @staticmethod
+    def _pick_gpc_experiment_json(json_files: list[Path]) -> Path:
+        """选择主实验参数 JSON。"""
+        keywords = ("param", "params", "parameter", "config", "setting", "experiment", "method")
+        sorted_files = sorted(json_files, key=lambda item: item.name.lower())
+        preferred = [
+            item for item in sorted_files
+            if item.parent == sorted_files[0].parent and any(keyword in item.stem.lower() for keyword in keywords)
+        ]
+        if preferred:
+            return preferred[0]
+        root_level = [item for item in sorted_files if item.parent == sorted_files[0].parent]
+        if root_level:
+            return root_level[0]
+        return sorted_files[0]
+
+    @staticmethod
+    def _detect_file_role(spectrum_type: str, local_file: Path, local_sample_path: Path) -> str:
+        """识别样本文件角色。"""
+        suffix = local_file.suffix.lower()
+        if spectrum_type == "gpc":
+            if suffix == ".arw":
+                return "primary_spectrum"
+            if suffix == ".pdf":
+                return "validation_pdf"
+            if suffix == ".json":
+                return "experiment_json"
+            return "other"
+        if spectrum_type in {"ir", "raman", "lcms"}:
+            if suffix in {".txt", ".csv"}:
+                return "primary_spectrum"
+            return "other"
+        relative_parts = local_file.relative_to(local_sample_path).parts if local_sample_path.is_dir() else ()
+        lower_name = local_file.name.lower()
+        if lower_name == "fid":
+            return "raw_data"
+        if "pdata" in relative_parts:
+            return "processed_data"
+        if suffix in {".acqus", ".proc", ".txt", ".csv", ".json", ".xml"}:
+            return "metadata"
+        return "other"
+
+    def _scan_candidates(self, spectrum_type: str, dates: list[str]) -> list[CollectCandidate]:
+        """扫描指定类型候选样本。"""
+        config = ((self._load_config().get("collectors", {}) or {}).get(spectrum_type, {}) or {})
+        if not bool(config.get("enabled", False)):
+            return []
+        remote_root = Path(str(config.get("remote_root") or ""))
+        local_root = Path(str(config.get("local_root") or ""))
+        share_key = str(config.get("share_key") or spectrum_type)
+        sample_mode = str(config.get("sample_mode") or ("directory" if spectrum_type in {"nmr", "gpc"} else "file"))
+        patterns = [str(pattern) for pattern in (config.get("patterns", []) or []) if str(pattern).strip()]
+        candidates: list[CollectCandidate] = []
+
+        for date_text in dates:
+            remote_date_dir = remote_root / date_text
+            if not remote_date_dir.exists() or not remote_date_dir.is_dir():
+                continue
+            if sample_mode == "directory":
+                for sample_dir in sorted([item for item in remote_date_dir.iterdir() if item.is_dir()]):
+                    if spectrum_type == "gpc" and not any(file_path.suffix.lower() == ".arw" for file_path in sample_dir.iterdir() if file_path.is_file()):
+                        continue
+                    candidates.append(
+                        CollectCandidate(
+                            spectrum_type=spectrum_type,
+                            source_date=date_text,
+                            sample_name=sample_dir.name,
+                            remote_path=sample_dir,
+                            remote_date_dir=remote_date_dir,
+                            sample_mode=sample_mode,
+                            local_root=local_root,
+                            share_key=share_key,
+                            patterns=patterns,
+                        )
+                    )
+            else:
+                if not patterns:
+                    patterns = ["*.txt", "*.csv"]
+                for sample_file in sorted([item for item in remote_date_dir.iterdir() if item.is_file()]):
+                    if not any(fnmatch.fnmatch(sample_file.name.lower(), pattern.lower()) for pattern in patterns):
+                        continue
+                    candidates.append(
+                        CollectCandidate(
+                            spectrum_type=spectrum_type,
+                            source_date=date_text,
+                            sample_name=sample_file.name,
+                            remote_path=sample_file,
+                            remote_date_dir=remote_date_dir,
+                            sample_mode=sample_mode,
+                            local_root=local_root,
+                            share_key=share_key,
+                            patterns=patterns,
+                        )
+                    )
+        return candidates
+
+    @staticmethod
+    def _build_date_list(date_from: str, date_to: str) -> list[str]:
+        """构建日期范围列表。"""
+        start = datetime.strptime(date_from, "%Y-%m-%d").date()
+        end = datetime.strptime(date_to, "%Y-%m-%d").date()
+        if start > end:
+            raise ValueError("date_from 不能大于 date_to")
+        items: list[str] = []
+        current = start
+        while current <= end:
+            items.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(days=1)
+        return items
+
+    @staticmethod
+    def _normalize_sample_name(sample_name: str) -> str:
+        """标准化样品名。"""
+        lowered = str(sample_name or "").strip().lower()
+        normalized = re.sub(r"[^0-9a-zA-Z]+", "_", lowered)
+        return normalized.strip("_")
+
+    @staticmethod
+    def _normalize_types(spectrum_types: list[str] | None) -> list[str]:
+        """归一化谱图类型列表。"""
+        allowed = {"nmr", "gpc", "ir", "raman", "lcms"}
+        if not spectrum_types:
+            return ["nmr", "gpc", "ir", "raman", "lcms"]
+        items = []
+        for item in spectrum_types:
+            normalized = str(item or "").strip().lower()
+            if normalized in allowed and normalized not in items:
+                items.append(normalized)
+        if not items:
+            raise ValueError("未提供有效的 spectrum_types")
+        return items
+
+    def _load_config(self) -> dict[str, Any]:
+        """读取 YAML 配置。"""
+        if not self.config_path.exists():
+            return {"collectors": {}}
+        content = self.config_path.read_text(encoding="utf-8")
+        data = yaml.safe_load(content) or {}
+        return data if isinstance(data, dict) else {"collectors": {}}
+
+
+lab_collect_service = LabCollectService()
+

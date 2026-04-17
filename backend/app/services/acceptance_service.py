@@ -469,7 +469,7 @@ class AcceptanceService:
             "input": {"input_type": "file_path", "input_path": sample.sample_path, "file_id": None},
             "params": {
                 "spectype": spectrum_type,
-                "mode": "function_groups" if spectrum_type == "raman" else "retrieval",
+                "mode": "function_groups",
                 "k": 3,
                 "x0": 400,
                 "x1": 4000,
@@ -799,6 +799,8 @@ class AcceptanceService:
             "ir": {
                 "sample_count": len(ir_items),
                 "task_success_rate": _rate(ir_items),
+                # TODO: IR 验收暂不统计本地标注指标；后续改为实验远程脚本汇总模式后，
+                # 由远端统一返回 labeled_count / micro_f1 / sample_f1_avg 等聚合结果。
                 "labeled_count": 0,
                 "micro_f1": None,
                 "sample_f1_avg": None,

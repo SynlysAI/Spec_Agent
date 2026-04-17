@@ -24,7 +24,7 @@ const formatHint = computed(() => (props.spectype === 'raman' ? '支持格式：
 const form = reactive({
   inputMode: 'upload',
   inputPath: '',
-  mode: props.spectype === 'raman' ? 'function_groups' : 'greedy_decode',
+  mode: 'function_groups',
   k: 3,
   x0: 400,
   x1: 4000,

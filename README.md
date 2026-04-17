@@ -20,6 +20,7 @@ Spec Agent 是一个面向谱图分析场景的智能分析平台，提供任务
 - 报告问答对话
 - NMRServer 正向/反向/检索工具
 - 批量验收测试与 Markdown 报告下载
+- 实验室共享目录数据采集与样本主档管理
 
 ---
 
@@ -30,6 +31,7 @@ Spec Agent 是一个面向谱图分析场景的智能分析平台，提供任务
 - FastAPI：API 服务入口，见 `backend/app/main.py`
 - Celery：异步任务执行，见 `backend/app/worker/celery_app.py`
 - MongoDB：任务、结果、文件元数据存储，见 `backend/app/infra/mongo.py`
+- MongoDB：同时承载实验采集批次、样本主档与样本文件清单
 - RabbitMQ：Celery Broker，见 `backend/app/core/config.py`
 - Python 分析模块：位于 `backend/analysis`、`backend/agents`、`backend/services`
 
@@ -419,6 +421,12 @@ npm run preview
 - `GET /api/v1/acceptance/runs`
 - `GET /api/v1/acceptance/run/{run_id}`
 - `GET /api/v1/acceptance/run/{run_id}/report`
+- `GET /api/v1/lab-collect/config`
+- `POST /api/v1/lab-collect/run`
+- `GET /api/v1/lab-collect/runs`
+- `GET /api/v1/lab-collect/run/{run_id}`
+- `GET /api/v1/lab-collect/samples`
+- `GET /api/v1/lab-collect/samples/{sample_id}`
 
 ### 导出 OpenAPI
 

@@ -8,9 +8,13 @@ from typing import Any
 from app.infra.mongo import (
     get_acceptance_runs_collection,
     get_files_collection,
+    get_lab_collect_runs_collection,
     get_results_collection,
+    get_spectrum_sample_files_collection,
+    get_spectrum_samples_collection,
     get_tasks_collection,
 )
+from app.schemas.lab_collect import LabCollectRunRecord, SpectrumSampleFileRecord, SpectrumSampleRecord
 from app.schemas.task_runtime import FileRecord, ResultRecord, TaskErrorInfo, TaskRecord
 
 
@@ -115,3 +119,103 @@ class AcceptanceRunRepository:
     def collection():
         """返回验收集合。"""
         return get_acceptance_runs_collection()
+
+
+class LabCollectRunRepository:
+    """实验室采集批次仓储。"""
+
+    @staticmethod
+    def collection():
+        """返回采集批次集合。"""
+        return get_lab_collect_runs_collection()
+
+    @staticmethod
+    def save(run_record: LabCollectRunRecord) -> None:
+        """保存采集批次。"""
+        payload = run_record.model_dump(mode="python")
+        get_lab_collect_runs_collection().update_one(
+            {"run_id": run_record.run_id},
+            {"$set": payload},
+            upsert=True,
+        )
+
+    @staticmethod
+    def find_by_run_id(run_id: str) -> LabCollectRunRecord | None:
+        """按批次 ID 查询采集批次。"""
+        doc = get_lab_collect_runs_collection().find_one({"run_id": run_id}, {"_id": 0})
+        return LabCollectRunRecord(**doc) if doc else None
+
+    @staticmethod
+    def list_recent(limit: int = 20) -> list[LabCollectRunRecord]:
+        """查询最近采集批次。"""
+        cursor = get_lab_collect_runs_collection().find({}, {"_id": 0}).sort([("created_at", -1)]).limit(limit)
+        return [LabCollectRunRecord(**doc) for doc in cursor]
+
+
+class SpectrumSampleRepository:
+    """实验样本主档仓储。"""
+
+    @staticmethod
+    def collection():
+        """返回样本主档集合。"""
+        return get_spectrum_samples_collection()
+
+    @staticmethod
+    def save(sample_record: SpectrumSampleRecord) -> None:
+        """保存样本主档。"""
+        payload = sample_record.model_dump(mode="python")
+        get_spectrum_samples_collection().update_one(
+            {"sample_key": sample_record.sample_key},
+            {"$set": payload},
+            upsert=True,
+        )
+
+    @staticmethod
+    def find_by_sample_key(sample_key: str) -> SpectrumSampleRecord | None:
+        """按样本键查询。"""
+        doc = get_spectrum_samples_collection().find_one({"sample_key": sample_key}, {"_id": 0})
+        return SpectrumSampleRecord(**doc) if doc else None
+
+    @staticmethod
+    def find_by_sample_id(sample_id: str) -> SpectrumSampleRecord | None:
+        """按样本 ID 查询。"""
+        doc = get_spectrum_samples_collection().find_one({"sample_id": sample_id}, {"_id": 0})
+        return SpectrumSampleRecord(**doc) if doc else None
+
+    @staticmethod
+    def list_paginated(query: dict[str, Any], page: int, page_size: int) -> tuple[int, list[SpectrumSampleRecord]]:
+        """分页查询样本主档。"""
+        collection = get_spectrum_samples_collection()
+        total = collection.count_documents(query)
+        cursor = (
+            collection.find(query, {"_id": 0})
+            .sort([("source_date", -1), ("updated_at", -1)])
+            .skip((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return total, [SpectrumSampleRecord(**doc) for doc in cursor]
+
+
+class SpectrumSampleFileRepository:
+    """实验样本文件清单仓储。"""
+
+    @staticmethod
+    def collection():
+        """返回样本文件集合。"""
+        return get_spectrum_sample_files_collection()
+
+    @staticmethod
+    def replace_for_sample(sample_id: str, file_records: list[SpectrumSampleFileRecord]) -> None:
+        """替换指定样本的文件清单。"""
+        collection = get_spectrum_sample_files_collection()
+        collection.delete_many({"sample_id": sample_id})
+        if file_records:
+            collection.insert_many([item.model_dump(mode="python") for item in file_records])
+
+    @staticmethod
+    def find_by_sample_id(sample_id: str) -> list[SpectrumSampleFileRecord]:
+        """按样本 ID 查询文件清单。"""
+        cursor = get_spectrum_sample_files_collection().find({"sample_id": sample_id}, {"_id": 0}).sort(
+            [("relative_path", 1)]
+        )
+        return [SpectrumSampleFileRecord(**doc) for doc in cursor]

@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from app.core.config import settings
 from app.infra.mongo import get_files_collection
@@ -86,6 +87,49 @@ class SpectrumPreviewService:
         data, ppm_scale, _, _ = get_nmr_sample_data(folder_path, index=0)
         return np.asarray(ppm_scale, dtype=np.float64), np.asarray(data, dtype=np.float64)
 
+    @staticmethod
+    def _read_gpc_arw_file(file_path: str) -> pd.DataFrame:
+        """读取 GPC `.arw` 文件。
+
+        Args:
+            file_path: `.arw` 文件路径。
+
+        Returns:
+            包含 `retention_time` 和 `intensity` 两列的 DataFrame。
+        """
+        try:
+            return pd.read_csv(
+                file_path,
+                sep="\t",
+                header=None,
+                names=["retention_time", "intensity"],
+            )
+        except Exception as exc:
+            raise ValueError(f"GPC .arw 文件读取失败: {exc}") from exc
+
+    def _preview_gpc_arw(self, file_path: str) -> tuple[np.ndarray, np.ndarray]:
+        """读取 GPC `.arw` 文件并生成预览数据。
+
+        Args:
+            file_path: `.arw` 文件路径。
+
+        Returns:
+            保留时间与强度序列。
+        """
+        curve_df = self._read_gpc_arw_file(file_path=file_path)
+        if not isinstance(curve_df, pd.DataFrame) or curve_df.empty:
+            raise ValueError("GPC .arw 文件为空或无法解析")
+        if "retention_time" not in curve_df.columns or "intensity" not in curve_df.columns:
+            raise ValueError("GPC .arw 文件缺少 retention_time/intensity 列")
+
+        curve_df = curve_df[["retention_time", "intensity"]].dropna()
+        if curve_df.empty:
+            raise ValueError("GPC .arw 文件未解析到有效数值")
+        return (
+            np.asarray(curve_df["retention_time"].astype(float), dtype=np.float64),
+            np.asarray(curve_df["intensity"].astype(float), dtype=np.float64),
+        )
+
     def _resolve_source_path(self, file_id: str | None, input_path: str | None) -> tuple[str, str]:
         """解析预览输入路径来源。
 
@@ -148,6 +192,11 @@ class SpectrumPreviewService:
                 children = [item for item in extract_dir.iterdir() if item.is_dir()]
                 nmr_path = str(children[0] if len(children) == 1 else extract_dir)
                 x_values, y_values = self._preview_nmr_folder(nmr_path)
+        elif inferred == "gpc" and ext == ".arw":
+            with tempfile.TemporaryDirectory(prefix="gpc_preview_") as temp_dir:
+                arw_path = Path(temp_dir) / filename
+                arw_path.write_bytes(file_bytes)
+                x_values, y_values = self._preview_gpc_arw(str(arw_path))
         else:
             content = self._decode_text_bytes(file_bytes)
             x_values, y_values = self._parse_two_column_text(content)
@@ -210,20 +259,21 @@ class SpectrumPreviewService:
             else:
                 folder_path = str(source_path if source_path.is_dir() else source_path.parent)
                 x_values, y_values = self._preview_nmr_folder(folder_path)
+        elif inferred == "gpc":
+            if source_path.is_dir():
+                arw_files = sorted(source_path.rglob("*.arw"))
+                if not arw_files:
+                    raise ValueError("GPC 目录中未找到可预览的 .arw 文件")
+                source_path = arw_files[0]
+                source_name = source_path.name
+            x_values, y_values = self._preview_gpc_arw(str(source_path))
         else:
             if source_path.is_dir():
-                if inferred == "gpc":
-                    arw_files = sorted(source_path.rglob("*.arw"))
-                    if not arw_files:
-                        raise ValueError("GPC 目录中未找到可预览的 .arw 文件")
-                    source_path = arw_files[0]
-                    source_name = source_path.name
-                else:
-                    text_files = sorted(source_path.rglob("*.txt")) + sorted(source_path.rglob("*.csv"))
-                    if not text_files:
-                        raise ValueError("目录中未找到可预览的 txt/csv 文件")
-                    source_path = text_files[0]
-                    source_name = source_path.name
+                text_files = sorted(source_path.rglob("*.txt")) + sorted(source_path.rglob("*.csv"))
+                if not text_files:
+                    raise ValueError("目录中未找到可预览的 txt/csv 文件")
+                source_path = text_files[0]
+                source_name = source_path.name
             file_bytes = source_path.read_bytes()
             content = self._decode_text_bytes(file_bytes)
             x_values, y_values = self._parse_two_column_text(content)

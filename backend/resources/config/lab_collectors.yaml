@@ -1,0 +1,45 @@
+collectors:
+  nmr:
+    enabled: true
+    share_key: nmr_lab
+    remote_root: E:/spectrum_files/remote_test/nmr
+    local_root: E:/spectrum_files/nmr/spectrum
+    sample_mode: directory
+    patterns: []
+  gpc:
+    enabled: true
+    share_key: gpc_lab
+    remote_root: E:/spectrum_files/remote_test/gpc
+    local_root: E:/spectrum_files/gpc/spectrum
+    sample_mode: directory
+    patterns:
+      - "*.arw"
+      - "*.pdf"
+      - "*.json"
+  ir:
+    enabled: true
+    share_key: ir_lab
+    remote_root: E:/spectrum_files/remote_test/ir
+    local_root: E:/spectrum_files/ir/spectrum
+    sample_mode: file
+    patterns:
+      - "*.txt"
+      - "*.csv"
+  raman:
+    enabled: true
+    share_key: raman_lab
+    remote_root: E:/spectrum_files/remote_test/raman
+    local_root: E:/spectrum_files/raman/spectrum
+    sample_mode: file
+    patterns:
+      - "*.txt"
+      - "*.csv"
+  lcms:
+    enabled: true
+    share_key: lcms_lab
+    remote_root: E:/spectrum_files/remote_test/lcms
+    local_root: E:/spectrum_files/lcms/spectrum
+    sample_mode: file
+    patterns:
+      - "*.txt"
+      - "*.csv"

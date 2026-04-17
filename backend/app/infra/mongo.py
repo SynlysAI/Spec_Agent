@@ -70,3 +70,33 @@ def get_acceptance_runs_collection() -> Collection:
     - 无。
     """
     return get_database()["acceptance_runs"]
+
+
+def get_lab_collect_runs_collection() -> Collection:
+    """获取 lab_collect_runs 集合。
+
+    函数名称: get_lab_collect_runs_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["lab_collect_runs"]
+
+
+def get_spectrum_samples_collection() -> Collection:
+    """获取 spectrum_samples 集合。
+
+    函数名称: get_spectrum_samples_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["spectrum_samples"]
+
+
+def get_spectrum_sample_files_collection() -> Collection:
+    """获取 spectrum_sample_files 集合。
+
+    函数名称: get_spectrum_sample_files_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["spectrum_sample_files"]

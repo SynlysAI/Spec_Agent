@@ -467,6 +467,93 @@ export async function getAcceptanceRuns(limit = 20, options = {}) {
 }
 
 /**
+ * 查询实验室采集配置摘要。
+ *
+ * Returns:
+ *   采集配置数据。
+ */
+export async function getLabCollectConfig(options = {}) {
+  const response = await apiClient.get('/lab-collect/config', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 创建实验室数据采集批次。
+ *
+ * Args:
+ *   payload: 采集请求参数。
+ *
+ * Returns:
+ *   批次创建结果。
+ */
+export async function createLabCollectRun(payload, options = {}) {
+  const response = await apiClient.post('/lab-collect/run', payload, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询实验室数据采集历史。
+ *
+ * Args:
+ *   limit: 返回条数。
+ *
+ * Returns:
+ *   采集批次列表。
+ */
+export async function getLabCollectRuns(limit = 20, options = {}) {
+  const response = await apiClient.get('/lab-collect/runs', {
+    ...buildRequestConfig(options),
+    params: { limit },
+  })
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询实验室采集批次详情。
+ *
+ * Args:
+ *   runId: 批次 ID。
+ *
+ * Returns:
+ *   批次详情。
+ */
+export async function getLabCollectRun(runId, options = {}) {
+  const response = await apiClient.get(`/lab-collect/run/${runId}`, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 分页查询实验样本主档。
+ *
+ * Args:
+ *   params: 查询参数。
+ *
+ * Returns:
+ *   样本分页结果。
+ */
+export async function listSpectrumSamples(params, options = {}) {
+  const response = await apiClient.get('/lab-collect/samples', {
+    ...buildRequestConfig(options),
+    params,
+  })
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询实验样本详情。
+ *
+ * Args:
+ *   sampleId: 样本 ID。
+ *
+ * Returns:
+ *   样本详情对象。
+ */
+export async function getSpectrumSampleDetail(sampleId, options = {}) {
+  const response = await apiClient.get(`/lab-collect/samples/${sampleId}`, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
  * 构建批量验收报告下载地址。
  *
  * Args:

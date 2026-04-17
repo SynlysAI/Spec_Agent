@@ -91,6 +91,7 @@ class Settings:
 
         # 资源文件路径
         self.acceptance_config_path: Path = self.resources_root / "config" / "acceptance.yaml"
+        self.lab_collectors_config_path: Path = self.resources_root / "config" / "lab_collectors.yaml"
         self.solvent_impurities_path: Path = self.resources_root / "config" / "solvent_impurities.json"
         self.raman_resources_root: Path = self.resources_root / "raman"
         self.raman_checkpoints_root: Path = self.raman_resources_root / "checkpoints"
