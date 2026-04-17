@@ -15,8 +15,8 @@ from analysis.gpc.tools.gpc_data_name_parser import GPCDataNameParser
 from analysis.gpc.tools.gpc_validation import GPCValidator
 from analysis.gpc.utils.gpc_analyzer import GPCAnalyzer
 from analysis.gpc.utils.gpc_plotter import GPCDataPlotter
+from app.core.config import settings
 from app.modules.common.llm_service import create_llm_client
-from config import GLOBAL_CONFIG
 
 
 def _parse_manual_interval(value: Optional[str]) -> Optional[List[float]]:
@@ -84,14 +84,14 @@ class GPCState(TypedDict, total=False):
 class GPCPathWorkflow:
     def __init__(self, llm_client=None, output_dir=None):
         self.llm_client = llm_client
-        self.output_dir = output_dir or GLOBAL_CONFIG["paths"]["gpc_results"]
-        self.three_color_dir = GLOBAL_CONFIG["paths"]["gpc_three_color_dir"]
+        self.output_dir = output_dir or str(settings.outputs_root / "gpc_results")
+        self.three_color_dir = str(settings.gpc_three_color_dir)
         # 实例变量，避免重复创建
         self.name_parser = GPCDataNameParser()
         self.roi_processor = GPCCurveROIProcessor()
-        # 对比报告 PDF：默认在 GLOBAL_CONFIG「gpc_comparison_pdf_dir」下按样品名匹配；见 GPCValidator
+        # 对比报告 PDF：默认在 settings.gpc_comparison_pdf_dir 下按样品名匹配；见 GPCValidator
         self.validator = GPCValidator(
-            search_dir=GLOBAL_CONFIG["paths"]["gpc_comparison_pdf_dir"],
+            search_dir=str(settings.gpc_comparison_pdf_dir),
         )
 
     # --- 节点 1: 路径扫描与验证 ---

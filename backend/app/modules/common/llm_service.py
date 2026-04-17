@@ -7,12 +7,29 @@ LLM 客户端服务模块。
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 from langchain_openai import ChatOpenAI
 
 from app.core.config import settings
-from config import setup_logging
+
+
+def _get_logger(logger_name: str = "spec_agent") -> logging.Logger:
+    """创建模块内日志记录器。"""
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+
+    if not logger.handlers:
+        stream_handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            "%(asctime)s - [%(filename)s:%(lineno)d] - %(levelname)s - %(message)s"
+        )
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
+        logger.propagate = False
+
+    return logger
 
 
 def get_llm_config() -> dict:
@@ -32,7 +49,7 @@ def get_llm_client() -> ChatOpenAI:
     Returns:
         根据当前 LLM 配置创建的 ChatOpenAI 实例。
     """
-    logger = setup_logging(logger_name="spec_agent")
+    logger = _get_logger(logger_name="spec_agent")
     llm_settings = get_llm_config()
 
     if not llm_settings.get("api_key"):

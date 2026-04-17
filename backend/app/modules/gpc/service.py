@@ -4,8 +4,8 @@ from typing import Optional
 
 import pandas as pd
 
+from app.core.config import settings
 from app.modules.gpc.workflow import run_gpc_analysis as run_gpc_workflow
-from config import GLOBAL_CONFIG
 
 
 TEMP_UPLOAD_DIR = "temp"
@@ -45,7 +45,7 @@ def preview_uploaded_curve(curve_path: str) -> pd.DataFrame:
 
 def get_calibration_curves_path() -> str:
     """获取 GPC 校准曲线目录。"""
-    return GLOBAL_CONFIG["data_storage"]["calibration_curves"]
+    return str(settings.calibration_curves_root)
 
 
 def list_calibration_curve_files() -> list[str]:

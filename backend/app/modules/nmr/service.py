@@ -18,8 +18,8 @@ from analysis.nmr.peak_detection import (
     detect_peaks,
     smooth_data,
 )
+from app.core.config import settings
 from app.modules.common.report_service import save_text_report
-from config import GLOBAL_CONFIG
 
 
 def get_ppm_range(folder_path: str, uploaded_ppm_scale=None, experiment_idx: int = 0) -> tuple[float, float]:
@@ -227,7 +227,7 @@ def build_peak_detection_result(
         if not detected_peaks:
             raise ValueError("自动检测峰失败，请尝试调整参数或使用手动模式")
 
-        json_path = str(GLOBAL_CONFIG["resources"]["solvent_impurities"])
+        json_path = str(settings.solvent_impurities_path)
         try:
             import json
             with open(json_path, 'r', encoding='utf-8') as f:

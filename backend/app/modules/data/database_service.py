@@ -8,12 +8,12 @@ import zipfile
 import pandas as pd
 
 from analysis.gpc.tools.gpc_pdf_processor import GPCPDFProcessor
-from config import GLOBAL_CONFIG
+from app.core.config import settings
 
 
 def get_database_path() -> str:
     """获取谱图数据库文件路径。"""
-    return GLOBAL_CONFIG["database"]["path"]
+    return ""
 
 
 def connect_database() -> sqlite3.Connection:
@@ -69,7 +69,7 @@ def get_spectrum_stats() -> dict:
 
 def get_spectrum_files_root() -> str:
     """获取谱图原始文件根目录。"""
-    return GLOBAL_CONFIG["paths"]["spectrum_files_root"]
+    return str(settings.spectrum_files_root)
 
 
 def save_uploaded_file(uploaded_file, spectrum_type: str, save_dir_name: str) -> str | None:

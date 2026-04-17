@@ -32,13 +32,13 @@ from langgraph.graph import END, StateGraph
 from langgraph.types import interrupt
 from typing_extensions import NotRequired, Required, TypedDict
 
+from app.core.config import settings
 from app.modules.nmr.service import (
     build_analysis_report,
     build_peak_detection_result,
     build_summary_rows,
     run_integration_analysis,
 )
-from config import GLOBAL_CONFIG
 
 # 本 Agent 固定为自动模式，与 services 约定一致
 _AUTO_INTEGRATION_MODE = "自动模式"
@@ -67,7 +67,7 @@ class NMRState(TypedDict, total=False):
       ``interrupt`` 恢复后写入，首次调用不要传。
     """
     output_dir: NotRequired[Optional[str]]
-    """结果输出根目录。可为 ``None``、省略或空字符串，均使用 ``GLOBAL_CONFIG['paths']['nmr_results']``。"""
+    """结果输出根目录。可为 ``None``、省略或空字符串，均使用默认 NMR 输出目录。"""
 
     errors: NotRequired[List[str]]
     peak_regions_preview: NotRequired[List[List[Any]]]
@@ -94,7 +94,7 @@ class NMRPathWorkflow:
     """
 
     def __init__(self, output_dir=None) -> None:
-        self.default_output_dir = output_dir or GLOBAL_CONFIG["paths"]["nmr_results"]
+        self.default_output_dir = output_dir or str(settings.outputs_root / "nmr_results")
         os.makedirs(self.default_output_dir, exist_ok=True)
         # 交互式断点续跑需持久化在同一 checkpointer 上（同一 Workflow 实例）
         self._checkpointer = MemorySaver()
@@ -336,7 +336,7 @@ def nmr_thread_config(thread_id: str, recursion_limit: int = 30) -> Dict[str, An
 
 
 def _load_solvent_ref() -> dict[str, Any]:
-    path = str(GLOBAL_CONFIG["resources"]["solvent_impurities"])
+    path = str(settings.solvent_impurities_path)
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -472,7 +472,7 @@ def run_nmr_analysis(
         input_path: 本机 Bruker 样品数据目录。
         peak_detection_params: 可选，覆盖 :func:`default_peak_detection_params` 中的项。
         internal_standard_idx: 自动检测出的积分区域中，内标峰索引。
-        output_dir: 输出根目录；可为 ``None`` 或省略，则使用 ``GLOBAL_CONFIG['paths']['nmr_results']``。
+        output_dir: 输出根目录；可为 ``None`` 或省略，则使用默认 NMR 输出目录。
             传空字符串或仅空白也会回退为上述默认目录。
 
     Returns:
