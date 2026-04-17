@@ -199,10 +199,11 @@ def load_lcms_label(input_file: Path) -> dict[str, Any] | None:
         if not candidate.exists() or not candidate.is_file():
             continue
         try:
+            content = candidate.read_text(encoding="utf-8-sig")
             if candidate.suffix.lower() == ".json":
-                payload = json.loads(candidate.read_text(encoding="utf-8"))
+                payload = json.loads(content)
             else:
-                payload = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+                payload = yaml.safe_load(content)
             if isinstance(payload, dict):
                 payload["_label_file"] = str(candidate)
                 return payload

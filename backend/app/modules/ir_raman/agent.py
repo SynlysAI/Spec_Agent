@@ -199,10 +199,11 @@ def _load_label(spectrum_file: Union[str, Path], spectype: str) -> Optional[dict
         if not p.exists() or not p.is_file():
             continue
         try:
+            content = p.read_text(encoding="utf-8-sig")
             if p.suffix.lower() == ".json":
-                obj = json.loads(p.read_text(encoding="utf-8"))
+                obj = json.loads(content)
             elif p.suffix.lower() in {".yaml", ".yml"}:
-                obj = yaml.safe_load(p.read_text(encoding="utf-8"))
+                obj = yaml.safe_load(content)
             else:
                 continue
             if isinstance(obj, dict):

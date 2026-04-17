@@ -115,6 +115,9 @@ class RemoteAcceptanceService:
                 "port": port,
                 "username": user,
                 "timeout": 20,
+                # 这里目前会寻找本机公钥
+                # "look_for_keys": False,
+                # "allow_agent": False,
             }
             if password:
                 connect_kwargs["password"] = password
