@@ -75,6 +75,7 @@ class LabCollectRunSummary(BaseModel):
     skipped: int = Field(default=0, description="跳过样本数。")
     failed: int = Field(default=0, description="失败样本数。")
     progress: int = Field(default=0, description="批次进度（0-100）。")
+    type_stats: dict[str, dict[str, int]] = Field(default_factory=dict, description="按谱图类型汇总统计。")
 
 
 class LabCollectRunRecord(BaseModel):
@@ -178,4 +179,3 @@ class SpectrumSampleDetailData(BaseModel):
 
     sample: SpectrumSampleRecord = Field(description="样本主档。")
     files: list[SpectrumSampleFileRecord] = Field(default_factory=list, description="文件清单。")
-

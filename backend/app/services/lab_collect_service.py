@@ -44,6 +44,8 @@ TYPE_INPUT_KIND = {
     "lcms": "file_path",
 }
 
+COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "failed")
+
 
 @dataclass
 class CollectCandidate:
@@ -260,16 +262,32 @@ class LabCollectService:
         failed = len(errors)
         processed = 0
         total_work = max(len(candidates), 1)
+        type_stats = self._build_empty_type_stats(run_record.spectrum_types)
+
+        for candidate in candidates:
+            type_stats.setdefault(candidate.spectrum_type, self._build_empty_type_summary())
+            type_stats[candidate.spectrum_type]["candidates"] += 1
+
+        for error in errors:
+            type_stats.setdefault(error.spectrum_type, self._build_empty_type_summary())
+            type_stats[error.spectrum_type]["failed"] += 1
+
+        run_record.summary.type_stats = type_stats
+        LabCollectRunRepository.save(run_record)
 
         for candidate in candidates:
             try:
                 existed = self._collect_single_candidate(run_id=run_id, candidate=candidate)
                 if existed:
                     updated += 1
+                    type_stats[candidate.spectrum_type]["updated"] += 1
                 else:
                     imported += 1
+                    type_stats[candidate.spectrum_type]["imported"] += 1
             except Exception as exc:
                 failed += 1
+                type_stats.setdefault(candidate.spectrum_type, self._build_empty_type_summary())
+                type_stats[candidate.spectrum_type]["failed"] += 1
                 errors.append(
                     LabCollectRunError(
                         spectrum_type=candidate.spectrum_type,
@@ -286,6 +304,7 @@ class LabCollectService:
             run_record.summary.skipped = skipped
             run_record.summary.failed = failed
             run_record.summary.progress = int(processed / total_work * 100)
+            run_record.summary.type_stats = type_stats
             run_record.errors = errors
             run_record.updated_at = datetime.now()
             LabCollectRunRepository.save(run_record)
@@ -297,10 +316,21 @@ class LabCollectService:
         run_record.summary.skipped = skipped
         run_record.summary.failed = failed
         run_record.summary.progress = 100
+        run_record.summary.type_stats = type_stats
         run_record.errors = errors
         run_record.finished_at = datetime.now()
         run_record.updated_at = datetime.now()
         LabCollectRunRepository.save(run_record)
+
+    @staticmethod
+    def _build_empty_type_summary() -> dict[str, int]:
+        """构建单个谱图类型的空汇总。"""
+        return {key: 0 for key in COLLECT_SUMMARY_KEYS}
+
+    @classmethod
+    def _build_empty_type_stats(cls, spectrum_types: list[str]) -> dict[str, dict[str, int]]:
+        """为本次批次初始化按类型汇总。"""
+        return {spectrum_type: cls._build_empty_type_summary() for spectrum_type in spectrum_types}
 
     def _collect_single_candidate(self, run_id: str, candidate: CollectCandidate) -> bool:
         """采集单个样本。"""
@@ -637,4 +667,3 @@ class LabCollectService:
 
 
 lab_collect_service = LabCollectService()
-

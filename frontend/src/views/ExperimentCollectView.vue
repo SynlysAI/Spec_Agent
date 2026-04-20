@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -40,6 +40,18 @@ const summaryCards = computed(() => {
     { title: '覆盖更新', value: summary.updated ?? 0 },
     { title: '失败数', value: summary.failed ?? 0 },
   ]
+})
+
+const activeProgress = computed(() => Number(activeRun.value?.summary?.progress || 0))
+const activeTypeStats = computed(() => {
+  const stats = activeRun.value?.summary?.type_stats || {}
+  return Object.entries(stats).map(([type, value]) => ({
+    type: String(type).toUpperCase(),
+    candidates: Number(value?.candidates || 0),
+    imported: Number(value?.imported || 0),
+    updated: Number(value?.updated || 0),
+    failed: Number(value?.failed || 0),
+  }))
 })
 
 /**
@@ -160,6 +172,32 @@ async function loadRun(runId) {
 }
 
 /**
+ * 计算采集状态对应的标签类型。
+ *
+ * Args:
+ *   status: 批次状态。
+ *
+ * Returns:
+ *   Element Plus 标签类型。
+ */
+function getStatusTagType(status) {
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'SUCCESS') {
+    return 'success'
+  }
+  if (normalized === 'FAILED') {
+    return 'danger'
+  }
+  if (normalized === 'PARTIAL_SUCCESS') {
+    return 'warning'
+  }
+  if (['RUNNING', 'QUEUED', 'PENDING'].includes(normalized)) {
+    return 'primary'
+  }
+  return 'info'
+}
+
+/**
  * 启动轮询。
  */
 function startPolling() {
@@ -193,163 +231,212 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="page-grid">
-    <div class="panel">
-      <div class="panel-header">
-        <h3 class="panel-title">实验数据采集</h3>
-        <el-button type="primary" :loading="creatingRun" @click="startCollect">启动采集</el-button>
-      </div>
-      <div class="panel-body">
-        <el-row :gutter="16">
-          <el-col :span="14">
-            <el-form label-position="top">
-              <el-form-item label="采集模式">
-                <el-radio-group v-model="collectMode">
-                  <el-radio-button label="single">单日采集</el-radio-button>
-                  <el-radio-button label="range">范围采集</el-radio-button>
-                </el-radio-group>
-              </el-form-item>
-
-              <el-form-item v-if="collectMode === 'single'" label="采集日期">
-                <el-date-picker
-                  v-model="collectDate"
-                  type="date"
-                  value-format="YYYY-MM-DD"
-                  format="YYYY-MM-DD"
-                  placeholder="选择日期"
-                  style="width: 100%"
-                />
-              </el-form-item>
-
-              <el-form-item v-else label="采集日期范围">
-                <el-date-picker
-                  v-model="dateRange"
-                  type="daterange"
-                  value-format="YYYY-MM-DD"
-                  format="YYYY-MM-DD"
-                  range-separator="至"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                  style="width: 100%"
-                />
-              </el-form-item>
-
-              <el-form-item label="实验类型">
-                <el-select v-model="selectedTypes" multiple style="width: 100%">
-                  <el-option
-                    v-for="item in typeOptions"
-                    :key="item.value"
-                    :label="`${item.label} · ${item.sampleMode === 'directory' ? '目录样本' : '单文件样本'}`"
-                    :value="item.value"
-                    :disabled="!item.enabled"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-form>
-          </el-col>
-
-          <el-col :span="10">
-            <el-card shadow="never" class="inner-card">
-              <template #header>
-                <div class="inner-card-title">配置摘要</div>
-              </template>
-              <el-skeleton :loading="loadingConfig" animated :rows="6">
-                <template #default>
-                  <div class="config-line">配置文件：{{ configData?.config_path || '-' }}</div>
-                  <div v-for="item in configData?.items || []" :key="item.spectrum_type" class="config-item">
-                    <div class="config-item-title">
-                      <span>{{ item.spectrum_type.toUpperCase() }}</span>
-                      <el-tag size="small" :type="item.enabled ? 'success' : 'info'">
-                        {{ item.enabled ? '已启用' : '未启用' }}
-                      </el-tag>
-                    </div>
-                    <div class="config-path">{{ item.remote_root || '-' }}</div>
-                  </div>
+  <div class="collect-page">
+    <div class="collect-main-grid">
+      <section class="panel collect-config-panel">
+        <div class="panel-header">
+          <h3 class="panel-title">采集参数</h3>
+        </div>
+        <div class="panel-body">
+          <el-row :gutter="18">
+            <el-col :span="9">
+              <el-card shadow="never" class="inner-card">
+                <template #header>
+                  <div class="inner-card-title">配置摘要</div>
                 </template>
-              </el-skeleton>
-            </el-card>
-          </el-col>
-        </el-row>
+                <el-skeleton :loading="loadingConfig" animated :rows="6">
+                  <template #default>
+                    <div class="config-line">配置文件：{{ configData?.config_path || '-' }}</div>
+                    <div v-for="item in configData?.items || []" :key="item.spectrum_type" class="config-item">
+                      <div class="config-item-title">
+                        <span>{{ item.spectrum_type.toUpperCase() }}</span>
+                        <el-tag size="small" :type="item.enabled ? 'success' : 'info'">
+                          {{ item.enabled ? '已启用' : '未启用' }}
+                        </el-tag>
+                      </div>
+                      <div class="config-path">{{ item.remote_root || '-' }}</div>
+                    </div>
+                  </template>
+                </el-skeleton>
+              </el-card>
+            </el-col>
 
-        <el-alert
-          type="info"
-          :closable="false"
-          show-icon
-          title="命名建议"
-          description="一级菜单使用“实验管理”，二级菜单使用“数据采集 / 样本管理”。“预览”放到样本详情内更合适。"
-          class="collect-alert"
-        />
+            <el-col :span="15">
+              <el-form label-position="top">
+                <el-form-item label="采集模式">
+                  <el-radio-group v-model="collectMode">
+                    <el-radio-button label="single">单日采集</el-radio-button>
+                    <el-radio-button label="range">范围采集</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
 
-        <el-card v-if="activeRun" shadow="never" class="inner-card">
-          <template #header>
-            <div class="inner-card-title">当前批次（{{ activeRun.run_id }}）</div>
-          </template>
-          <div class="stat-grid collect-stat-grid">
-            <div v-for="item in summaryCards" :key="item.title" class="stat-card">
-              <div class="stat-title">{{ item.title }}</div>
-              <div class="stat-value">{{ item.value }}</div>
+                <el-form-item v-if="collectMode === 'single'" label="采集日期">
+                  <el-date-picker
+                    v-model="collectDate"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    format="YYYY-MM-DD"
+                    placeholder="选择日期"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+
+                <el-form-item v-else label="采集日期范围">
+                  <el-date-picker
+                    v-model="dateRange"
+                    type="daterange"
+                    value-format="YYYY-MM-DD"
+                    format="YYYY-MM-DD"
+                    range-separator="至"
+                    start-placeholder="开始日期"
+                    end-placeholder="结束日期"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+
+                <el-form-item label="实验类型">
+                  <el-select v-model="selectedTypes" multiple style="width: 100%">
+                    <el-option
+                      v-for="item in typeOptions"
+                      :key="item.value"
+                      :label="`${item.label} · ${item.sampleMode === 'directory' ? '目录样本' : '单文件样本'}`"
+                      :value="item.value"
+                      :disabled="!item.enabled"
+                    />
+                  </el-select>
+                </el-form-item>
+
+                <div class="form-actions">
+                  <el-button type="primary" :loading="creatingRun" @click="startCollect">启动采集</el-button>
+                  <el-button plain :loading="loadingHistory" @click="loadHistory">刷新历史</el-button>
+                </div>
+              </el-form>
+            </el-col>
+          </el-row>
+        </div>
+      </section>
+
+      <section v-if="activeRun" class="panel collect-run-panel">
+        <div class="panel-body">
+          <el-card shadow="never" class="inner-card">
+            <template #header>
+              <div class="run-header">
+                <div class="inner-card-title">当前批次（{{ activeRun.run_id }}）</div>
+                <el-tag :type="getStatusTagType(activeRun.status)">{{ activeRun.status }}</el-tag>
+              </div>
+            </template>
+            <div class="stat-grid collect-stat-grid">
+              <div v-for="item in summaryCards" :key="item.title" class="stat-card">
+                <div class="stat-title">{{ item.title }}</div>
+                <div class="stat-value">{{ item.value }}</div>
+              </div>
             </div>
-          </div>
-          <el-descriptions :column="2" border class="run-desc">
-            <el-descriptions-item label="状态">{{ activeRun.status }}</el-descriptions-item>
-            <el-descriptions-item label="触发模式">{{ activeRun.trigger_mode }}</el-descriptions-item>
-            <el-descriptions-item label="日期范围">{{ activeRun.date_from }} ~ {{ activeRun.date_to }}</el-descriptions-item>
-            <el-descriptions-item label="实验类型">{{ (activeRun.spectrum_types || []).join(', ') }}</el-descriptions-item>
-          </el-descriptions>
-          <el-progress :percentage="activeRun.summary?.progress || 0" :stroke-width="14" />
-          <el-alert
-            v-if="(activeRun.errors || []).length > 0"
-            type="warning"
-            :closable="false"
-            show-icon
-            :title="`存在 ${activeRun.errors.length} 条失败记录`"
-            class="collect-alert"
-          />
-          <el-table v-if="(activeRun.errors || []).length > 0" :data="activeRun.errors" size="small" border max-height="220">
-            <el-table-column prop="spectrum_type" label="类型" width="90" />
-            <el-table-column prop="source_date" label="日期" width="120" />
-            <el-table-column prop="sample_name" label="样本" min-width="180" />
-            <el-table-column prop="error_message" label="错误信息" min-width="220" />
-          </el-table>
-        </el-card>
-      </div>
-    </div>
+            <el-descriptions :column="2" border class="run-desc">
+              <el-descriptions-item label="触发模式">{{ activeRun.trigger_mode }}</el-descriptions-item>
+              <el-descriptions-item label="日期范围">{{ activeRun.date_from }} ~ {{ activeRun.date_to }}</el-descriptions-item>
+              <el-descriptions-item label="实验类型">{{ (activeRun.spectrum_types || []).join(', ') }}</el-descriptions-item>
+              <el-descriptions-item label="失败数量">{{ activeRun.errors?.length || 0 }}</el-descriptions-item>
+            </el-descriptions>
+            <el-progress :percentage="activeProgress" :stroke-width="14" />
+            <div v-if="activeTypeStats.length > 0" class="type-stat-section">
+              <div class="type-stat-header">分类型采集统计</div>
+              <div class="type-stat-grid">
+                <div v-for="item in activeTypeStats" :key="item.type" class="type-stat-card">
+                  <div class="type-stat-title">{{ item.type }}</div>
+                  <div class="type-stat-line">候选 {{ item.candidates }}</div>
+                  <div class="type-stat-line">新增 {{ item.imported }}</div>
+                  <div class="type-stat-line">更新 {{ item.updated }}</div>
+                  <div class="type-stat-line">失败 {{ item.failed }}</div>
+                </div>
+              </div>
+            </div>
+            <el-alert
+              v-if="(activeRun.errors || []).length > 0"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="`存在 ${activeRun.errors.length} 条失败记录`"
+              class="collect-alert"
+            />
+            <el-table v-if="(activeRun.errors || []).length > 0" :data="activeRun.errors" size="small" border max-height="220">
+              <el-table-column prop="spectrum_type" label="类型" width="110" />
+              <el-table-column prop="source_date" label="日期" width="120" />
+              <el-table-column prop="sample_name" label="样本" min-width="180" />
+              <el-table-column prop="error_message" label="错误信息" min-width="220" />
+            </el-table>
+          </el-card>
+        </div>
+      </section>
 
-    <div class="panel">
-      <div class="panel-header">
-        <h3 class="panel-title">采集历史</h3>
-        <el-button type="primary" plain :loading="loadingHistory" @click="loadHistory">刷新</el-button>
-      </div>
-      <div class="panel-body">
-        <el-table :data="historyItems" size="small" border v-loading="loadingHistory" max-height="680">
-          <el-table-column prop="run_id" label="批次ID" min-width="220" />
-          <el-table-column prop="status" label="状态" width="110" />
-          <el-table-column prop="date_from" label="起始日期" width="110" />
-          <el-table-column prop="date_to" label="结束日期" width="110" />
-          <el-table-column label="样本数" width="100">
-            <template #default="scope">
-              {{ scope.row.summary?.total_candidates ?? 0 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="导入/更新" width="120">
-            <template #default="scope">
-              {{ scope.row.summary?.imported ?? 0 }} / {{ scope.row.summary?.updated ?? 0 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="100" fixed="right">
-            <template #default="scope">
-              <el-button link type="primary" @click="loadRun(scope.row.run_id)">查看</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <section class="panel collect-history-panel">
+        <div class="panel-header">
+          <h3 class="panel-title">采集历史</h3>
+        </div>
+        <div class="panel-body">
+          <el-table :data="historyItems" size="small" border v-loading="loadingHistory" max-height="680">
+            <el-table-column prop="run_id" label="批次ID" min-width="220" />
+            <el-table-column prop="status" label="状态" min-width="110" />
+            <el-table-column prop="date_from" label="起始日期" min-width="120" />
+            <el-table-column prop="date_to" label="结束日期" min-width="120" />
+            <el-table-column label="样本数" min-width="100">
+              <template #default="scope">
+                {{ scope.row.summary?.total_candidates ?? 0 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="导入/更新" min-width="120">
+              <template #default="scope">
+                {{ scope.row.summary?.imported ?? 0 }} / {{ scope.row.summary?.updated ?? 0 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="进度" min-width="100">
+              <template #default="scope">
+                {{ scope.row.summary?.progress ?? 0 }}%
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" min-width="100">
+              <template #default="scope">
+                <el-button link type="primary" @click="loadRun(scope.row.run_id)">查看</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <style scoped>
+.collect-page {
+  display: grid;
+  gap: 16px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.form-actions .el-button {
+  min-width: 136px;
+  height: 42px;
+  font-weight: 600;
+}
+
+.form-actions .el-button--primary {
+  box-shadow: 0 10px 18px rgba(45, 112, 214, 0.22);
+}
+
+.collect-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
 .inner-card {
-  margin-bottom: 16px;
+  margin-bottom: 0;
+  border-radius: 12px;
+  border-color: #e1ebfa;
 }
 
 .inner-card-title {
@@ -393,11 +480,77 @@ onBeforeUnmount(() => {
 }
 
 .collect-stat-grid {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .run-desc {
   margin-bottom: 14px;
 }
-</style>
 
+.run-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.type-stat-section {
+  margin: 16px 0;
+}
+
+.type-stat-header {
+  margin-bottom: 10px;
+  color: #314968;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.type-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.type-stat-card {
+  padding: 12px;
+  border: 1px solid #dbe7f7;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f7fd 100%);
+}
+
+.type-stat-title {
+  margin-bottom: 8px;
+  color: #1f3f71;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.type-stat-line {
+  color: #5f7392;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.collect-history-panel :deep(.el-table th.el-table__cell) {
+  background: #f7faff;
+}
+
+@media (max-width: 1200px) {
+  .collect-config-panel :deep(.el-col) {
+    max-width: 100%;
+    flex: 0 0 100%;
+  }
+}
+
+@media (max-width: 1024px) {
+  .form-actions .el-button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .form-actions {
+    flex-direction: column;
+  }
+}
+</style>
