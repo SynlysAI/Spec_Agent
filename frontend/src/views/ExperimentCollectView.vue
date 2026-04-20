@@ -418,8 +418,9 @@ onBeforeUnmount(() => {
 }
 
 .form-actions .el-button {
-  min-width: 136px;
-  height: 42px;
+  min-width: 112px;
+  height: 34px;
+  padding: 0 18px;
   font-weight: 600;
 }
 
