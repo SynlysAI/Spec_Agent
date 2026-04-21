@@ -45,7 +45,7 @@ TYPE_INPUT_KIND = {
     "lcms": "file_path",
 }
 
-COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "failed")
+COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "skipped", "failed")
 SAMPLE_SUMMARY_TYPES = ("nmr", "gpc", "ir", "raman", "lcms")
 
 
@@ -62,6 +62,14 @@ class CollectCandidate:
     local_root: Path
     share_key: str
     patterns: list[str]
+
+
+@dataclass
+class CollectSingleCandidateResult:
+    """单个候选样品采集结果。"""
+
+    action: str
+    sample_id: str | None = None
 
 
 class LabCollectService:
@@ -119,6 +127,7 @@ class LabCollectService:
         date_from: str | None,
         date_to: str | None,
         spectrum_types: list[str] | None,
+        overwrite_existing: bool = False,
     ) -> LabCollectRunCreateData:
         """创建采集批次并异步执行。"""
         selected_types = self._normalize_types(spectrum_types=spectrum_types)
@@ -136,6 +145,7 @@ class LabCollectService:
             run_id=run_id,
             status="PENDING",
             spectrum_types=selected_types,
+            overwrite_existing=bool(overwrite_existing),
             date_from=normalized_from,
             date_to=normalized_to,
             trigger_mode=trigger_mode,
@@ -303,8 +313,15 @@ class LabCollectService:
 
         for candidate in candidates:
             try:
-                existed = self._collect_single_candidate(run_id=run_id, candidate=candidate)
-                if existed:
+                result = self._collect_single_candidate(
+                    run_id=run_id,
+                    candidate=candidate,
+                    overwrite_existing=run_record.overwrite_existing,
+                )
+                if result.action == "skipped":
+                    skipped += 1
+                    type_stats[candidate.spectrum_type]["skipped"] += 1
+                elif result.action == "updated":
                     updated += 1
                     type_stats[candidate.spectrum_type]["updated"] += 1
                 else:
@@ -358,10 +375,17 @@ class LabCollectService:
         """为本次批次初始化按类型汇总。"""
         return {spectrum_type: cls._build_empty_type_summary() for spectrum_type in spectrum_types}
 
-    def _collect_single_candidate(self, run_id: str, candidate: CollectCandidate) -> bool:
+    def _collect_single_candidate(
+        self,
+        run_id: str,
+        candidate: CollectCandidate,
+        overwrite_existing: bool,
+    ) -> CollectSingleCandidateResult:
         """采集单个样本。"""
         sample_key = f"{candidate.spectrum_type}:{candidate.source_date}:{candidate.sample_name}"
         existed = SpectrumSampleRepository.find_by_sample_key(sample_key=sample_key)
+        if existed and not overwrite_existing:
+            return CollectSingleCandidateResult(action="skipped", sample_id=existed.sample_id)
         sample_id = existed.sample_id if existed else f"sp_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
         local_date_dir = candidate.local_root / candidate.source_date
         local_date_dir.mkdir(parents=True, exist_ok=True)
@@ -421,7 +445,10 @@ class LabCollectService:
         )
         SpectrumSampleRepository.save(sample_record)
         SpectrumSampleFileRepository.replace_for_sample(sample_id=sample_id, file_records=file_records)
-        return existed is not None
+        return CollectSingleCandidateResult(
+            action="updated" if existed else "imported",
+            sample_id=sample_id,
+        )
 
     def _build_sample_files_and_meta(
         self,

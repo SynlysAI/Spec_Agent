@@ -21,6 +21,7 @@ const selectedTypes = ref([])
 const collectMode = ref('single')
 const collectDate = ref('2026-04-17')
 const dateRange = ref(['2026-04-17', '2026-04-17'])
+const overwriteExisting = ref(false)
 
 const typeOptions = computed(() =>
   (configData.value?.items || []).map((item) => ({
@@ -38,6 +39,7 @@ const summaryCards = computed(() => {
     { title: '候选样本', value: summary.total_candidates ?? 0 },
     { title: '新增导入', value: summary.imported ?? 0 },
     { title: '覆盖更新', value: summary.updated ?? 0 },
+    { title: '跳过数', value: summary.skipped ?? 0 },
     { title: '失败数', value: summary.failed ?? 0 },
   ]
 })
@@ -50,6 +52,7 @@ const activeTypeStats = computed(() => {
     candidates: Number(value?.candidates || 0),
     imported: Number(value?.imported || 0),
     updated: Number(value?.updated || 0),
+    skipped: Number(value?.skipped || 0),
     failed: Number(value?.failed || 0),
   }))
 })
@@ -105,12 +108,14 @@ function buildPayload() {
     return {
       collect_date: collectDate.value,
       spectrum_types: selectedTypes.value,
+      overwrite_existing: overwriteExisting.value,
     }
   }
   return {
     date_from: dateRange.value?.[0],
     date_to: dateRange.value?.[1],
     spectrum_types: selectedTypes.value,
+    overwrite_existing: overwriteExisting.value,
   }
 }
 
@@ -306,6 +311,10 @@ onBeforeUnmount(() => {
                   </el-select>
                 </el-form-item>
 
+                <el-form-item>
+                  <el-checkbox v-model="overwriteExisting">覆盖已入库样品</el-checkbox>
+                </el-form-item>
+
                 <div class="form-actions">
                   <el-button type="primary" :loading="creatingRun" @click="startCollect">启动采集</el-button>
                   <el-button plain :loading="loadingHistory" @click="loadHistory">刷新历史</el-button>
@@ -335,6 +344,9 @@ onBeforeUnmount(() => {
               <el-descriptions-item label="触发模式">{{ activeRun.trigger_mode }}</el-descriptions-item>
               <el-descriptions-item label="日期范围">{{ activeRun.date_from }} ~ {{ activeRun.date_to }}</el-descriptions-item>
               <el-descriptions-item label="实验类型">{{ (activeRun.spectrum_types || []).join(', ') }}</el-descriptions-item>
+              <el-descriptions-item label="覆盖策略">
+                {{ activeRun.overwrite_existing ? '覆盖已入库样品' : '跳过已入库样品' }}
+              </el-descriptions-item>
               <el-descriptions-item label="失败数量">{{ activeRun.errors?.length || 0 }}</el-descriptions-item>
             </el-descriptions>
             <el-progress :percentage="activeProgress" :stroke-width="14" />
@@ -346,6 +358,7 @@ onBeforeUnmount(() => {
                   <div class="type-stat-line">候选 {{ item.candidates }}</div>
                   <div class="type-stat-line">新增 {{ item.imported }}</div>
                   <div class="type-stat-line">更新 {{ item.updated }}</div>
+                  <div class="type-stat-line">跳过 {{ item.skipped }}</div>
                   <div class="type-stat-line">失败 {{ item.failed }}</div>
                 </div>
               </div>

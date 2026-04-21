@@ -40,6 +40,7 @@ class LabCollectRunRequest(BaseModel):
     date_from: Optional[str] = Field(default=None, description="范围起始日期，格式 YYYY-MM-DD。")
     date_to: Optional[str] = Field(default=None, description="范围结束日期，格式 YYYY-MM-DD。")
     spectrum_types: list[LabSpectrumType] | None = Field(default=None, description="采集谱图类型列表。")
+    overwrite_existing: bool = Field(default=False, description="是否覆盖已入库样品。")
 
     @model_validator(mode="after")
     def validate_date_input(self) -> "LabCollectRunRequest":
@@ -84,6 +85,7 @@ class LabCollectRunRecord(BaseModel):
     run_id: str = Field(description="批次 ID。")
     status: LabCollectStatus = Field(description="批次状态。")
     spectrum_types: list[LabSpectrumType] = Field(default_factory=list, description="谱图类型列表。")
+    overwrite_existing: bool = Field(default=False, description="是否覆盖已入库样品。")
     date_from: str = Field(description="起始日期。")
     date_to: str = Field(description="结束日期。")
     trigger_mode: LabCollectTriggerMode = Field(description="触发模式。")
@@ -142,7 +144,7 @@ class SpectrumSampleRecord(BaseModel):
     source: dict[str, Any] = Field(default_factory=dict, description="远程来源信息。")
     storage: dict[str, Any] = Field(default_factory=dict, description="本地存储信息。")
     analysis_input: dict[str, Any] = Field(default_factory=dict, description="分析输入信息。")
-    collect_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = Field(description="采集状态。")
+    collect_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED", "SKIPPED"] = Field(description="采集状态。")
     collect_stats: dict[str, Any] = Field(default_factory=dict, description="采集统计。")
     sample_meta: dict[str, Any] = Field(default_factory=dict, description="样本元数据。")
     latest_run_id: str = Field(description="最近一次采集批次 ID。")

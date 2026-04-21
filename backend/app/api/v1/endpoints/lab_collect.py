@@ -36,6 +36,7 @@ def create_lab_collect_run(payload: LabCollectRunRequest) -> ApiResponse[LabColl
             date_from=payload.date_from,
             date_to=payload.date_to,
             spectrum_types=payload.spectrum_types,
+            overwrite_existing=payload.overwrite_existing,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
