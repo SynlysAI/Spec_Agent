@@ -509,6 +509,7 @@ onBeforeUnmount(() => {
 }
 
 .collect-stat-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-bottom: 14px;
 }
 
@@ -568,6 +569,10 @@ onBeforeUnmount(() => {
   .collect-config-panel :deep(.el-col) {
     max-width: 100%;
     flex: 0 0 100%;
+  }
+
+  .collect-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
