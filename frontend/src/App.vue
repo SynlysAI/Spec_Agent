@@ -9,7 +9,6 @@ import {
   Histogram,
   ChatLineRound,
   Monitor,
-  Operation,
   SetUp,
   Fold,
   Expand,
@@ -126,10 +125,6 @@ function formatCurrentDate() {
           <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
           <el-menu-item index="/tools/acceptance">批量验收测试</el-menu-item>
         </el-sub-menu>
-        <el-menu-item index="/docs">
-          <el-icon><Document /></el-icon>
-          <span>接口文档</span>
-        </el-menu-item>
         <el-sub-menu index="/experiments">
           <template #title>
             <el-icon><FolderOpened /></el-icon>
@@ -138,9 +133,9 @@ function formatCurrentDate() {
           <el-menu-item index="/experiments/collect">数据采集</el-menu-item>
           <el-menu-item index="/experiments/samples">样本管理</el-menu-item>
         </el-sub-menu>
-        <el-menu-item index="/ops" disabled>
-          <el-icon><Operation /></el-icon>
-          <span>运维管理</span>
+        <el-menu-item index="/docs">
+          <el-icon><Document /></el-icon>
+          <span>接口文档</span>
         </el-menu-item>
       </el-menu>
     </el-aside>

@@ -16,11 +16,12 @@ const configData = ref(null)
 const historyItems = ref([])
 const activeRun = ref(null)
 const pollingTimer = ref(null)
+const defaultCollectDate = formatCurrentDate()
 
 const selectedTypes = ref([])
 const collectMode = ref('single')
-const collectDate = ref('2026-04-17')
-const dateRange = ref(['2026-04-17', '2026-04-17'])
+const collectDate = ref(defaultCollectDate)
+const dateRange = ref([defaultCollectDate, defaultCollectDate])
 const overwriteExisting = ref(false)
 
 const typeOptions = computed(() =>
@@ -56,6 +57,20 @@ const activeTypeStats = computed(() => {
     failed: Number(value?.failed || 0),
   }))
 })
+
+/**
+ * 生成当前日期字符串（YYYY-MM-DD）。
+ *
+ * Returns:
+ *   当前日期字符串。
+ */
+function formatCurrentDate() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 /**
  * 加载采集配置。

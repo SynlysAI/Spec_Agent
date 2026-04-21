@@ -47,6 +47,7 @@ TYPE_INPUT_KIND = {
 
 COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "skipped", "failed")
 SAMPLE_SUMMARY_TYPES = ("nmr", "gpc", "ir", "raman", "lcms")
+RUN_PROGRESS_SAVE_INTERVAL = 100
 
 
 @dataclass
@@ -311,7 +312,36 @@ class LabCollectService:
         run_record.summary.type_stats = type_stats
         LabCollectRunRepository.save(run_record)
 
-        for candidate in candidates:
+        skipped_candidates: list[CollectCandidate] = []
+        pending_candidates = candidates
+        if not run_record.overwrite_existing and candidates:
+            candidate_keys = [self._build_sample_key(candidate=candidate) for candidate in candidates]
+            existing_keys = SpectrumSampleRepository.find_existing_sample_keys(sample_keys=candidate_keys)
+            pending_candidates = []
+            for candidate in candidates:
+                if self._build_sample_key(candidate=candidate) in existing_keys:
+                    skipped_candidates.append(candidate)
+                    continue
+                pending_candidates.append(candidate)
+
+        skipped = len(skipped_candidates)
+        processed = skipped
+        for candidate in skipped_candidates:
+            type_stats[candidate.spectrum_type]["skipped"] += 1
+
+        self._save_run_progress(
+            run_record=run_record,
+            imported=imported,
+            updated=updated,
+            skipped=skipped,
+            failed=failed,
+            processed=processed,
+            total_work=total_work,
+            type_stats=type_stats,
+            errors=errors,
+        )
+
+        for candidate in pending_candidates:
             try:
                 result = self._collect_single_candidate(
                     run_id=run_id,
@@ -341,18 +371,19 @@ class LabCollectService:
                     )
                 )
             processed += 1
-            run_record = LabCollectRunRepository.find_by_run_id(run_id=run_id) or run_record
-            run_record.summary.imported = imported
-            run_record.summary.updated = updated
-            run_record.summary.skipped = skipped
-            run_record.summary.failed = failed
-            run_record.summary.progress = int(processed / total_work * 100)
-            run_record.summary.type_stats = type_stats
-            run_record.errors = errors
-            run_record.updated_at = datetime.now()
-            LabCollectRunRepository.save(run_record)
+            if processed % RUN_PROGRESS_SAVE_INTERVAL == 0 or processed == total_work:
+                self._save_run_progress(
+                    run_record=run_record,
+                    imported=imported,
+                    updated=updated,
+                    skipped=skipped,
+                    failed=failed,
+                    processed=processed,
+                    total_work=total_work,
+                    type_stats=type_stats,
+                    errors=errors,
+                )
 
-        run_record = LabCollectRunRepository.find_by_run_id(run_id=run_id) or run_record
         run_record.status = "FAILED" if failed and not (imported or updated) else ("PARTIAL_SUCCESS" if failed else "SUCCESS")
         run_record.summary.imported = imported
         run_record.summary.updated = updated
@@ -382,7 +413,7 @@ class LabCollectService:
         overwrite_existing: bool,
     ) -> CollectSingleCandidateResult:
         """采集单个样本。"""
-        sample_key = f"{candidate.spectrum_type}:{candidate.source_date}:{candidate.sample_name}"
+        sample_key = self._build_sample_key(candidate=candidate)
         existed = SpectrumSampleRepository.find_by_sample_key(sample_key=sample_key)
         if existed and not overwrite_existing:
             return CollectSingleCandidateResult(action="skipped", sample_id=existed.sample_id)
@@ -694,6 +725,53 @@ class LabCollectService:
         lowered = str(sample_name or "").strip().lower()
         normalized = re.sub(r"[^0-9a-zA-Z]+", "_", lowered)
         return normalized.strip("_")
+
+    @staticmethod
+    def _build_sample_key(candidate: CollectCandidate) -> str:
+        """构建样本唯一键。
+
+        Args:
+            candidate: 待处理的候选样本。
+
+        Returns:
+            样本唯一键。
+        """
+        return f"{candidate.spectrum_type}:{candidate.source_date}:{candidate.sample_name}"
+
+    @staticmethod
+    def _save_run_progress(
+        run_record: LabCollectRunRecord,
+        imported: int,
+        updated: int,
+        skipped: int,
+        failed: int,
+        processed: int,
+        total_work: int,
+        type_stats: dict[str, dict[str, int]],
+        errors: list[LabCollectRunError],
+    ) -> None:
+        """保存采集批次进度。
+
+        Args:
+            run_record: 当前采集批次记录。
+            imported: 已新增导入数量。
+            updated: 已覆盖更新数量。
+            skipped: 已跳过数量。
+            failed: 已失败数量。
+            processed: 已处理数量。
+            total_work: 总处理数量。
+            type_stats: 分类型统计。
+            errors: 失败项列表。
+        """
+        run_record.summary.imported = imported
+        run_record.summary.updated = updated
+        run_record.summary.skipped = skipped
+        run_record.summary.failed = failed
+        run_record.summary.progress = int(processed / max(total_work, 1) * 100)
+        run_record.summary.type_stats = type_stats
+        run_record.errors = errors
+        run_record.updated_at = datetime.now()
+        LabCollectRunRepository.save(run_record)
 
     @staticmethod
     def _normalize_types(spectrum_types: list[str] | None) -> list[str]:

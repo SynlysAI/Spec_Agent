@@ -177,6 +177,25 @@ class SpectrumSampleRepository:
         return SpectrumSampleRecord(**doc) if doc else None
 
     @staticmethod
+    def find_existing_sample_keys(sample_keys: list[str]) -> set[str]:
+        """批量查询已存在的样本键集合。
+
+        Args:
+            sample_keys: 待查询的样本键列表。
+
+        Returns:
+            数据库中已存在的样本键集合。
+        """
+        normalized_keys = [str(item).strip() for item in sample_keys if str(item).strip()]
+        if not normalized_keys:
+            return set()
+        cursor = get_spectrum_samples_collection().find(
+            {"sample_key": {"$in": normalized_keys}},
+            {"sample_key": 1, "_id": 0},
+        )
+        return {str(doc.get("sample_key")) for doc in cursor if doc.get("sample_key")}
+
+    @staticmethod
     def find_by_sample_id(sample_id: str) -> SpectrumSampleRecord | None:
         """按样本 ID 查询。"""
         doc = get_spectrum_samples_collection().find_one({"sample_id": sample_id}, {"_id": 0})

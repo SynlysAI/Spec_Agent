@@ -2,14 +2,14 @@ collectors:
   nmr:
     enabled: true
     share_key: nmr_lab
-    remote_root: E:/spectrum_files/remote_test/nmr
+    remote_root: \\100.69.213.65\admin
     local_root: E:/spectrum_files/nmr/spectrum
     sample_mode: directory
     patterns: []
   gpc:
     enabled: true
     share_key: gpc_lab
-    remote_root: E:/spectrum_files/remote_test/gpc
+    remote_root: \\100.74.253.59\gpc-lcms\GPC
     local_root: E:/spectrum_files/gpc/spectrum
     sample_mode: directory
     patterns:
@@ -26,7 +26,7 @@ collectors:
       - "*.txt"
       - "*.csv"
   raman:
-    enabled: true
+    enabled: false
     share_key: raman_lab
     remote_root: E:/spectrum_files/remote_test/raman
     local_root: E:/spectrum_files/raman/spectrum
@@ -37,7 +37,7 @@ collectors:
   lcms:
     enabled: true
     share_key: lcms_lab
-    remote_root: E:/spectrum_files/remote_test/lcms
+    remote_root: \\100.74.253.59\gpc-lcms\LCMS
     local_root: E:/spectrum_files/lcms/spectrum
     sample_mode: file
     patterns:
