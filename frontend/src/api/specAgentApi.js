@@ -523,6 +523,17 @@ export async function getLabCollectRun(runId, options = {}) {
 }
 
 /**
+ * 查询实验样本汇总。
+ *
+ * Returns:
+ *   样本汇总数据。
+ */
+export async function getSpectrumSampleSummary(options = {}) {
+  const response = await apiClient.get('/lab-collect/samples/summary', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
  * 分页查询实验样本主档。
  *
  * Args:

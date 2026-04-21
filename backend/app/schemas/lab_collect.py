@@ -174,6 +174,14 @@ class SpectrumSampleListData(BaseModel):
     items: list[SpectrumSampleListItem] = Field(default_factory=list, description="样本列表。")
 
 
+class SpectrumSampleSummaryData(BaseModel):
+    """样本汇总响应。"""
+
+    total_samples: int = Field(default=0, description="总样本数。")
+    type_counts: dict[str, int] = Field(default_factory=dict, description="按谱图类型统计的样本数。")
+    latest_updated_at: datetime | None = Field(default=None, description="最近样本更新时间。")
+
+
 class SpectrumSampleDetailData(BaseModel):
     """样本详情响应。"""
 

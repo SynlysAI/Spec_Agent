@@ -33,6 +33,7 @@ from app.schemas.lab_collect import (
     SpectrumSampleListData,
     SpectrumSampleListItem,
     SpectrumSampleRecord,
+    SpectrumSampleSummaryData,
 )
 
 
@@ -45,6 +46,7 @@ TYPE_INPUT_KIND = {
 }
 
 COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "failed")
+SAMPLE_SUMMARY_TYPES = ("nmr", "gpc", "ir", "raman", "lcms")
 
 
 @dataclass
@@ -224,6 +226,30 @@ class LabCollectService:
             return None
         files = SpectrumSampleFileRepository.find_by_sample_id(sample_id=sample_id)
         return SpectrumSampleDetailData(sample=sample, files=files)
+
+    def get_sample_summary(self) -> SpectrumSampleSummaryData:
+        """汇总样本资产概览数据。"""
+        collection = SpectrumSampleRepository.collection()
+        total_samples = int(collection.count_documents({}))
+        type_counts = {spectrum_type: 0 for spectrum_type in SAMPLE_SUMMARY_TYPES}
+
+        cursor = collection.aggregate(
+            [
+                {"$group": {"_id": "$spectrum_type", "count": {"$sum": 1}}},
+            ]
+        )
+        for item in cursor:
+            spectrum_type = str(item.get("_id") or "").strip().lower()
+            if spectrum_type in type_counts:
+                type_counts[spectrum_type] = int(item.get("count") or 0)
+
+        latest_doc = collection.find_one({}, {"updated_at": 1, "_id": 0}, sort=[("updated_at", -1)])
+        latest_updated_at = latest_doc.get("updated_at") if latest_doc else None
+        return SpectrumSampleSummaryData(
+            total_samples=total_samples,
+            type_counts=type_counts,
+            latest_updated_at=latest_updated_at,
+        )
 
     def run_collect(self, run_id: str) -> None:
         """执行采集批次。"""

@@ -13,6 +13,7 @@ from app.schemas.lab_collect import (
     LabCollectRunRequest,
     SpectrumSampleDetailData,
     SpectrumSampleListData,
+    SpectrumSampleSummaryData,
 )
 from app.services.lab_collect_service import lab_collect_service
 
@@ -76,6 +77,13 @@ def list_spectrum_samples(
     return ApiResponse(code=0, message="ok", data=data)
 
 
+@router.get("/samples/summary", response_model=ApiResponse[SpectrumSampleSummaryData])
+def get_spectrum_sample_summary() -> ApiResponse[SpectrumSampleSummaryData]:
+    """查询实验样本汇总。"""
+    data = lab_collect_service.get_sample_summary()
+    return ApiResponse(code=0, message="ok", data=data)
+
+
 @router.get("/samples/{sample_id}", response_model=ApiResponse[SpectrumSampleDetailData])
 def get_spectrum_sample_detail(sample_id: str) -> ApiResponse[SpectrumSampleDetailData]:
     """查询实验样本详情。"""
@@ -83,4 +91,3 @@ def get_spectrum_sample_detail(sample_id: str) -> ApiResponse[SpectrumSampleDeta
     if not data:
         raise HTTPException(status_code=404, detail="样本不存在")
     return ApiResponse(code=0, message="ok", data=data)
-
