@@ -19,6 +19,21 @@ const router = useRouter()
 const sidebarCollapsed = ref(false)
 const currentDate = ref(formatCurrentDate())
 
+/**
+ * 解析接口文档地址。
+ *
+ * Returns:
+ *   基于当前页面地址推导的接口文档 URL。
+ */
+function resolveDocsUrl() {
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:8000/docs'
+  }
+  const protocol = window.location.protocol || 'http:'
+  const hostname = window.location.hostname || '127.0.0.1'
+  return `${protocol}//${hostname}:8000/docs`
+}
+
 const activeMenu = computed(() => {
   const current = route.path
   if (current.startsWith('/tasks/detail')) {
@@ -44,7 +59,7 @@ const activeMenu = computed(() => {
  */
 function handleMenuSelect(index) {
   if (index === '/docs') {
-    window.open('http://127.0.0.1:8000/docs', '_blank')
+    window.open(resolveDocsUrl(), '_blank')
     return
   }
   router.push(index)
