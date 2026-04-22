@@ -11,6 +11,7 @@ from app.schemas.lab_collect import (
     LabCollectRunListData,
     LabCollectRunRecord,
     LabCollectRunRequest,
+    MolecularStatisticsData,
     SpectrumSampleDetailData,
     SpectrumSampleListData,
     SpectrumSampleSummaryData,
@@ -82,6 +83,20 @@ def list_spectrum_samples(
 def get_spectrum_sample_summary() -> ApiResponse[SpectrumSampleSummaryData]:
     """查询实验样本汇总。"""
     data = lab_collect_service.get_sample_summary()
+    return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.get("/molecular-stats", response_model=ApiResponse[MolecularStatisticsData])
+def get_molecular_statistics() -> ApiResponse[MolecularStatisticsData]:
+    """读取分子资产统计缓存。"""
+    data = lab_collect_service.get_molecular_statistics()
+    return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.post("/molecular-stats/refresh", response_model=ApiResponse[MolecularStatisticsData])
+def refresh_molecular_statistics() -> ApiResponse[MolecularStatisticsData]:
+    """手动刷新分子资产统计缓存。"""
+    data = lab_collect_service.refresh_molecular_statistics()
     return ApiResponse(code=0, message="ok", data=data)
 
 

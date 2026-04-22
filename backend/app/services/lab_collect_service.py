@@ -14,10 +14,14 @@ from typing import Any
 from uuid import uuid4
 
 import yaml
+from rdkit import Chem
+from rdkit.Chem import Fragments
+from rdkit.Chem.Scaffolds import MurckoScaffold
 
 from app.core.config import settings
 from app.infra.repositories import (
     LabCollectRunRepository,
+    MolecularStatisticsRepository,
     SpectrumSampleFileRepository,
     SpectrumSampleRepository,
 )
@@ -28,6 +32,7 @@ from app.schemas.lab_collect import (
     LabCollectRunRecord,
     LabCollectRunSummary,
     LabCollectorTypeConfig,
+    MolecularStatisticsData,
     SpectrumSampleDetailData,
     SpectrumSampleFileRecord,
     SpectrumSampleListData,
@@ -48,6 +53,7 @@ TYPE_INPUT_KIND = {
 COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "skipped", "failed")
 SAMPLE_SUMMARY_TYPES = ("nmr", "gpc", "ir", "raman", "lcms")
 RUN_PROGRESS_SAVE_INTERVAL = 100
+MOLECULAR_STATS_KEY = "sample_smiles_overview"
 
 
 @dataclass
@@ -102,6 +108,7 @@ class LabCollectService:
         )
         SpectrumSampleFileRepository.collection().create_index([("sample_key", 1)])
         SpectrumSampleFileRepository.collection().create_index([("spectrum_type", 1), ("file_ext", 1)])
+        MolecularStatisticsRepository.collection().create_index("stats_key", unique=True)
 
     def get_config_summary(self) -> LabCollectConfigData:
         """读取采集配置摘要。"""
@@ -253,6 +260,7 @@ class LabCollectService:
 
         SpectrumSampleFileRepository.delete_by_sample_id(sample_id=sample_id)
         SpectrumSampleRepository.delete_by_sample_id(sample_id=sample_id)
+        self._mark_molecular_statistics_stale()
         return True
 
     def get_sample_summary(self) -> SpectrumSampleSummaryData:
@@ -278,6 +286,68 @@ class LabCollectService:
             type_counts=type_counts,
             latest_updated_at=latest_updated_at,
         )
+
+    def get_molecular_statistics(self) -> MolecularStatisticsData:
+        """获取缓存的分子资产统计结果。"""
+        cached = MolecularStatisticsRepository.find_by_key(stats_key=MOLECULAR_STATS_KEY)
+        if cached:
+            return cached
+        return MolecularStatisticsData(stats_key=MOLECULAR_STATS_KEY)
+
+    def refresh_molecular_statistics(self) -> MolecularStatisticsData:
+        """重新计算并刷新分子资产统计缓存。"""
+        sample_collection = SpectrumSampleRepository.collection()
+        cursor = sample_collection.find(
+            {"sample_meta.smiles": {"$exists": True, "$nin": ["", None]}},
+            {"_id": 0, "sample_meta.smiles": 1},
+        )
+
+        raw_smiles_list = [
+            str(((item.get("sample_meta") or {}).get("smiles") or "")).strip()
+            for item in cursor
+            if str(((item.get("sample_meta") or {}).get("smiles") or "")).strip()
+        ]
+        unique_smiles = sorted(set(raw_smiles_list))
+        unique_scaffolds: set[str] = set()
+        unique_functional_groups: set[str] = set()
+
+        for smiles in unique_smiles:
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                continue
+            try:
+                scaffold_mol = MurckoScaffold.GetScaffoldForMol(mol)
+                scaffold_smiles = Chem.MolToSmiles(scaffold_mol)
+                if scaffold_smiles:
+                    unique_scaffolds.add(scaffold_smiles)
+            except Exception:
+                pass
+
+            for func_name in dir(Fragments):
+                if not func_name.startswith("fr_"):
+                    continue
+                fg_func = getattr(Fragments, func_name)
+                try:
+                    if fg_func(mol) > 0:
+                        unique_functional_groups.add(func_name)
+                except Exception:
+                    continue
+
+        stats_record = MolecularStatisticsData(
+            stats_key=MOLECULAR_STATS_KEY,
+            unique_smiles_count=len(unique_smiles),
+            unique_scaffold_count=len(unique_scaffolds),
+            unique_functional_group_count=len(unique_functional_groups),
+            functional_groups=sorted(unique_functional_groups),
+            source_sample_count=len(raw_smiles_list),
+            source_smiles_count=len(raw_smiles_list),
+            is_stale=False,
+            status="SUCCESS",
+            updated_at=datetime.now(),
+            error_message=None,
+        )
+        MolecularStatisticsRepository.save(stats_record)
+        return stats_record
 
     def run_collect(self, run_id: str) -> None:
         """执行采集批次。"""
@@ -493,10 +563,19 @@ class LabCollectService:
         )
         SpectrumSampleRepository.save(sample_record)
         SpectrumSampleFileRepository.replace_for_sample(sample_id=sample_id, file_records=file_records)
+        self._mark_molecular_statistics_stale()
         return CollectSingleCandidateResult(
             action="updated" if existed else "imported",
             sample_id=sample_id,
         )
+
+    def _mark_molecular_statistics_stale(self) -> None:
+        """将分子资产统计缓存标记为过期。"""
+        cached = MolecularStatisticsRepository.find_by_key(stats_key=MOLECULAR_STATS_KEY)
+        if not cached:
+            return
+        cached.is_stale = True
+        MolecularStatisticsRepository.save(cached)
 
     def _build_sample_files_and_meta(
         self,

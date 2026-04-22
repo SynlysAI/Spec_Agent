@@ -100,3 +100,13 @@ def get_spectrum_sample_files_collection() -> Collection:
     - 无。
     """
     return get_database()["spectrum_sample_files"]
+
+
+def get_molecular_statistics_collection() -> Collection:
+    """获取 molecular_statistics_cache 集合。
+
+    函数名称: get_molecular_statistics_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["molecular_statistics_cache"]

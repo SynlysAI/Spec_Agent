@@ -9,12 +9,18 @@ from app.infra.mongo import (
     get_acceptance_runs_collection,
     get_files_collection,
     get_lab_collect_runs_collection,
+    get_molecular_statistics_collection,
     get_results_collection,
     get_spectrum_sample_files_collection,
     get_spectrum_samples_collection,
     get_tasks_collection,
 )
-from app.schemas.lab_collect import LabCollectRunRecord, SpectrumSampleFileRecord, SpectrumSampleRecord
+from app.schemas.lab_collect import (
+    LabCollectRunRecord,
+    MolecularStatisticsData,
+    SpectrumSampleFileRecord,
+    SpectrumSampleRecord,
+)
 from app.schemas.task_runtime import FileRecord, ResultRecord, TaskErrorInfo, TaskRecord
 
 
@@ -248,3 +254,28 @@ class SpectrumSampleFileRepository:
     def delete_by_sample_id(sample_id: str) -> None:
         """按样本 ID 删除文件清单。"""
         get_spectrum_sample_files_collection().delete_many({"sample_id": sample_id})
+
+
+class MolecularStatisticsRepository:
+    """分子统计缓存仓储。"""
+
+    @staticmethod
+    def collection():
+        """返回分子统计缓存集合。"""
+        return get_molecular_statistics_collection()
+
+    @staticmethod
+    def save(stats_record: MolecularStatisticsData) -> None:
+        """保存分子统计缓存。"""
+        payload = stats_record.model_dump(mode="python")
+        get_molecular_statistics_collection().update_one(
+            {"stats_key": stats_record.stats_key},
+            {"$set": payload},
+            upsert=True,
+        )
+
+    @staticmethod
+    def find_by_key(stats_key: str) -> MolecularStatisticsData | None:
+        """按缓存键查询分子统计缓存。"""
+        doc = get_molecular_statistics_collection().find_one({"stats_key": stats_key}, {"_id": 0})
+        return MolecularStatisticsData(**doc) if doc else None

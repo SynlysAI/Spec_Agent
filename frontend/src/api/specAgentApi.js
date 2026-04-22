@@ -534,6 +534,28 @@ export async function getSpectrumSampleSummary(options = {}) {
 }
 
 /**
+ * 查询分子资产统计缓存。
+ *
+ * Returns:
+ *   分子统计结果。
+ */
+export async function getMolecularStatistics(options = {}) {
+  const response = await apiClient.get('/lab-collect/molecular-stats', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 手动刷新分子资产统计缓存。
+ *
+ * Returns:
+ *   刷新后的分子统计结果。
+ */
+export async function refreshMolecularStatistics(options = {}) {
+  const response = await apiClient.post('/lab-collect/molecular-stats/refresh', {}, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
  * 分页查询实验样本主档。
  *
  * Args:

@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.schemas.lab_collect import LabCollectRunRecord
+from app.schemas.lab_collect import MolecularStatisticsData
 from app.schemas.lab_collect import LabCollectRunRequest
 from app.schemas.lab_collect import LabCollectRunSummary
 from app.services.lab_collect_service import CollectCandidate
@@ -185,9 +186,53 @@ class TestLabCollectService(unittest.TestCase):
                 deleted = service.delete_sample(sample_id="sp_001")
 
             self.assertTrue(deleted)
-            self.assertFalse(local_sample_path.exists())
-            delete_sample_mock.assert_called_once_with(sample_id="sp_001")
-            delete_files_mock.assert_called_once_with(sample_id="sp_001")
+        self.assertFalse(local_sample_path.exists())
+        delete_sample_mock.assert_called_once_with(sample_id="sp_001")
+        delete_files_mock.assert_called_once_with(sample_id="sp_001")
+
+    def test_get_molecular_statistics_returns_empty_default_when_cache_missing(self) -> None:
+        """分子统计缓存不存在时应返回默认空结果。"""
+        with patch.object(LabCollectService, "_ensure_indexes", return_value=None):
+            service = LabCollectService()
+        with patch("app.services.lab_collect_service.MolecularStatisticsRepository.find_by_key", return_value=None):
+            result = service.get_molecular_statistics()
+        self.assertEqual(result.stats_key, "sample_smiles_overview")
+        self.assertTrue(result.is_stale)
+        self.assertEqual(result.status, "EMPTY")
+
+    def test_refresh_molecular_statistics_builds_expected_summary(self) -> None:
+        """刷新分子统计时应统计唯一 SMILES、骨架和官能团数量。"""
+        sample_docs = [
+            {"sample_meta": {"smiles": "CCO"}},
+            {"sample_meta": {"smiles": "CCO"}},
+            {"sample_meta": {"smiles": "c1ccccc1O"}},
+            {"sample_meta": {"smiles": ""}},
+        ]
+
+        class FakeCollection:
+            """最小化模拟样本集合。"""
+
+            @staticmethod
+            def find(*args, **kwargs):
+                return sample_docs
+
+        saved_stats = []
+        with patch.object(LabCollectService, "_ensure_indexes", return_value=None):
+            service = LabCollectService()
+        with (
+            patch("app.services.lab_collect_service.SpectrumSampleRepository.collection", return_value=FakeCollection()),
+            patch("app.services.lab_collect_service.MolecularStatisticsRepository.save", side_effect=saved_stats.append),
+        ):
+            result = service.refresh_molecular_statistics()
+
+        self.assertEqual(result.unique_smiles_count, 2)
+        self.assertGreaterEqual(result.unique_scaffold_count, 1)
+        self.assertGreaterEqual(result.unique_functional_group_count, 1)
+        self.assertEqual(result.source_sample_count, 3)
+        self.assertFalse(result.is_stale)
+        self.assertEqual(result.status, "SUCCESS")
+        self.assertEqual(len(saved_stats), 1)
+        self.assertIsInstance(saved_stats[0], MolecularStatisticsData)
 
 
 if __name__ == "__main__":

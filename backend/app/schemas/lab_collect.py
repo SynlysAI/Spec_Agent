@@ -184,6 +184,22 @@ class SpectrumSampleSummaryData(BaseModel):
     latest_updated_at: datetime | None = Field(default=None, description="最近样本更新时间。")
 
 
+class MolecularStatisticsData(BaseModel):
+    """分子资产统计响应。"""
+
+    stats_key: str = Field(default="sample_smiles_overview", description="统计缓存键。")
+    unique_smiles_count: int = Field(default=0, description="去重 SMILES 数量。")
+    unique_scaffold_count: int = Field(default=0, description="去重分子骨架数量。")
+    unique_functional_group_count: int = Field(default=0, description="去重官能团类型数量。")
+    functional_groups: list[str] = Field(default_factory=list, description="命中的官能团类型列表。")
+    source_sample_count: int = Field(default=0, description="参与统计的样本数。")
+    source_smiles_count: int = Field(default=0, description="参与统计的原始 SMILES 数量。")
+    is_stale: bool = Field(default=True, description="统计结果是否已过期。")
+    status: str = Field(default="EMPTY", description="统计状态。")
+    updated_at: datetime | None = Field(default=None, description="最近更新时间。")
+    error_message: str | None = Field(default=None, description="最近一次错误信息。")
+
+
 class SpectrumSampleDetailData(BaseModel):
     """样本详情响应。"""
 

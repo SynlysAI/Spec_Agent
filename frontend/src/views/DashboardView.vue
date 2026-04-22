@@ -5,13 +5,17 @@ import { ElMessage } from 'element-plus'
 import {
   getApiErrorMessage,
   getLabCollectRuns,
+  getMolecularStatistics,
+  refreshMolecularStatistics,
   getSpectrumSampleSummary,
   listTasks,
 } from '../api/specAgentApi'
 
 const router = useRouter()
 const loading = ref(false)
+const molecularRefreshing = ref(false)
 const sampleSummary = ref(null)
+const molecularStats = ref(null)
 const taskSummary = ref({
   total: 0,
   queued: 0,
@@ -21,6 +25,12 @@ const taskSummary = ref({
 })
 const taskTypeItems = ref([])
 const systemDynamics = ref([])
+
+const molecularCards = computed(() => [
+  { title: '去重 SMILES', value: molecularStats.value?.unique_smiles_count ?? 0, featured: true },
+  { title: '分子骨架', value: molecularStats.value?.unique_scaffold_count ?? 0 },
+  { title: '官能团类型', value: molecularStats.value?.unique_functional_group_count ?? 0 },
+])
 
 const sampleCards = computed(() => {
   const typeCounts = sampleSummary.value?.type_counts || {}
@@ -70,6 +80,7 @@ async function loadDashboard() {
   try {
     const [
       sampleData,
+      molecularData,
       all,
       queued,
       running,
@@ -84,6 +95,7 @@ async function loadDashboard() {
       lcms,
     ] = await Promise.all([
       getSpectrumSampleSummary(),
+      getMolecularStatistics(),
       listTasks({ page: 1, page_size: 1 }),
       listTasks({ page: 1, page_size: 1, status: 'QUEUED' }),
       listTasks({ page: 1, page_size: 1, status: 'RUNNING' }),
@@ -99,6 +111,7 @@ async function loadDashboard() {
     ])
 
     sampleSummary.value = sampleData
+    molecularStats.value = molecularData
     taskSummary.value = {
       total: all.total,
       queued: queued.total,
@@ -141,6 +154,24 @@ async function loadDashboard() {
 }
 
 /**
+ * 手动刷新分子资产统计。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function updateMolecularStatistics() {
+  molecularRefreshing.value = true
+  try {
+    molecularStats.value = await refreshMolecularStatistics()
+    ElMessage.success('分子资产统计已更新')
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error))
+  } finally {
+    molecularRefreshing.value = false
+  }
+}
+
+/**
  * 跳转到指定页面。
  *
  * Args:
@@ -167,6 +198,29 @@ onMounted(loadDashboard)
               <div class="sample-card-title">{{ item.title }}</div>
               <div class="sample-card-value">{{ item.value }}</div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">分子资产概览</h3>
+          <el-button type="primary" plain :loading="molecularRefreshing" @click="updateMolecularStatistics">
+            更新统计
+          </el-button>
+        </div>
+        <div class="panel-body" v-loading="loading || molecularRefreshing">
+          <div class="dashboard-sample-grid">
+            <div v-for="item in molecularCards" :key="item.title" class="sample-card" :class="{ featured: item.featured }">
+              <div class="sample-card-title">{{ item.title }}</div>
+              <div class="sample-card-value">{{ item.value }}</div>
+            </div>
+          </div>
+          <div class="molecular-meta">
+            <div>最近更新时间：{{ formatDisplayTime(molecularStats?.updated_at) }}</div>
+            <div>统计状态：{{ molecularStats?.status || 'EMPTY' }}</div>
+            <div>数据来源：样本库 `sample_meta.smiles` 去重统计</div>
+            <div v-if="molecularStats?.is_stale" class="stale-text">样本库已变更，建议手动更新统计</div>
           </div>
         </div>
       </section>
@@ -293,6 +347,18 @@ onMounted(loadDashboard)
   color: #1e4375;
   font-size: 28px;
   font-weight: 700;
+}
+
+.molecular-meta {
+  margin-top: 14px;
+  color: #7083a2;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.stale-text {
+  color: #c56a00;
+  font-weight: 600;
 }
 
 .dashboard-task-grid {
