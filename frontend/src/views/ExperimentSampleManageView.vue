@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
 import {
+  deleteSpectrumSample,
   getApiErrorMessage,
   getSpectrumSampleDetail,
   listSpectrumSamples,
@@ -16,6 +17,7 @@ const tableData = ref([])
 const detailVisible = ref(false)
 const activeDetail = ref(null)
 const previewData = ref(null)
+const deletingSampleId = ref('')
 
 const query = ref({
   page: 1,
@@ -162,6 +164,56 @@ async function loadPreview() {
   }
 }
 
+/**
+ * 删除指定样本。
+ *
+ * Args:
+ *   sample: 样本列表项。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function deleteSample(sample) {
+  const sampleId = sample?.sample_id
+  if (!sampleId) {
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认删除样品“${sample.sample_name || sampleId}”吗？该操作会同时删除本地样本文件，且不可恢复。`,
+      '删除确认',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  deletingSampleId.value = sampleId
+  try {
+    await deleteSpectrumSample(sampleId)
+    if (activeDetail.value?.sample?.sample_id === sampleId) {
+      detailVisible.value = false
+      activeDetail.value = null
+      previewData.value = null
+    }
+    const totalAfterDelete = Math.max((pagination.value.total || 1) - 1, 0)
+    const maxPage = Math.max(Math.ceil(totalAfterDelete / (query.value.page_size || 10)), 1)
+    if (query.value.page > maxPage) {
+      query.value.page = maxPage
+    }
+    await fetchSamples()
+    ElMessage.success('样品删除成功')
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error))
+  } finally {
+    deletingSampleId.value = ''
+  }
+}
+
 onMounted(fetchSamples)
 </script>
 
@@ -220,9 +272,17 @@ onMounted(fetchSamples)
             {{ scope.row.analysis_input?.input_path || '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="scope">
             <el-button type="primary" link @click="openDetail(scope.row.sample_id)">详情</el-button>
+            <el-button
+              type="danger"
+              link
+              :loading="deletingSampleId === scope.row.sample_id"
+              @click="deleteSample(scope.row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -337,4 +397,3 @@ onMounted(fetchSamples)
   }
 }
 </style>
-

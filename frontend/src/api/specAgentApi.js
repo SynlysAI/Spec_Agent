@@ -565,6 +565,20 @@ export async function getSpectrumSampleDetail(sampleId, options = {}) {
 }
 
 /**
+ * 删除实验样本。
+ *
+ * Args:
+ *   sampleId: 样本 ID。
+ *
+ * Returns:
+ *   删除结果。
+ */
+export async function deleteSpectrumSample(sampleId, options = {}) {
+  const response = await apiClient.delete(`/lab-collect/samples/${sampleId}`, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
  * 构建批量验收报告下载地址。
  *
  * Args:

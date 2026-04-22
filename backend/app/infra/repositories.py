@@ -214,6 +214,11 @@ class SpectrumSampleRepository:
         )
         return total, [SpectrumSampleRecord(**doc) for doc in cursor]
 
+    @staticmethod
+    def delete_by_sample_id(sample_id: str) -> None:
+        """按样本 ID 删除样本主档。"""
+        get_spectrum_samples_collection().delete_one({"sample_id": sample_id})
+
 
 class SpectrumSampleFileRepository:
     """实验样本文件清单仓储。"""
@@ -238,3 +243,8 @@ class SpectrumSampleFileRepository:
             [("relative_path", 1)]
         )
         return [SpectrumSampleFileRecord(**doc) for doc in cursor]
+
+    @staticmethod
+    def delete_by_sample_id(sample_id: str) -> None:
+        """按样本 ID 删除文件清单。"""
+        get_spectrum_sample_files_collection().delete_many({"sample_id": sample_id})

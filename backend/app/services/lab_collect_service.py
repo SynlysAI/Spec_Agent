@@ -238,6 +238,23 @@ class LabCollectService:
         files = SpectrumSampleFileRepository.find_by_sample_id(sample_id=sample_id)
         return SpectrumSampleDetailData(sample=sample, files=files)
 
+    def delete_sample(self, sample_id: str) -> bool:
+        """删除样本及其本地存储。"""
+        sample = SpectrumSampleRepository.find_by_sample_id(sample_id=sample_id)
+        if not sample:
+            return False
+
+        local_sample_path = Path(str((sample.storage or {}).get("local_sample_path") or "")).expanduser()
+        if str(local_sample_path).strip() and local_sample_path.exists():
+            if local_sample_path.is_dir():
+                shutil.rmtree(local_sample_path)
+            else:
+                local_sample_path.unlink()
+
+        SpectrumSampleFileRepository.delete_by_sample_id(sample_id=sample_id)
+        SpectrumSampleRepository.delete_by_sample_id(sample_id=sample_id)
+        return True
+
     def get_sample_summary(self) -> SpectrumSampleSummaryData:
         """汇总样本资产概览数据。"""
         collection = SpectrumSampleRepository.collection()

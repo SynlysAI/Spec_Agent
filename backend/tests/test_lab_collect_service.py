@@ -156,6 +156,39 @@ class TestLabCollectService(unittest.TestCase):
         self.assertEqual(run_record.summary.progress, 100)
         self.assertLessEqual(save_mock.call_count, 6)
 
+    def test_delete_sample_removes_record_files_and_local_storage(self) -> None:
+        """删除样本时应同时移除主档、文件清单和本地存储。"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_sample_path = Path(temp_dir) / "2026-04-21" / "IR_82680.txt"
+            local_sample_path.parent.mkdir(parents=True, exist_ok=True)
+            local_sample_path.write_text("mock spectrum", encoding="utf-8")
+
+            sample_record = SimpleNamespace(
+                sample_id="sp_001",
+                sample_name="IR_82680.txt",
+                storage={"local_sample_path": str(local_sample_path)},
+            )
+
+            with patch.object(LabCollectService, "_ensure_indexes", return_value=None):
+                service = LabCollectService()
+
+            with (
+                patch(
+                    "app.services.lab_collect_service.SpectrumSampleRepository.find_by_sample_id",
+                    return_value=sample_record,
+                ),
+                patch("app.services.lab_collect_service.SpectrumSampleRepository.delete_by_sample_id") as delete_sample_mock,
+                patch(
+                    "app.services.lab_collect_service.SpectrumSampleFileRepository.delete_by_sample_id"
+                ) as delete_files_mock,
+            ):
+                deleted = service.delete_sample(sample_id="sp_001")
+
+            self.assertTrue(deleted)
+            self.assertFalse(local_sample_path.exists())
+            delete_sample_mock.assert_called_once_with(sample_id="sp_001")
+            delete_files_mock.assert_called_once_with(sample_id="sp_001")
+
 
 if __name__ == "__main__":
     unittest.main()

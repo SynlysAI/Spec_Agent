@@ -92,3 +92,12 @@ def get_spectrum_sample_detail(sample_id: str) -> ApiResponse[SpectrumSampleDeta
     if not data:
         raise HTTPException(status_code=404, detail="样本不存在")
     return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.delete("/samples/{sample_id}", response_model=ApiResponse[dict[str, bool]])
+def delete_spectrum_sample(sample_id: str) -> ApiResponse[dict[str, bool]]:
+    """删除实验样本。"""
+    deleted = lab_collect_service.delete_sample(sample_id=sample_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="样本不存在")
+    return ApiResponse(code=0, message="ok", data={"deleted": True})
