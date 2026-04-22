@@ -72,6 +72,7 @@ def enhanced_gpc_plot(time, response, start_idx, end_idx, M_i, h_i, Mn, Mw, Mz, 
 
     plt.tight_layout()
     plt.show()
+    plt.close(fig)
 
 
 
@@ -93,17 +94,19 @@ class GPCDataPlotter:
         参数:
         filename (str): 保存图表的文件名，默认值为 'gpc_machine_curve.png'
         """
-        plt.figure(figsize=(8, 5))
-        plt.plot(self.time_data, self.calibration_func(self.time_data), 'b-', linewidth=1.5)
-        plt.xlabel('Time (min)')
-        plt.ylabel('Log Molecular Weight (Da)')
-        plt.title('GPC Machine Curve')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        if save_path is None:
-            save_path = os.path.join(self.output_dir, f"{self.sample_name}_gpc_machine_curve.png")
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close()
+        fig, ax = plt.subplots(figsize=(8, 5))
+        try:
+            ax.plot(self.time_data, self.calibration_func(self.time_data), 'b-', linewidth=1.5)
+            ax.set_xlabel('Time (min)')
+            ax.set_ylabel('Log Molecular Weight (Da)')
+            ax.set_title('GPC Machine Curve')
+            ax.grid(True, alpha=0.3)
+            fig.tight_layout()
+            if save_path is None:
+                save_path = os.path.join(self.output_dir, f"{self.sample_name}_gpc_machine_curve.png")
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        finally:
+            plt.close(fig)
         print(f"GPC标定曲线已保存到 {save_path}")
 
     def plot_roi_result(
@@ -121,6 +124,7 @@ class GPCDataPlotter:
         roi_result: ROI计算结果
         actual_curve_name: 实际洗脱曲线名称，用于标题
         """
+        fig = None
         try:
             roi_start = roi_result['roi_start']
             roi_end = roi_result['roi_end']
@@ -272,18 +276,21 @@ class GPCDataPlotter:
                 ax.plot([], [], ' ', label=f'Y轴范围: {min_intensity:.2f} - {max_intensity:.2f}')
 
             # 调整布局
-            plt.tight_layout(rect=[0, 0, 1, 0.96])
+            fig.tight_layout(rect=[0, 0, 1, 0.96])
 
             # 保存或显示图片
             if save_path is None:
                 save_path = os.path.join(self.output_dir, f"{self.sample_name}_roi_identification.png")
 
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
             logger.info(f"ROI结果图已保存到: {save_path}")
 
         except Exception as e:
             logger.error(f"绘制ROI结果图失败: {str(e)}")
             raise
+        finally:
+            if fig is not None:
+                plt.close(fig)
 
     def plot_with_cumulative(self, peak_index: int = 0, save_path: Optional[str] = None):
         """
@@ -293,45 +300,46 @@ class GPCDataPlotter:
             print("分子量计算结果为空")
             return
 
-        plt.figure(figsize=(10, 6))
-        ax1 = plt.gca()
-        ax2 = ax1.twinx()  # 创建共享 X 轴的右侧轴
+        fig, ax1 = plt.subplots(figsize=(10, 6))
+        try:
+            ax2 = ax1.twinx()  # 创建共享 X 轴的右侧轴
 
-        M, logM, diff_w, cum_w = self.calculate_cumulative_distribution(peak_index)
+            M, logM, diff_w, cum_w = self.calculate_cumulative_distribution(peak_index)
 
-        # 绘制微分分布曲线 (左轴)
-        line1, = ax1.plot(M, diff_w, color="blue", lw=2, label=f'Peak {peak_index + 1} 微分分布')
-        ax1.fill_between(M, diff_w, color="blue", alpha=0.1)
+            # 绘制微分分布曲线 (左轴)
+            line1, = ax1.plot(M, diff_w, color="blue", lw=2, label=f'Peak {peak_index + 1} 微分分布')
+            ax1.fill_between(M, diff_w, color="blue", alpha=0.1)
 
-        # 绘制累积分布曲线 (右轴) - 使用虚线区分
-        line2, = ax2.plot(M, cum_w, color="red", linestyle='--', lw=2, alpha=0.8,
-                          label=f'Peak {peak_index + 1} 累积分布')
+            # 绘制累积分布曲线 (右轴) - 使用虚线区分
+            line2, = ax2.plot(M, cum_w, color="red", linestyle='--', lw=2, alpha=0.8,
+                              label=f'Peak {peak_index + 1} 累积分布')
 
-        # 设置横坐标为对数轴
-        ax1.set_xscale('log')
+            # 设置横坐标为对数轴
+            ax1.set_xscale('log')
 
-        # 格式化坐标轴
-        ax1.set_xlabel('分子量 Molecular Weight (g/mol) [Log Scale]', fontsize=12)
-        ax1.set_ylabel('相对含量 Relative Abundance (Normalized)', fontsize=12)
-        ax2.set_ylabel('累积质量分数 Cumulative Weight (%)', fontsize=12)
+            # 格式化坐标轴
+            ax1.set_xlabel('分子量 Molecular Weight (g/mol) [Log Scale]', fontsize=12)
+            ax1.set_ylabel('相对含量 Relative Abundance (Normalized)', fontsize=12)
+            ax2.set_ylabel('累积质量分数 Cumulative Weight (%)', fontsize=12)
 
-        ax1.set_ylim(0, 1.1)  # 微分曲线留白
-        ax2.set_ylim(0, 105)  # 累积曲线 0-100%
+            ax1.set_ylim(0, 1.1)  # 微分曲线留白
+            ax2.set_ylim(0, 105)  # 累积曲线 0-100%
 
-        # 网格与图例
-        ax1.grid(True, which="both", ls="-", alpha=0.15)
+            # 网格与图例
+            ax1.grid(True, which="both", ls="-", alpha=0.15)
 
-        # 合并图例
-        lines = [line1, line2]
-        labels = [l.get_label() for l in lines]
-        ax1.legend(lines, labels, loc='upper left')
+            # 合并图例
+            lines = [line1, line2]
+            labels = [l.get_label() for l in lines]
+            ax1.legend(lines, labels, loc='upper left')
 
-        plt.title('GPC 分子量分析 (Logarithmic Scale)', fontsize=14)
-        plt.tight_layout()
-        if save_path is None:
-            save_path = os.path.join(self.output_dir, f"{self.sample_name}_detailed_gpc_plot.png")
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close()
+            ax1.set_title('GPC 分子量分析 (Logarithmic Scale)', fontsize=14)
+            fig.tight_layout()
+            if save_path is None:
+                save_path = os.path.join(self.output_dir, f"{self.sample_name}_detailed_gpc_plot.png")
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        finally:
+            plt.close(fig)
         logger.info(f"GPC分子量分析图已保存到 {save_path}")
 
     def plot_gpc_result(self, peak_index=0, save_path=None):
@@ -343,33 +351,33 @@ class GPCDataPlotter:
         mw = self.molecular_info[peak_index]['Mw']
         mz = self.molecular_info[peak_index]['Mz']
 
-        # 创建画布
-        plt.figure(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10, 6))
+        try:
+            # 绘制分布曲线 (dW/dlogM)
+            # 归一化信号以便观察
+            h_norm = h_i / np.max(h_i) if np.max(h_i) != 0 else h_i
+            ax.plot(log_M, h_norm, color='royalblue', linewidth=2, label='MW Distribution')
+            ax.fill_between(log_M, h_norm, color='royalblue', alpha=0.15)
 
-        # 绘制分布曲线 (dW/dlogM)
-        # 归一化信号以便观察
-        h_norm = h_i / np.max(h_i) if np.max(h_i) != 0 else h_i
-        plt.plot(log_M, h_norm, color='royalblue', linewidth=2, label='MW Distribution')
-        plt.fill_between(log_M, h_norm, color='royalblue', alpha=0.15)
+            # 标注平均分子量位置
+            ax.axvline(x=np.log10(mn), color='forestgreen', linestyle='--', label=f'Mn={mn:.2e}')
+            ax.axvline(x=np.log10(mw), color='firebrick', linestyle='--', label=f'Mw={mw:.2e}')
+            ax.axvline(x=np.log10(mz), color='darkorange', linestyle='--', label=f'Mz={mz:.2e}')
 
-        # 标注平均分子量位置
-        plt.axvline(x=np.log10(mn), color='forestgreen', linestyle='--', label=f'Mn={mn:.2e}')
-        plt.axvline(x=np.log10(mw), color='firebrick', linestyle='--', label=f'Mw={mw:.2e}')
-        plt.axvline(x=np.log10(mz), color='darkorange', linestyle='--', label=f'Mz={mz:.2e}')
+            # 图表修饰
+            ax.set_title(f"分子量分布结果图 - {self.sample_name}", fontsize=14)
+            ax.set_xlabel("log(M)", fontsize=12)
+            ax.set_ylabel("Normalized Response", fontsize=12)
+            ax.legend(loc='upper left')
+            ax.grid(True, linestyle=':', alpha=0.7)
 
-        # 图表修饰
-        plt.title(f"分子量分布结果图 - {self.sample_name}", fontsize=14)
-        plt.xlabel("log(M)", fontsize=12)
-        plt.ylabel("Normalized Response", fontsize=12)
-        plt.legend(loc='upper left')
-        plt.grid(True, linestyle=':', alpha=0.7)
+            if save_path is None:
+                save_path = os.path.join(self.output_dir, f"{self.sample_name}_result_plot.png")
 
-        if save_path is None:
-            save_path = os.path.join(self.output_dir, f"{self.sample_name}_result_plot.png")
-
-        # 保存图片
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close()  # 释放内存，防止在循环中产生过多画布
+            # 保存图片
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        finally:
+            plt.close(fig)  # 释放内存，防止在循环中产生过多画布
         logger.info(f"GPC分子量分布结果图已保存到 {save_path}")
 
     def plot_peak_detect_process(
@@ -394,195 +402,196 @@ class GPCDataPlotter:
             safe_left = peaks_details[peak_index]["left_bound"]
             safe_right = peaks_details[peak_index]["right_bound"]
 
-        # 创建2x2子图
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        ax1, ax2, ax3, ax4 = axes.flatten()
-
-        # 图1: 原始信号和检测到的所有峰值
-        ax1.plot(self.time_data, self.signal_data, 'b-', linewidth=2, label='原始信号')
-        # 确保peak_times和peak_heights有效且长度匹配
-        if len(peak_times) > 0 and len(peak_heights) > 0 and len(peak_times) == len(peak_heights):
-            ax1.scatter(peak_times, peak_heights, color='red', s=100, marker='o', zorder=5,
-                        label='检测到的峰值')
-        # 标记当前分析的峰值（安全检查）
-        if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
-            ax1.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
-                        color='darkred', s=150, marker='*', zorder=6,
-                        label=f'当前分析峰值(峰{peak_index + 1})')
-        ax1.set_title('步骤1: 原始信号与峰值检测', fontsize=16)
-        ax1.set_xlabel('Elution Time (min)', fontsize=14)
-        ax1.set_ylabel('Detector Response', fontsize=14)
-        ax1.legend(fontsize=12, loc='best')
-        ax1.grid(True, linestyle='--', alpha=0.7)
-
-        window_size = max(5, int(len(self.signal_data) * 0.05))
-        origin_baseline = minimum_filter1d(self.signal_data, size=window_size, mode='reflect')
-
-        # 图2: 基线计算
-        ax2.plot(self.time_data, self.signal_data, 'b-', linewidth=2, label='原始信号')
-        ax2.plot(self.time_data, origin_baseline, 'g-', linewidth=2, label='计算基线')
-        # 填充基线以上区域
-        ax2.fill_between(self.time_data, origin_baseline, self.signal_data,
-                         color='lightblue', alpha=0.3, label='基线以上信号')
-        # 标记当前分析的峰值（安全检查）
-        if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
-            ax2.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
-                        color='darkred', s=150, marker='*', zorder=6,
-                        label=f'当前分析峰值(峰{peak_index + 1})')
-        ax2.set_title('步骤2: 基线计算', fontsize=16)
-        ax2.set_xlabel('Elution Time (min)', fontsize=14)
-        ax2.set_ylabel('Detector Response', fontsize=14)
-        ax2.legend(fontsize=12, loc='best')
-        ax2.grid(True, linestyle='--', alpha=0.7)
-
-        # 图3: 导数计算和边界识别（整个区域）
-        # 计算导数
-        dy = np.gradient(self.signal_data, 2)
-        d2y = np.gradient(dy, 2)
-
-        # 显示整个信号区域
-        view_start = 0
-        view_end = len(self.time_data)
-
-        # 创建多Y轴
-        ax3_main = ax3
-
-        # 副Y轴1：用于显示一阶导数
-        ax3_der1 = ax3_main.twinx()
-        # 副Y轴2：用于显示二阶导数
-        ax3_der2 = ax3_main.twinx()
-        # 调整副Y轴2的位置，避免与副Y轴1重叠
-        ax3_der2.spines['right'].set_position(('outward', 60))
-
-        # 绘制原始信号（安全检查）
-        if view_start < view_end and view_start >= 0 and view_end <= len(self.time_data):
-            # 绘制原始信号（主Y轴）
-            line1 = ax3_main.plot(self.time_data[view_start:view_end],
-                                  self.signal_data[view_start:view_end],
-                                  'b-', linewidth=2, label='原始信号')
-
-            # 绘制导数（安全检查）
-            if len(dy) >= view_end and len(d2y) >= view_end:
-                # 绘制一阶导数（副Y轴1）
-                line2 = ax3_der1.plot(self.time_data[view_start:view_end],
-                                      dy[view_start:view_end],
-                                      'r-', linewidth=0.5, label='一阶导数')
-                # 绘制二阶导数（副Y轴2）
-                line3 = ax3_der2.plot(self.time_data[view_start:view_end],
-                                      d2y[view_start:view_end],
-                                      'g-', linewidth=0.5, label='二阶导数')
-
-        # 绘制零线
-        ax3_der1.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
-        ax3_der2.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
-
-        # 标记峰值（安全检查）
-        if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
-            peak_marker = ax3_main.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
-                                           color='darkred', s=150, marker='*', zorder=6,
-                                           label=f'峰值(峰{peak_index + 1})')
-
-        # 绘制边界线
-        if 0 <= safe_left < len(self.time_data):
-            left_line = ax3_main.axvline(x=self.time_data[safe_left], color='orange', linestyle='--',
-                                         linewidth=1, label='左边界')
-        if 0 <= safe_right < len(self.time_data):
-            right_line = ax3_main.axvline(x=self.time_data[safe_right], color='orange', linestyle='--',
-                                          linewidth=1, label='右边界')
-
-        # 设置轴标签和颜色
-        ax3_main.set_title('步骤3: 导数计算与边界识别（整个区域）', fontsize=16)
-        ax3_main.set_xlabel('Elution Time (min)', fontsize=14)
-        ax3_main.set_ylabel('Detector Response', fontsize=14, color='b')
-        ax3_der1.set_ylabel('一阶导数', fontsize=14, color='r')
-        ax3_der2.set_ylabel('二阶导数', fontsize=14, color='g')
-
-        # 设置轴刻度颜色
-        ax3_main.tick_params(axis='y', labelcolor='b')
-        ax3_der1.tick_params(axis='y', labelcolor='r')
-        ax3_der2.tick_params(axis='y', labelcolor='g')
-
-        # 合并图例
-        lines = line1 + line2 + line3
-        labels = [line.get_label() for line in lines]
-
-        # 添加峰值标记、边界线和填充区域到图例
-        if 'peak_marker' in locals():
-            lines.append(peak_marker)
-            labels.append(peak_marker.get_label())
-        if 'left_line' in locals():
-            lines.append(left_line)
-            labels.append(left_line.get_label())
-
-        ax3_main.legend(lines, labels, fontsize=10, loc='best')
-
-        ax3_main.grid(True, linestyle='--', alpha=0.7)
-
-        # 图4: 最终峰区域识别结果
-        ax4.plot(self.time_data, self.signal_data, 'b-', linewidth=2, label='原始信号')
-
-        # 绘制基线
-        baseline = self.get_bound_baseline(safe_left, safe_right)
-        ax4.plot(self.time_data[safe_left:safe_right + 1], baseline, 'g-', linewidth=2, label='基线')
-
-        # 高亮显示识别的峰区域（安全检查）
-        if safe_left <= safe_right and safe_right < len(self.time_data):
-            ax4.fill_between(
-                self.time_data[safe_left:safe_right + 1],
-                baseline,
-                self.signal_data[safe_left:safe_right + 1],
-                color='lightgreen', alpha=0.5, label='识别的峰区域'
-            )
-
-        # 标记边界（安全检查）
-        if 0 <= safe_left < len(self.time_data):
-            ax4.axvline(x=self.time_data[safe_left], color='red', linestyle='--',
-                        linewidth=2, label='左边界')
-        if 0 <= safe_right < len(self.time_data):
-            ax4.axvline(x=self.time_data[safe_right], color='red', linestyle='--',
-                        linewidth=2, label='右边界')
-
-        # 标记当前分析的峰值（安全检查）
-        if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
-            ax4.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
-                        color='darkred', s=150, marker='*', zorder=6,
-                        label=f'当前分析峰值(峰{peak_index + 1})')
-
-        # 添加峰信息文本（安全检查）
         try:
-            if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data) and 0 <= safe_left < len(
-                    self.time_data) and 0 <= safe_right < len(self.time_data):
-                peak_summary = self.get_peak_summary(peak_index, safe_left, safe_right)
-                ax4.text(0.02, 0.02, peak_summary, transform=ax4.transAxes, fontsize=12,
-                         verticalalignment='bottom', bbox=dict(boxstyle='round',
-                                                               facecolor='wheat', alpha=0.5))
-        except Exception as e:
-            print(f"添加峰信息文本时出错: {e}")
+            ax1, ax2, ax3, ax4 = axes.flatten()
 
-        ax4.set_title('步骤4: 峰区域识别结果', fontsize=16)
-        ax4.set_xlabel('Elution Time (min)', fontsize=14)
-        ax4.set_ylabel('Detector Response', fontsize=14)
-        ax4.legend(fontsize=12, loc='upper right')
-        ax4.grid(True, linestyle='--', alpha=0.7)
+            # 图1: 原始信号和检测到的所有峰值
+            ax1.plot(self.time_data, self.signal_data, 'b-', linewidth=2, label='原始信号')
+            # 确保peak_times和peak_heights有效且长度匹配
+            if len(peak_times) > 0 and len(peak_heights) > 0 and len(peak_times) == len(peak_heights):
+                ax1.scatter(peak_times, peak_heights, color='red', s=100, marker='o', zorder=5,
+                            label='检测到的峰值')
+            # 标记当前分析的峰值（安全检查）
+            if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
+                ax1.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
+                            color='darkred', s=150, marker='*', zorder=6,
+                            label=f'当前分析峰值(峰{peak_index + 1})')
+            ax1.set_title('步骤1: 原始信号与峰值检测', fontsize=16)
+            ax1.set_xlabel('Elution Time (min)', fontsize=14)
+            ax1.set_ylabel('Detector Response', fontsize=14)
+            ax1.legend(fontsize=12, loc='best')
+            ax1.grid(True, linestyle='--', alpha=0.7)
 
-        # 添加总标题和模式信息
-        # 从类属性获取sample_name，如果没有则使用默认值
-        sample_name = getattr(self, 'sample_name', 'GPC样品')
-        if detect_mode == 'manual':
-            plt.suptitle(
-                f'GPC数据峰值检测完整过程 - {sample_name} (手动模式: {manual_interval[0]:.2f}-{manual_interval[1]:.2f} min)',
-                fontsize=20, fontweight='bold')
-        else:
-            plt.suptitle(f'GPC数据峰值检测完整过程 - {sample_name} (自动模式)',
-                         fontsize=20, fontweight='bold')
-        plt.tight_layout(rect=[0, 0, 1, 0.97])
-        # 处理输出目录
-        if save_path is None:
-            save_path = os.path.join(self.output_dir, f"{self.sample_name}_peak_detect.png")
-        # 保存图像
-        plt.tight_layout()
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close(fig)
+            window_size = max(5, int(len(self.signal_data) * 0.05))
+            origin_baseline = minimum_filter1d(self.signal_data, size=window_size, mode='reflect')
+
+            # 图2: 基线计算
+            ax2.plot(self.time_data, self.signal_data, 'b-', linewidth=2, label='原始信号')
+            ax2.plot(self.time_data, origin_baseline, 'g-', linewidth=2, label='计算基线')
+            # 填充基线以上区域
+            ax2.fill_between(self.time_data, origin_baseline, self.signal_data,
+                             color='lightblue', alpha=0.3, label='基线以上信号')
+            # 标记当前分析的峰值（安全检查）
+            if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
+                ax2.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
+                            color='darkred', s=150, marker='*', zorder=6,
+                            label=f'当前分析峰值(峰{peak_index + 1})')
+            ax2.set_title('步骤2: 基线计算', fontsize=16)
+            ax2.set_xlabel('Elution Time (min)', fontsize=14)
+            ax2.set_ylabel('Detector Response', fontsize=14)
+            ax2.legend(fontsize=12, loc='best')
+            ax2.grid(True, linestyle='--', alpha=0.7)
+
+            # 图3: 导数计算和边界识别（整个区域）
+            # 计算导数
+            dy = np.gradient(self.signal_data, 2)
+            d2y = np.gradient(dy, 2)
+
+            # 显示整个信号区域
+            view_start = 0
+            view_end = len(self.time_data)
+
+            # 创建多Y轴
+            ax3_main = ax3
+
+            # 副Y轴1：用于显示一阶导数
+            ax3_der1 = ax3_main.twinx()
+            # 副Y轴2：用于显示二阶导数
+            ax3_der2 = ax3_main.twinx()
+            # 调整副Y轴2的位置，避免与副Y轴1重叠
+            ax3_der2.spines['right'].set_position(('outward', 60))
+
+            # 绘制原始信号（安全检查）
+            if view_start < view_end and view_start >= 0 and view_end <= len(self.time_data):
+                # 绘制原始信号（主Y轴）
+                line1 = ax3_main.plot(self.time_data[view_start:view_end],
+                                      self.signal_data[view_start:view_end],
+                                      'b-', linewidth=2, label='原始信号')
+
+                # 绘制导数（安全检查）
+                if len(dy) >= view_end and len(d2y) >= view_end:
+                    # 绘制一阶导数（副Y轴1）
+                    line2 = ax3_der1.plot(self.time_data[view_start:view_end],
+                                          dy[view_start:view_end],
+                                          'r-', linewidth=0.5, label='一阶导数')
+                    # 绘制二阶导数（副Y轴2）
+                    line3 = ax3_der2.plot(self.time_data[view_start:view_end],
+                                          d2y[view_start:view_end],
+                                          'g-', linewidth=0.5, label='二阶导数')
+
+            # 绘制零线
+            ax3_der1.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
+            ax3_der2.axhline(y=0, color='gray', linestyle='-', alpha=0.3)
+
+            # 标记峰值（安全检查）
+            if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
+                peak_marker = ax3_main.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
+                                               color='darkred', s=150, marker='*', zorder=6,
+                                               label=f'峰值(峰{peak_index + 1})')
+
+            # 绘制边界线
+            if 0 <= safe_left < len(self.time_data):
+                left_line = ax3_main.axvline(x=self.time_data[safe_left], color='orange', linestyle='--',
+                                             linewidth=1, label='左边界')
+            if 0 <= safe_right < len(self.time_data):
+                right_line = ax3_main.axvline(x=self.time_data[safe_right], color='orange', linestyle='--',
+                                              linewidth=1, label='右边界')
+
+            # 设置轴标签和颜色
+            ax3_main.set_title('步骤3: 导数计算与边界识别（整个区域）', fontsize=16)
+            ax3_main.set_xlabel('Elution Time (min)', fontsize=14)
+            ax3_main.set_ylabel('Detector Response', fontsize=14, color='b')
+            ax3_der1.set_ylabel('一阶导数', fontsize=14, color='r')
+            ax3_der2.set_ylabel('二阶导数', fontsize=14, color='g')
+
+            # 设置轴刻度颜色
+            ax3_main.tick_params(axis='y', labelcolor='b')
+            ax3_der1.tick_params(axis='y', labelcolor='r')
+            ax3_der2.tick_params(axis='y', labelcolor='g')
+
+            # 合并图例
+            lines = line1 + line2 + line3
+            labels = [line.get_label() for line in lines]
+
+            # 添加峰值标记、边界线和填充区域到图例
+            if 'peak_marker' in locals():
+                lines.append(peak_marker)
+                labels.append(peak_marker.get_label())
+            if 'left_line' in locals():
+                lines.append(left_line)
+                labels.append(left_line.get_label())
+
+            ax3_main.legend(lines, labels, fontsize=10, loc='best')
+
+            ax3_main.grid(True, linestyle='--', alpha=0.7)
+
+            # 图4: 最终峰区域识别结果
+            ax4.plot(self.time_data, self.signal_data, 'b-', linewidth=2, label='原始信号')
+
+            # 绘制基线
+            baseline = self.get_bound_baseline(safe_left, safe_right)
+            ax4.plot(self.time_data[safe_left:safe_right + 1], baseline, 'g-', linewidth=2, label='基线')
+
+            # 高亮显示识别的峰区域（安全检查）
+            if safe_left <= safe_right and safe_right < len(self.time_data):
+                ax4.fill_between(
+                    self.time_data[safe_left:safe_right + 1],
+                    baseline,
+                    self.signal_data[safe_left:safe_right + 1],
+                    color='lightgreen', alpha=0.5, label='识别的峰区域'
+                )
+
+            # 标记边界（安全检查）
+            if 0 <= safe_left < len(self.time_data):
+                ax4.axvline(x=self.time_data[safe_left], color='red', linestyle='--',
+                            linewidth=2, label='左边界')
+            if 0 <= safe_right < len(self.time_data):
+                ax4.axvline(x=self.time_data[safe_right], color='red', linestyle='--',
+                            linewidth=2, label='右边界')
+
+            # 标记当前分析的峰值（安全检查）
+            if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data):
+                ax4.scatter(self.time_data[peak_idx], self.signal_data[peak_idx],
+                            color='darkred', s=150, marker='*', zorder=6,
+                            label=f'当前分析峰值(峰{peak_index + 1})')
+
+            # 添加峰信息文本（安全检查）
+            try:
+                if 0 <= peak_idx < len(self.time_data) and 0 <= peak_idx < len(self.signal_data) and 0 <= safe_left < len(
+                        self.time_data) and 0 <= safe_right < len(self.time_data):
+                    peak_summary = self.get_peak_summary(peak_index, safe_left, safe_right)
+                    ax4.text(0.02, 0.02, peak_summary, transform=ax4.transAxes, fontsize=12,
+                             verticalalignment='bottom', bbox=dict(boxstyle='round',
+                                                                   facecolor='wheat', alpha=0.5))
+            except Exception as e:
+                print(f"添加峰信息文本时出错: {e}")
+
+            ax4.set_title('步骤4: 峰区域识别结果', fontsize=16)
+            ax4.set_xlabel('Elution Time (min)', fontsize=14)
+            ax4.set_ylabel('Detector Response', fontsize=14)
+            ax4.legend(fontsize=12, loc='upper right')
+            ax4.grid(True, linestyle='--', alpha=0.7)
+
+            # 添加总标题和模式信息
+            # 从类属性获取sample_name，如果没有则使用默认值
+            sample_name = getattr(self, 'sample_name', 'GPC样品')
+            if detect_mode == 'manual':
+                fig.suptitle(
+                    f'GPC数据峰值检测完整过程 - {sample_name} (手动模式: {manual_interval[0]:.2f}-{manual_interval[1]:.2f} min)',
+                    fontsize=20, fontweight='bold')
+            else:
+                fig.suptitle(f'GPC数据峰值检测完整过程 - {sample_name} (自动模式)',
+                             fontsize=20, fontweight='bold')
+            fig.tight_layout(rect=[0, 0, 1, 0.97])
+            # 处理输出目录
+            if save_path is None:
+                save_path = os.path.join(self.output_dir, f"{self.sample_name}_peak_detect.png")
+            # 保存图像
+            fig.tight_layout()
+            fig.savefig(save_path, dpi=300, bbox_inches='tight')
+        finally:
+            plt.close(fig)
         logger.info(f"GPC数据峰值检测过程图已保存到 {save_path}")
 
     def get_peak_detect_plot(
