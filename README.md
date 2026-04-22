@@ -2,266 +2,281 @@
 
 ## 项目简介
 
-Spec Agent 是一个面向谱图分析场景的智能分析平台，提供任务提交、异步执行、结果查询、报告查看、问答对话、批量验收和 NMR 预测等能力。
+Spec Agent 是一个面向表征实验谱图的智能解析与分析平台，当前已从原 Streamlit Demo 形态迁移为 **FastAPI 后端 + Vue 前端** 的前后端分离工程。
 
-当前项目采用前后端分离架构：
+项目远程仓库仍复用原仓库：
 
-- 后端基于 **FastAPI + Celery + MongoDB + RabbitMQ** 提供 API、任务调度与结果持久化能力。
-- 前端基于 **Vue 3 + Vite + Element Plus** 提供任务管理、分析结果查看和工具化交互界面。
-- 算法与分析能力主要位于 `backend/analysis`、`backend/agents`、`backend/services`。
+- GitHub：`git@github.com:SynlysAI/Spec_Agent.git`
+- 当前重构主线远程分支：`origin/develop-vue`
 
-支持的主要分析/工具能力：
+本地当前分支可能仍为 `master`，如需跟随远程重构主线，可基于团队协作约定切换或建立本地跟踪分支。
 
-- GPC 任务分析
-- NMR 任务分析
-- IR 任务分析
-- Raman 任务分析
-- LCMS 任务分析
+当前系统提供以下能力：
+
+- GPC、NMR、IR、Raman、LCMS 谱图任务提交、异步执行、状态查询与结果查看
+- 任务产物管理，包括报告、图片、JSON、CSV、PDF 等输出文件访问
 - 报告问答对话
-- NMRServer 正向/反向/检索工具
-- 批量验收测试与 Markdown 报告下载
-- 实验室共享目录数据采集与样本主档管理
+- NMRServer 正向预测、反向预测与数据库搜索
+- 拉曼光谱仪批量采集
+- 批量验收运行、历史查询与 Markdown 报告下载
+- 实验室共享目录数据采集、样本主档管理与分子资产统计
+- 谱图预览、化学结构图与官能团图辅助展示
 
 ---
 
-## 技术栈总览
+## 技术栈
 
 ### 后端
 
-- FastAPI：API 服务入口，见 `backend/app/main.py`
-- Celery：异步任务执行，见 `backend/app/worker/celery_app.py`
-- MongoDB：任务、结果、文件元数据存储，见 `backend/app/infra/mongo.py`
-- MongoDB：同时承载实验采集批次、样本主档与样本文件清单
-- RabbitMQ：Celery Broker，见 `backend/app/core/config.py`
-- Python 分析模块：位于 `backend/analysis`、`backend/agents`、`backend/services`
+- FastAPI：HTTP API 服务，入口为 `backend/app/main.py`
+- Celery：异步任务执行，入口为 `backend/app/worker/celery_app.py`
+- RabbitMQ：Celery Broker
+- MongoDB：任务、结果、文件元数据、实验采集批次与样本主档存储
+- Pydantic：接口请求与响应模型
+- Python 分析模块：主线位于 `backend/app/modules`、`backend/app/services`、`backend/resources`
 
 ### 前端
 
-- Vue 3：应用框架，见 `frontend/src/main.js`
-- Vue Router：页面路由，见 `frontend/src/router/index.js`
-- Element Plus：UI 组件库
-- Axios：API 调用封装，见 `frontend/src/api/specAgentApi.js`
-- ECharts：谱图与图表展示
-- JSZip：NMR 文件夹前端打包上传能力
+- Vue 3
+- Vite
+- Vue Router
+- Element Plus
+- Axios
+- ECharts
+- JSZip
 
 ---
 
-## 系统架构与任务链路
-
-### 整体架构
+## 系统架构
 
 ```text
-前端 Vue 页面
+Vue 前端页面
     ↓
-FastAPI API（/api/v1）
+Axios API Client
     ↓
-TaskService 创建任务并写入 MongoDB
+FastAPI /api/v1
     ↓
-Celery 投递到 RabbitMQ 队列
+Service 层创建任务并写入 MongoDB
     ↓
-Worker 执行分析任务
+Celery 投递任务到 RabbitMQ
     ↓
-分析结果写入 MongoDB / 输出文件写入 outputs/
+Worker 执行谱图分析流程
     ↓
-前端轮询状态并读取结果、产物、报告
+结果写入 MongoDB，产物写入 .runtime/outputs
+    ↓
+前端轮询任务状态并展示结果、报告和产物
 ```
 
-### 后端关键入口
+关键入口：
 
-- 应用入口：`backend/app/main.py:17`
-- 路由聚合：`backend/app/api/v1/router.py:16`
-- 任务服务：`backend/app/services/task_service.py:26`
-- Worker 执行主逻辑：`backend/app/worker/tasks.py:246`
-
-### 前端关键入口
-
-- 应用启动：`frontend/src/main.js:1`
-- 应用壳层：`frontend/src/App.vue:1`
-- 路由定义：`frontend/src/router/index.js:13`
-- API 封装：`frontend/src/api/specAgentApi.js:3`
+- 后端应用入口：`backend/app/main.py`
+- 后端路由聚合：`backend/app/api/v1/router.py`
+- 后端配置：`backend/app/core/config.py`
+- Celery 应用：`backend/app/worker/celery_app.py`
+- Celery 任务：`backend/app/worker/tasks.py`
+- 前端入口：`frontend/src/main.js`
+- 前端路由：`frontend/src/router/index.js`
+- 前端 API 封装：`frontend/src/api/specAgentApi.js`
 
 ---
 
-## 目录结构说明
+## 目录结构
 
 ```text
 Spec_Agent/
-├─ backend/                  # 后端服务、任务执行、算法与脚本
-│  ├─ app/                   # FastAPI 应用主干
-│  │  ├─ api/v1/endpoints/   # 各业务接口
-│  │  ├─ core/               # 配置
-│  │  ├─ infra/              # Mongo 等基础设施
-│  │  ├─ models/             # Pydantic 数据模型
-│  │  ├─ services/           # 业务服务层
-│  │  └─ worker/             # Celery Worker
-│  ├─ agents/                # 分析流程编排
-│  ├─ analysis/              # 算法实现、模型权重、数据资源
-│  ├─ config/                # 业务配置
-│  ├─ scripts/               # OpenAPI 导出、回归脚本
-│  ├─ requirements.txt       # Python 依赖
-│  └─ README.md              # 后端局部说明
-├─ frontend/                 # Vue 前端
+├─ backend/
+│  ├─ app/
+│  │  ├─ api/v1/endpoints/      # FastAPI 接口
+│  │  ├─ core/                  # 配置与日志
+│  │  ├─ infra/                 # MongoDB 与仓储封装
+│  │  ├─ modules/               # 谱图业务模块主线实现
+│  │  ├─ schemas/               # 接口 Schema
+│  │  ├─ services/              # 应用服务层
+│  │  └─ worker/                # Celery Worker
+│  ├─ resources/
+│  │  ├─ config/                # acceptance、lab_collectors 等配置
+│  │  └─ raman/                 # IR/Raman 模型、数据库与 tokenizer 资源
+│  ├─ scripts/                  # OpenAPI 导出、回归脚本
+│  ├─ logs/                     # 后端运行日志，默认自动创建
+│  ├─ requirements.txt
+│  └─ README.md
+├─ frontend/
 │  ├─ src/
-│  │  ├─ api/                # Axios API 封装
-│  │  ├─ components/         # 通用组件
-│  │  ├─ router/             # 路由定义
-│  │  ├─ views/              # 页面视图
-│  │  ├─ App.vue             # 应用壳层
-│  │  └─ main.js             # 启动入口
-│  └─ package.json           # 前端依赖与脚本
-├─ uploads/                  # 上传输入文件目录
-├─ outputs/                  # 任务输出产物、报告目录
-└─ API草案-v1.md             # 接口设计草案
+│  │  ├─ api/                   # Axios API 封装
+│  │  ├─ components/            # 通用图表与展示组件
+│  │  ├─ router/                # Vue Router 路由
+│  │  ├─ views/                 # 页面视图
+│  │  ├─ App.vue
+│  │  └─ main.js
+│  └─ package.json
+├─ .runtime/
+│  ├─ uploads/                  # 默认上传文件目录
+│  └─ outputs/                  # 默认任务输出目录
+├─ docs/
+├─ scripts/
+├─ AGENTS.md
+├─ 重构验收进度表.md
+└─ README.md
 ```
+
+说明：
+
+- `.runtime/uploads` 与 `.runtime/outputs` 是当前默认运行时目录。
+- 根目录 `uploads/`、`outputs/` 如存在，多为历史或临时兼容目录，不应作为新功能默认依赖。
+- `backend/resources` 存放正式运行所需资源配置，部署时需要随后端一起发布。
+- 当前目标是完全独立部署，不再依赖源项目 `E:\github_project\Spec_Agent` 的运行时导入路径。
 
 ---
 
 ## 环境准备
 
-建议本地准备以下基础环境：
+建议准备：
 
+- Conda 环境：`Spec_Agent`
 - Python 3.10+
 - Node.js 18+
 - MongoDB
 - RabbitMQ
 
-如果使用 Conda，可为后端单独准备一个虚拟环境。
+项目约定后端运行前激活环境：
+
+```powershell
+conda activate Spec_Agent
+```
 
 ---
 
-## 后端安装与启动
-
-后端已有基础启动说明，见 `backend/README.md:3`。
+## 后端启动
 
 ### 1. 安装依赖
 
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/backend
 conda activate Spec_Agent
 pip install -r requirements.txt
 ```
 
-### 2. 启动 API 服务
+### 2. 配置环境变量
 
-```bash
+复制并按实际环境修改：
+
+```powershell
+cd E:/xx_project/Spec_Agent/backend
+Copy-Item .env.example .env
+```
+
+后端会自动加载 `backend/.env`。
+
+### 3. 启动 API 服务
+
+```powershell
 cd E:/xx_project/Spec_Agent/backend
 conda activate Spec_Agent
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 3. 启动 Celery Worker
+### 4. 启动 Celery Worker
 
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/backend
 conda activate Spec_Agent
 python -m celery -A app.worker.celery_app:celery_app worker --loglevel=info -Q spec_agent -P solo
 ```
 
-推荐使用 `python -m celery` 形式，避免 Windows 下 `celery.exe` 入口脚本的模块路径差异问题。
+Windows 下推荐使用 `python -m celery`，避免 `celery.exe` 入口脚本带来的模块路径差异。
 
-### 4. 接口文档
+### 5. 打开接口文档
 
-后端应用默认提供 Swagger 文档；前端“接口文档”菜单会直接打开：
-
-- `http://127.0.0.1:8000/docs`
-
-前端该入口见 `frontend/src/App.vue:42`。
+```text
+http://127.0.0.1:8000/docs
+```
 
 ---
 
-## 前端安装与启动
-
-前端启动脚本定义在 `frontend/package.json:6`。
+## 前端启动
 
 ### 1. 安装依赖
 
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/frontend
 npm install
 ```
 
-### 2. 启动开发环境
+### 2. 启动开发服务
 
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/frontend
 npm run dev
 ```
 
 ### 3. 构建生产包
 
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/frontend
 npm run build
 ```
 
 ### 4. 本地预览构建产物
 
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/frontend
 npm run preview
 ```
 
 ---
 
-## 环境变量说明
+## 环境变量
 
-后端通过 `backend/app/core/config.py:11` 自动加载 `backend/.env`，变量样例可参考 `backend/.env.example:1`。
+后端核心配置位于 `backend/app/core/config.py`，默认加载 `backend/.env`。
 
-### 核心变量
+| 变量名 | 说明 | 默认值                         |
+| --- | --- |-----------------------------|
+| `APP_ENV` | 运行环境 | `dev`                       |
+| `MONGODB_HOST` | MongoDB 主机 | `{工作站IP}`                 |
+| `MONGODB_PORT` | MongoDB 端口 | `27017`                     |
+| `MONGODB_USERNAME` | MongoDB 用户名 | 空                           |
+| `MONGODB_PASSWORD` | MongoDB 密码 | 空                           |
+| `MONGODB_DATABASE` | MongoDB 数据库 | `spec_agent`                |
+| `RABBITMQ_HOST` | RabbitMQ 主机 | `{工作站IP}`                 |
+| `RABBITMQ_PORT` | RabbitMQ 端口 | `5672`                      |
+| `RABBITMQ_USERNAME` | RabbitMQ 用户名 | `guest`                     |
+| `RABBITMQ_PASSWORD` | RabbitMQ 密码 | `guest`                     |
+| `RABBITMQ_VHOST` | RabbitMQ vhost | `/`                         |
+| `CELERY_TASK_QUEUE` | Celery 队列名 | `spec_agent`                |
+| `NMR_SERVER_BASE_URL` | NMRServer 服务地址 | `http://{工作站IP}:8080`     |
+| `LCMS_INFER_URL` | LCMS 推理服务地址 | `http://{工作站IP}:9999/infer` |
+| `LLM_MODEL` | 问答模型名称 | `deepseek-chat`             |
+| `LLM_API_KEY` | LLM API Key | 空                           |
+| `LLM_BASE_URL` | LLM API 地址 | `https://api.agicto.cn/v1`  |
+| `SPEC_AGENT_RUNTIME_ROOT` | 运行时根目录 | `.runtime`                  |
+| `SPEC_AGENT_UPLOAD_ROOT` | 上传目录 | `.runtime/uploads`          |
+| `SPEC_AGENT_OUTPUT_ROOT` | 输出目录 | `.runtime/outputs`          |
+| `SPEC_AGENT_LOG_ROOT` | 日志目录 | `backend/logs`              |
+| `SPECTRUM_FILES_ROOT` | 谱图样本根目录 | `sample_data`               |
+
+前端 API 地址：
 
 | 变量名 | 说明 |
 | --- | --- |
-| `APP_ENV` | 运行环境标记，默认 `dev` |
-| `MONGODB_HOST` | MongoDB 主机 |
-| `MONGODB_PORT` | MongoDB 端口 |
-| `MONGODB_USERNAME` | MongoDB 用户名 |
-| `MONGODB_PASSWORD` | MongoDB 密码 |
-| `MONGODB_DATABASE` | MongoDB 数据库名 |
-| `RABBITMQ_HOST` | RabbitMQ 主机 |
-| `RABBITMQ_PORT` | RabbitMQ 端口 |
-| `RABBITMQ_USERNAME` | RabbitMQ 用户名 |
-| `RABBITMQ_PASSWORD` | RabbitMQ 密码 |
-| `RABBITMQ_VHOST` | RabbitMQ vhost |
-| `CELERY_TASK_QUEUE` | Celery 队列名，默认 `spec_agent` |
-| `NMR_SERVER_BASE_URL` | 外部 NMRServer 服务地址 |
+| `VITE_API_BASE_URL` | 前端请求后端的 API 根地址，示例：`http://127.0.0.1:8000/api/v1` |
 
-### 后端默认目录约定
-
-以下目录由配置对象自动推导：
-
-- 上传目录：`uploads/`
-- 输出目录：`outputs/`
-- API 前缀：`/api/v1`
-
-相关代码见 `backend/app/core/config.py:24`。
-
-### 前端环境变量
-
-前端 API 基础地址定义在 `frontend/src/api/specAgentApi.js:3`：
-
-- `VITE_API_BASE_URL`
-
-若未配置，则默认使用：
-
-- `http://127.0.0.1:8000/api/v1`
-
-> 注意：`backend/.env.example` 中当前包含真实风格地址与口令示例，仅应作为格式参考，实际部署前请改为本地或正式环境配置。
+若未设置 `VITE_API_BASE_URL`，前端会按当前页面主机名自动推导 `http(s)://当前主机:8000/api/v1`。
 
 ---
 
-## 核心功能说明
+## 功能模块
 
-### 1. 工作台
+### 工作台
+
+路由：`/dashboard`
 
 页面：`frontend/src/views/DashboardView.vue`
 
-用于展示任务总览、状态分布和近期任务，作为平台首页入口。
+用于展示任务总览、状态分布、近期任务与系统入口。
 
-### 2. 任务提交
+### 任务提交
 
-路由定义见 `frontend/src/router/index.js:16`。
-
-目前包含四类任务提交页：
+路由：
 
 - `/tasks/submit/gpc`
 - `/tasks/submit/nmr`
@@ -269,306 +284,397 @@ npm run preview
 - `/tasks/submit/raman`
 - `/tasks/submit/lcms`
 
-对应页面：
+页面：
 
 - `frontend/src/views/TaskSubmitGpcView.vue`
 - `frontend/src/views/TaskSubmitNmrView.vue`
 - `frontend/src/views/TaskSubmitIrRamanView.vue`
+- `frontend/src/views/TaskSubmitLcmsView.vue`
 
-支持的输入方式包括：
+支持本地路径、目录路径、上传文件 `file_id` 等输入方式。NMR 场景支持前端通过 JSZip 对文件夹进行打包上传。
 
-- 本地文件路径
-- 本地目录路径
-- 上传文件后通过 `file_id` 复用
+### 任务中心
 
-### 3. 任务中心
+路由：`/tasks/center`
 
 页面：`frontend/src/views/TaskCenterView.vue`
 
-能力包括：
+能力：
 
-- 任务列表分页查询
-- 按状态/任务类型筛选
+- 任务分页查询
+- 按任务类型和状态筛选
 - 跳转任务详情
 
-后端接口位于：`backend/app/api/v1/endpoints/tasks.py:25`。
+### 任务详情
 
-### 4. 任务详情与产物查看
+路由：`/tasks/detail/:taskId`
 
 页面：`frontend/src/views/TaskDetailView.vue`
 
-能力包括：
+能力：
 
 - 查看任务状态
 - 查看结构化结果
 - 查看文本报告
-- 查看任务产物列表
-- 渲染图像、谱图或 JSON 结果
+- 查看输出产物
+- 渲染图片、谱图、JSON 等结果
 
-任务产物接口见：`backend/app/api/v1/endpoints/tasks.py:163`。
+### 报告问答
 
-### 5. 报告问答对话
+路由：`/dialogue`
 
 页面：`frontend/src/views/DialogueView.vue`
 
-能力包括：
+能力：
 
-- 查询分析类型列表
-- 查询历史报告列表
-- 基于报告进行问答对话
+- 查询分析类型
+- 查询历史报告
+- 基于报告内容进行问答
 
-前端调用封装见：
+### 实验数据采集
 
-- `frontend/src/api/specAgentApi.js:144`
-- `frontend/src/api/specAgentApi.js:158`
-- `frontend/src/api/specAgentApi.js:174`
+路由：`/experiments/collect`
 
-### 6. NMRServer 工具
+页面：`frontend/src/views/ExperimentCollectView.vue`
+
+能力：
+
+- 读取实验室采集配置
+- 从共享目录采集实验数据
+- 查询采集批次历史
+- 查看采集批次详情
+
+配置文件：
+
+- `backend/resources/config/lab_collectors.yaml`
+
+### 实验样本管理
+
+路由：`/experiments/samples`
+
+页面：`frontend/src/views/ExperimentSampleManageView.vue`
+
+能力：
+
+- 查询样本汇总
+- 分页查询样本主档
+- 查看样本详情
+- 删除样本
+- 查看分子资产统计
+- 手动刷新分子资产统计缓存
+
+### NMRServer 工具
+
+路由：`/tools/nmrserver`
 
 页面：`frontend/src/views/ToolNmrServerView.vue`
 
-支持三类能力：
+能力：
 
-- 正向预测
-- 反向预测
-- 数据库搜索
+- 正向预测：SMILES 到 NMR 位移预测
+- 反向预测：NMR 位移到结构候选
+- 数据库搜索：基于位移搜索匹配分子
 
-对应前端接口封装见：
+### 拉曼批量采集
 
-- `frontend/src/api/specAgentApi.js:83`
-- `frontend/src/api/specAgentApi.js:88`
-- `frontend/src/api/specAgentApi.js:93`
+路由：`/tools/raman-capture`
 
-### 7. 批量验收测试
+页面：`frontend/src/views/ToolRamanCaptureView.vue`
+
+能力：
+
+- 配置拉曼光谱仪 IP 与回调端口
+- 批量设置中心波数列表与激光功率列表
+- 调用后端接口执行采集并展示成功/失败结果
+
+### 批量验收测试
+
+路由：`/tools/acceptance`
 
 页面：`frontend/src/views/ToolAcceptanceView.vue`
 
-后端接口见 `backend/app/api/v1/endpoints/acceptance.py:23`，支持：
+能力：
 
 - 读取验收配置摘要
-- 启动验收批次（直接批量执行解析，不提交任务中心）
-- 查询批次历史
-- 查看批次状态
+- 启动批量验收
+- 查询验收历史
+- 查看验收状态与样本详情
 - 下载 Markdown 验收报告
-- 查看页内样本详情与产物链接
+
+配置文件：
+
+- `backend/resources/config/acceptance.yaml`
 
 ---
 
-## 典型使用流程
+## API 总览
 
-### 任务分析主流程
+后端 API 统一前缀：
 
-1. 启动 MongoDB、RabbitMQ、后端 API、Celery Worker、前端页面。
-2. 在左侧菜单进入对应任务提交页。
-3. 选择输入方式并填写分析参数。
-4. 提交任务后记录返回的 `task_id`。
-5. 在“任务中心”或“任务详情”页轮询任务状态。
-6. 任务成功后查看：
-   - 结构化结果
-   - 文本报告
-   - 输出产物
-7. 如任务失败，在详情中查看失败状态与错误信息。
+```text
+/api/v1
+```
 
-### 批量验收流程
-
-1. 打开“工具服务 / 批量验收测试”。
-2. 读取后端验收配置摘要。
-3. 选择谱图类型并启动批量运行。
-4. 轮询批次状态。
-5. 完成后在当前页面查看总体指标、样本详情与产物链接。
-6. 如需归档，打开历史记录或下载 Markdown 报告。
-
-### 报告问答流程
-
-1. 打开“问答对话”页面。
-2. 选择分析类型。
-3. 选择报告。
-4. 输入问题并发起请求。
-5. 查看多轮问答结果。
-
----
-
-## API 与开发辅助脚本
-
-### API 路由总览
-
-后端通过 `backend/app/api/v1/router.py:16` 聚合以下模块：
+当前路由模块：
 
 - `health`
 - `files`
 - `tasks`
-- `nmr_server`
+- `lab-collect`
+- `nmrserver`
+- `raman-capture`
 - `chemistry`
 - `spectra`
 - `dialogue`
 - `acceptance`
 
-### 已确认的核心接口
+核心接口：
 
-- `GET /api/v1/health`
-- `POST /api/v1/files/upload`
-- `GET /api/v1/tasks`
-- `POST /api/v1/tasks/gpc`
-- `POST /api/v1/tasks/nmr`
-- `POST /api/v1/tasks/ir`
-- `POST /api/v1/tasks/raman`
-- `POST /api/v1/tasks/lcms`
-- `GET /api/v1/tasks/{task_id}`
-- `GET /api/v1/tasks/{task_id}/result`
-- `GET /api/v1/tasks/{task_id}/artifacts`
-- `GET /api/v1/acceptance/config`
-- `POST /api/v1/acceptance/run`
-- `GET /api/v1/acceptance/runs`
-- `GET /api/v1/acceptance/run/{run_id}`
-- `GET /api/v1/acceptance/run/{run_id}/report`
-- `GET /api/v1/lab-collect/config`
-- `POST /api/v1/lab-collect/run`
-- `GET /api/v1/lab-collect/runs`
-- `GET /api/v1/lab-collect/run/{run_id}`
-- `GET /api/v1/lab-collect/samples`
-- `GET /api/v1/lab-collect/samples/{sample_id}`
+```text
+GET    /api/v1/health
+
+POST   /api/v1/files/upload
+
+GET    /api/v1/tasks
+POST   /api/v1/tasks/gpc
+POST   /api/v1/tasks/nmr
+POST   /api/v1/tasks/ir
+POST   /api/v1/tasks/raman
+POST   /api/v1/tasks/lcms
+GET    /api/v1/tasks/{task_id}
+GET    /api/v1/tasks/{task_id}/result
+GET    /api/v1/tasks/{task_id}/artifacts
+
+POST   /api/v1/spectra/preview
+
+POST   /api/v1/nmrserver/forward
+POST   /api/v1/nmrserver/reverse
+POST   /api/v1/nmrserver/search
+
+POST   /api/v1/raman-capture/run
+
+GET    /api/v1/dialogue/analysis-types
+GET    /api/v1/dialogue/reports
+POST   /api/v1/dialogue/chat
+
+GET    /api/v1/lab-collect/config
+POST   /api/v1/lab-collect/run
+GET    /api/v1/lab-collect/runs
+GET    /api/v1/lab-collect/run/{run_id}
+GET    /api/v1/lab-collect/samples
+GET    /api/v1/lab-collect/samples/summary
+GET    /api/v1/lab-collect/molecular-stats
+POST   /api/v1/lab-collect/molecular-stats/refresh
+GET    /api/v1/lab-collect/samples/{sample_id}
+DELETE /api/v1/lab-collect/samples/{sample_id}
+
+GET    /api/v1/acceptance/config
+POST   /api/v1/acceptance/run
+GET    /api/v1/acceptance/runs
+GET    /api/v1/acceptance/run/{run_id}
+GET    /api/v1/acceptance/run/{run_id}/report
+
+GET    /api/v1/chemistry/molecule-image
+GET    /api/v1/chemistry/function-group-image
+```
+
+---
+
+## 开发辅助脚本
 
 ### 导出 OpenAPI
 
-脚本：`backend/scripts/export_openapi.py:16`
-
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/backend
 conda activate Spec_Agent
 python scripts/export_openapi.py
 ```
 
-导出文件：
+输出：
 
-- `backend/openapi.json`
+```text
+backend/openapi.json
+```
 
-### 回归脚本
+### 执行回归脚本
 
-脚本：`backend/scripts/run_regression.py:100`
-
-```bash
+```powershell
 cd E:/xx_project/Spec_Agent/backend
 conda activate Spec_Agent
 python scripts/run_regression.py
 ```
 
-该脚本当前会执行：
+可选环境变量：
 
-- 健康检查
-- GPC 用例提交与轮询
-- NMR 用例提交与轮询
-- 结果接口检查
-
-相关环境变量：
-
-- `REG_BASE_URL`
-- `REG_GPC_PATH`
-- `REG_NMR_PATH`
+- `REG_BASE_URL`：默认 `http://127.0.0.1:8000/api/v1`
+- `REG_GPC_PATH`：GPC 回归样本路径
+- `REG_NMR_PATH`：NMR 回归样本路径
 
 ---
 
-## 测试与回归
+## 日志与运行时文件
 
-当前仓库更偏向脚本式回归验证，已明确可用入口为：
+### 日志
 
-- `backend/scripts/run_regression.py`
+默认日志目录：
 
-建议至少执行以下检查：
+```text
+backend/logs
+```
 
-### 后端检查
+常见日志：
 
-- API 能正常启动
-- `/api/v1/health` 返回成功
-- Celery Worker 能连接 RabbitMQ
-- MongoDB 可写入任务与结果
+- `backend/logs/app.log`
+- `backend/logs/error.log`
+- `backend/logs/worker.log`
 
-### 任务链路检查
+可通过 `SPEC_AGENT_LOG_ROOT` 覆盖日志目录。
 
-- 可成功提交 GPC 任务
-- 可成功提交 NMR 任务
-- 任务状态可从 `PENDING/QUEUED/RUNNING` 流转到 `SUCCESS/FAILED`
-- 结果接口与产物接口可正确返回
+### 上传文件
 
-### 前端检查
+默认目录：
 
-- 工作台可访问
-- 任务提交页可打开
-- 任务中心可查询到任务
-- 任务详情页可展示结果
-- 问答、NMRServer、批量验收页面可进入
+```text
+.runtime/uploads
+```
 
----
+文件上传后，后端会将文件元数据写入 MongoDB，并允许后续任务通过 `file_id` 复用。
 
-## 常见目录说明
+### 输出产物
 
-### `uploads/`
+默认目录：
 
-用于存放上传的原始输入文件。后端在文件上传成功后会记录文件元数据，并支持通过 `file_id` 进行后续任务提交。
+```text
+.runtime/outputs
+```
 
-### `outputs/`
+任务产物会通过 FastAPI 静态挂载暴露：
 
-用于存放任务执行产物与报告。当前任务产物查询逻辑会扫描：
+```text
+/static/outputs
+```
 
-- `outputs/tasks/{task_id}`
-
-对应代码见：`backend/app/services/task_service.py:191`。
-
-当前支持识别的产物类型包括：
+当前产物识别类型：
 
 - 图片：`.png`、`.jpg`、`.jpeg`、`.svg`
 - 文本：`.txt`、`.md`、`.json`、`.csv`
 - PDF：`.pdf`
-- 其他类型：归类为 `other`
-
-并通过 `/static/outputs/...` 形式暴露访问地址，见 `backend/app/main.py:33`。
+- 其他类型：`other`
 
 ---
 
-## FAQ
+## 典型使用流程
 
-### 1. 为什么任务一直停留在 `QUEUED`？
+### 谱图任务分析
+
+1. 启动 MongoDB 与 RabbitMQ。
+2. 启动后端 API。
+3. 启动 Celery Worker。
+4. 启动前端开发服务或部署前端构建产物。
+5. 在前端进入对应谱图任务提交页。
+6. 提交任务后进入任务中心或任务详情页查看状态。
+7. 任务完成后查看结构化结果、文本报告和输出产物。
+8. 如任务失败，优先查看任务详情错误信息与 Worker 日志。
+
+### 批量验收
+
+1. 打开“工具服务 / 批量验收测试”。
+2. 读取验收配置。
+3. 选择谱图类型并启动验收批次。
+4. 等待批次完成。
+5. 查看样本详情、总体指标与产物链接。
+6. 下载 Markdown 验收报告归档。
+
+### 实验室数据采集
+
+1. 配置 `backend/resources/config/lab_collectors.yaml`。
+2. 打开“实验数据 / 数据采集”。
+3. 选择采集范围并启动采集批次。
+4. 在历史记录中查看采集结果。
+5. 打开“实验数据 / 样本管理”查看样本主档与统计信息。
+
+---
+
+## 验证建议
+
+后端基础检查：
+
+- API 服务可启动
+- `/api/v1/health` 返回成功
+- Celery Worker 可连接 RabbitMQ
+- MongoDB 可正常写入任务、结果与采集数据
+
+任务链路检查：
+
+- GPC 任务可提交并完成
+- NMR 任务可提交并完成
+- IR/Raman/LCMS 任务接口可按配置调用
+- 任务状态可从 `PENDING/QUEUED/RUNNING` 流转到 `SUCCESS/FAILED`
+- 结果接口与产物接口返回正常
+
+前端检查：
+
+- 工作台可访问
+- 任务提交页可访问
+- 任务中心可查询任务
+- 任务详情可展示结果与产物
+- 报告问答、实验采集、样本管理、NMRServer、拉曼批量采集、批量验收页面可进入
+
+---
+
+## 常见问题
+
+### 任务一直停留在 `QUEUED`
 
 优先检查：
 
-- RabbitMQ 是否正常启动
-- Celery Worker 是否已启动
-- 队列名是否与 `CELERY_TASK_QUEUE` 一致
+- RabbitMQ 是否启动
+- Celery Worker 是否启动
+- Worker 队列名是否与 `CELERY_TASK_QUEUE` 一致
+- Worker 日志是否有连接或导入错误
 
-### 2. 为什么前端请求失败？
+### 前端请求失败
 
 优先检查：
 
 - 后端 API 是否启动
 - `VITE_API_BASE_URL` 是否正确
-- 浏览器访问 `/docs` 是否可打开
+- 浏览器是否能打开 `http://127.0.0.1:8000/docs`
+- 浏览器控制台是否存在跨域、网络或超时错误
 
-### 3. 为什么任务创建成功但结果为空？
+### 任务创建成功但结果为空
 
 优先检查：
 
+- Worker 是否实际执行任务
 - Worker 日志是否报错
-- MongoDB 是否成功写入 `result_ref`
-- `outputs/tasks/{task_id}` 下是否存在产物
+- MongoDB 中任务是否写入 `result_ref`
+- `.runtime/outputs` 下是否生成对应产物
 
-### 4. 为什么上传后无法通过 `file_id` 提交任务？
+### 上传后无法通过 `file_id` 提交任务
 
 优先检查：
 
-- MongoDB 中对应文件元数据是否存在
-- 上传文件是否实际落盘到 `uploads/`
-- `input_type` 是否与提交方式匹配
+- MongoDB 中是否存在文件元数据
+- 文件是否落盘到 `.runtime/uploads`
+- 提交任务时 `input_type` 与请求参数是否匹配
+
+### Git 分支和远程重构主线不一致
+
+当前远程重构分支是：
+
+```text
+origin/develop-vue
+```
+
+如果本地仍在 `master`，提交前请确认团队希望继续在本地 `master` 开发，还是切换到跟踪 `origin/develop-vue` 的本地分支。
 
 ---
 
-## 参考文件
+## 参考文档
 
-- 可优化/可重构点总结：`可优化可重构点总结.md`
-- 后端局部说明：`backend/README.md`
-- 接口草案：`API草案-v1.md`
-- 后端入口：`backend/app/main.py`
-- 路由聚合：`backend/app/api/v1/router.py`
-- 任务服务：`backend/app/services/task_service.py`
-- Worker：`backend/app/worker/tasks.py`
-- 前端入口：`frontend/src/main.js`
-- 前端路由：`frontend/src/router/index.js`
-- 前端 API：`frontend/src/api/specAgentApi.js`
+- `backend/README.md`
+- `AGENTS.md`
+- `重构验收进度表.md`
+- `可优化可重构点总结.md`
+- `任务与验收状态流转图.md`

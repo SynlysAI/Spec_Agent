@@ -260,6 +260,9 @@ function buildRequestConfig(options = {}) {
   if (options.signal) {
     config.signal = options.signal
   }
+  if (options.timeout) {
+    config.timeout = options.timeout
+  }
   return config
 }
 
@@ -319,6 +322,20 @@ export async function nmrserverReverse(payload, options = {}) {
 
 export async function nmrserverSearch(payload, options = {}) {
   const response = await apiClient.post('/nmrserver/search', payload, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 执行拉曼光谱仪批量采集。
+ *
+ * Args:
+ *   payload: 拉曼采集参数。
+ *
+ * Returns:
+ *   批量采集报告数据。
+ */
+export async function runRamanCapture(payload, options = {}) {
+  const response = await apiClient.post('/raman-capture/run', payload, buildRequestConfig(options))
   return unwrapResponse(response)
 }
 

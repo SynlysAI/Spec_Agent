@@ -11,6 +11,7 @@ from app.api.v1.endpoints.files import router as files_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.lab_collect import router as lab_collect_router
 from app.api.v1.endpoints.nmr_server import router as nmr_server_router
+from app.api.v1.endpoints.raman_capture import router as raman_capture_router
 from app.api.v1.endpoints.spectra import router as spectra_router
 from app.api.v1.endpoints.tasks import router as tasks_router
 
@@ -20,6 +21,7 @@ api_router.include_router(files_router)
 api_router.include_router(tasks_router)
 api_router.include_router(lab_collect_router)
 api_router.include_router(nmr_server_router)
+api_router.include_router(raman_capture_router)
 api_router.include_router(chemistry_router)
 api_router.include_router(spectra_router)
 api_router.include_router(dialogue_router)

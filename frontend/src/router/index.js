@@ -8,6 +8,7 @@ import TaskDetailView from '../views/TaskDetailView.vue'
 import TaskSubmitIrRamanView from '../views/TaskSubmitIrRamanView.vue'
 import TaskSubmitLcmsView from '../views/TaskSubmitLcmsView.vue'
 import ToolNmrServerView from '../views/ToolNmrServerView.vue'
+import ToolRamanCaptureView from '../views/ToolRamanCaptureView.vue'
 import DialogueView from '../views/DialogueView.vue'
 import ToolAcceptanceView from '../views/ToolAcceptanceView.vue'
 import ExperimentCollectView from '../views/ExperimentCollectView.vue'
@@ -28,6 +29,7 @@ const routes = [
   { path: '/experiments/collect', component: ExperimentCollectView },
   { path: '/experiments/samples', component: ExperimentSampleManageView },
   { path: '/tools/nmrserver', component: ToolNmrServerView },
+  { path: '/tools/raman-capture', component: ToolRamanCaptureView },
   { path: '/tools/acceptance', component: ToolAcceptanceView },
 ]
 
