@@ -1,9 +1,22 @@
-﻿:root {
-  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
-  color: #243248;
+:root {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "Segoe UI",
+    Arial, Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
+  color: #1c2128;
   background: #eef3fb;
   line-height: 1.5;
   font-weight: 400;
+  --app-font-family:
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "Segoe UI",
+    Arial, Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
+  --app-text-primary: #0f1113;
+  --app-text-strong: #1c2128;
+  --app-text-secondary: #555d69;
+  --app-text-muted: #7f8794;
+  --app-table-header: #2f3338;
+  --app-border-soft: #d7e0ec;
 }
 
 * {
@@ -16,6 +29,13 @@ body,
   margin: 0;
   width: 100%;
   min-height: 100vh;
+}
+
+body {
+  font-family: var(--app-font-family);
+  color: var(--app-text-primary);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 .app-shell {
@@ -141,7 +161,7 @@ body,
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #2a3f62;
+  color: var(--app-text-strong);
 }
 
 .panel-body {
@@ -162,13 +182,13 @@ body,
 }
 
 .stat-title {
-  color: #7e91ad;
+  color: var(--app-text-muted);
   font-size: 13px;
 }
 
 .stat-value {
   margin-top: 8px;
-  color: #1e3c6c;
+  color: var(--app-text-strong);
   font-size: 24px;
   font-weight: 700;
 }
@@ -189,10 +209,63 @@ body,
   max-height: 420px;
 }
 
+.el-input__inner,
+.el-textarea__inner,
+.el-select__selected-item,
+.el-table,
+.el-dialog,
+.el-drawer,
+.el-form-item__label,
+.el-descriptions__label,
+.el-descriptions__content,
+.el-pagination,
+.el-tag {
+  font-family: var(--app-font-family);
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  box-shadow: 0 0 0 1px var(--app-border-soft) inset;
+}
+
+.el-input__inner,
+.el-textarea__inner,
+.el-select__selected-item {
+  color: var(--app-text-primary);
+  font-weight: 500;
+}
+
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder {
+  color: var(--app-text-muted);
+}
+
+.el-form-item__label,
+.el-descriptions__label {
+  color: var(--app-text-secondary);
+}
+
+.el-table {
+  color: var(--app-text-primary);
+}
+
+.el-table th.el-table__cell {
+  color: var(--app-table-header);
+  font-weight: 600;
+}
+
+.el-table td.el-table__cell,
+.el-table .cell {
+  color: var(--app-text-primary);
+  font-weight: 500;
+}
+
 @media (max-width: 1200px) {
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
   .page-grid {
     grid-template-columns: 1fr;
   }
@@ -202,6 +275,7 @@ body,
   .app-sidebar {
     display: none;
   }
+
   .app-main {
     padding: 10px;
   }
