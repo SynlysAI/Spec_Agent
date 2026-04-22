@@ -35,7 +35,18 @@ RABBITMQ_PORT=5672
 RABBITMQ_USERNAME=admin
 RABBITMQ_PASSWORD=password123
 RABBITMQ_VHOST=/
+
+SPEC_AGENT_LOG_ROOT=E:/xx_project/Spec_Agent/backend/logs
 ```
+
+## 日志说明
+
+- 后端应用日志默认写入 `backend/logs/app.log`
+- 未捕获异常与错误日志默认写入 `backend/logs/error.log`
+- Celery Worker 日志默认写入 `backend/logs/worker.log`
+- 项目自定义日志默认仅写入文件，不额外输出到服务启动终端
+- 日志按天滚动切分，默认保留 14 天
+- 可通过 `SPEC_AGENT_LOG_ROOT` 自定义日志目录
 
 ## 已实现接口
 

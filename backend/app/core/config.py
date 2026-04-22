@@ -32,6 +32,9 @@ class Settings:
         self.outputs_root: Path = Path(
             os.getenv("SPEC_AGENT_OUTPUT_ROOT", str(self.runtime_root / "outputs"))
         )
+        self.logs_root: Path = Path(
+            os.getenv("SPEC_AGENT_LOG_ROOT", str(self.backend_root / "logs"))
+        )
         self.resources_root: Path = self.backend_root / "resources"
         self.max_upload_size_mb: int = 100
         self.api_prefix: str = "/api/v1"
@@ -99,6 +102,7 @@ class Settings:
         self.raman_tokenizer_root: Path = self.raman_resources_root / "moltokenizer"
         self.upload_root.mkdir(parents=True, exist_ok=True)
         self.outputs_root.mkdir(parents=True, exist_ok=True)
+        self.logs_root.mkdir(parents=True, exist_ok=True)
 
     @property
     def mongodb_uri(self) -> str:

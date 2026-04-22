@@ -5,5 +5,11 @@ uploads/
 outputs/
 temp_remote/
 backend/.env
-backend/analysis/raman/database/
-backend/analysis/raman/checkpoints/
+backend/resources/raman/
+.agents/
+.claude/
+.vscode/
+.playwright/
+.superpowers/
+docs/
+scripts/

@@ -17,6 +17,7 @@ import platform
 from typing import Any
 
 from app.core.config import settings
+from app.core.logging import configure_named_logger
 
 
 COMPATIBILITY_NOTE = (
@@ -37,19 +38,13 @@ def setup_matplotlib_font() -> None:
 
 def setup_logging(log_level: int = logging.INFO, logger_name: str = "spec_agent") -> logging.Logger:
     """统一日志初始化，兼容旧模块调用方式。"""
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(log_level)
-
-    if not logger.handlers:
-        stream_handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            "%(asctime)s - [%(filename)s:%(lineno)d] - %(levelname)s - %(message)s"
-        )
-        stream_handler.setFormatter(formatter)
-        logger.addHandler(stream_handler)
-        logger.propagate = False
-
-    return logger
+    filename = "worker.log" if "worker" in logger_name.lower() else "app.log"
+    return configure_named_logger(
+        logger_name,
+        filename=filename,
+        level=log_level,
+        error_filename="error.log",
+    )
 
 
 def _build_database_config() -> dict[str, Any]:
@@ -80,6 +75,7 @@ def _build_paths_config() -> dict[str, str]:
     """构建旧版路径配置兼容字典。"""
     return {
         "outputs": str(settings.outputs_root),
+        "logs": str(settings.logs_root),
         "gpc_results": str(settings.outputs_root / "gpc_results"),
         "nmr_results": str(settings.outputs_root / "nmr_results"),
         "raman_results": str(settings.outputs_root / "raman_results"),

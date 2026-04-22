@@ -1,7 +1,8 @@
-﻿"""FastAPI 应用入口。"""
+"""FastAPI 应用入口。"""
 
 from __future__ import annotations
 
+import time
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -14,6 +15,10 @@ from starlette.requests import Request
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.logging import get_logger
+
+
+APP_LOGGER = get_logger("spec_agent.app")
 
 
 def _resolve_request_id(request: Request) -> str:
@@ -55,6 +60,9 @@ def _map_http_error(status_code: int) -> tuple[int, str]:
 
 def create_app() -> FastAPI:
     """创建 FastAPI 应用实例。"""
+    global APP_LOGGER
+    APP_LOGGER = get_logger("spec_agent.app")
+
     app = FastAPI(
         title="Spec_Agent Backend",
         version="0.1.0",
@@ -67,6 +75,35 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def access_log_middleware(request: Request, call_next):
+        """记录请求访问日志。"""
+        request_id = _resolve_request_id(request)
+        started_at = time.perf_counter()
+        APP_LOGGER.info(
+            f"request started: {request.method} {request.url.path}",
+            extra={"request_id": request_id},
+        )
+        try:
+            response = await call_next(request)
+        except Exception:
+            APP_LOGGER.exception(
+                f"request failed: {request.method} {request.url.path}",
+                extra={"request_id": request_id},
+            )
+            raise
+
+        duration_ms = (time.perf_counter() - started_at) * 1000
+        response.headers["X-Request-Id"] = request_id
+        APP_LOGGER.info(
+            (
+                f"request completed: {request.method} {request.url.path} "
+                f"status={response.status_code} duration_ms={duration_ms:.2f}"
+            ),
+            extra={"request_id": request_id},
+        )
+        return response
 
     app.include_router(api_router, prefix=settings.api_prefix)
     app.mount("/static/outputs", StaticFiles(directory=settings.outputs_root), name="outputs")
@@ -87,6 +124,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         统一错误响应。
     """
     request_id = _resolve_request_id(request)
+    APP_LOGGER.warning(
+        f"request validation failed: {request.method} {request.url.path}",
+        extra={"request_id": request_id},
+    )
     return JSONResponse(
         status_code=422,
         content={
@@ -115,6 +156,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     """
     code, message = _map_http_error(exc.status_code)
     request_id = _resolve_request_id(request)
+    log_method = APP_LOGGER.warning if exc.status_code < 500 else APP_LOGGER.error
+    log_method(
+        f"http exception: {request.method} {request.url.path} status={exc.status_code}",
+        extra={"request_id": request_id},
+    )
 
     detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
     return JSONResponse(
@@ -140,6 +186,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         统一错误响应。
     """
     request_id = _resolve_request_id(request)
+    APP_LOGGER.exception(
+        f"unhandled exception: {request.method} {request.url.path}",
+        extra={"request_id": request_id},
+    )
     return JSONResponse(
         status_code=500,
         content={
