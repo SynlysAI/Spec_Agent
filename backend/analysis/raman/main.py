@@ -112,7 +112,7 @@ if __name__ == '__main__':
     # print(df['smiles'].values[66] )
     # #
 
-    txt_data = pd.read_csv(r"E:\spectrum_files\raman\spectrum\RAMAN_00078.txt", sep='\s+', header=None)
+    txt_data = pd.read_csv(r"E:\spectrum_files\raman\spectrum\RAMAN_00078.txt", sep=r'\s+', header=None)
 
     # 取第一列首尾作为输入谱图的 x0 / x1，第二列作为强度序列
     x0 = float(txt_data.iloc[0, 0])
