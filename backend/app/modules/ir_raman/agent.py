@@ -369,9 +369,10 @@ def run_ir_raman_analysis_from_file(
 ) -> Dict[str, Any]:
     """一键脚本入口：输入谱图文件与参数，返回结构化结果并可写出 Markdown 报告。"""
     x_values, y_values = _parse_spectrum_file(spectrum_file)
-    actual_x0 = float(x0)
-    actual_x1 = float(x1)
+    actual_x0 = round(float(x_values[0]), 1)
+    actual_x1 = round(float(x_values[-1]), 1)
 
+    # TODO 这里暂时没有传手动指定的有效波长范围x0和x1，后面算法中默认写死了400~4000的范围
     result = run_ir_raman_analysis(
         y_values,
         actual_x0,

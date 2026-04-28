@@ -58,6 +58,13 @@ class Settings:
         # NMRServer 外部服务配置
         self.nmr_server_base_url: str = os.getenv("NMR_SERVER_BASE_URL", "http://127.0.0.1:8080")
         self.lcms_infer_url: str = os.getenv("LCMS_INFER_URL", "http://127.0.0.1:9999/infer")
+        self.raman_capture_instrument_ip: str = os.getenv("RAMAN_CAPTURE_INSTRUMENT_IP", "47.113.220.254")
+        self.raman_capture_callback_url: str = os.getenv(
+            "RAMAN_CAPTURE_CALLBACK_URL",
+            "http://127.0.0.1:8099/raman/jy/callback",
+        )
+        self.raman_capture_submit_port: int = int(os.getenv("RAMAN_CAPTURE_SUBMIT_PORT", "7001"))
+        self.raman_capture_result_port: int = int(os.getenv("RAMAN_CAPTURE_RESULT_PORT", "7002"))
 
         # LLM 配置
         self.llm_model: str = os.getenv("LLM_MODEL", "deepseek-chat")

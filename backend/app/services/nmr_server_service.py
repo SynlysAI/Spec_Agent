@@ -132,7 +132,10 @@ class NmrServerService:
 
         payload = {
             "name": "case_reverse_predict",
-            "input_data": {"reverse_predict": reverse_predict_data},
+            "input_data": {
+                "reverse_predict": reverse_predict_data,
+                "config": {"topk": 50}
+            },
         }
         return self._post(payload)
 

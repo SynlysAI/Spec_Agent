@@ -66,19 +66,30 @@ def preprocess_spectrum(x0, x1, intensities,
                         spectype='ir',
                         transmittance=False):
     """
-    将任意波数范围和采样点数的光谱预处理为目标格式
+    将输入谱图裁剪到有效范围后重采样为模型所需的固定倒序点列。
 
-    处理逻辑：
-    1. 超出目标范围的部分直接截断丢弃
-    2. 不足目标范围的部分在两边补零
-    3. 使用线性插值进行重采样
+    Args:
+        x0: 输入谱图第一行对应的 x 值。
+        x1: 输入谱图最后一行对应的 x 值。
+        intensities: 输入谱图 y 值序列。
+        target_range: 算法固定使用的有效 x 范围。
+        target_points: 模型要求的固定采样点数。
+        spectype: 光谱类型，支持 ``ir`` 或 ``raman``。
+        transmittance: IR 模式下是否先将透射率转换为吸光度。
+
+    Returns:
+        形状为 ``(1, 1, target_points)`` 的倒序光谱张量。
     """
-    intensities = np.array(intensities)
+    intensities = np.asarray(intensities, dtype=np.float32).reshape(-1)
+    if intensities.size == 0:
+        raise ValueError("输入光谱强度不能为空")
 
     # 把透射率转换为吸光度
     if spectype == 'ir' and transmittance:
         intensities = -np.log10(np.clip(intensities, 0.01, 100) / 100)  # 设置最小0.01%透射率
-    intensities = intensities / intensities.max(-1)
+    max_intensity = np.max(intensities)
+    if max_intensity > 0:
+        intensities = intensities / max_intensity
     target_min, target_max = target_range
     wavenumbers = np.linspace(x0, x1, intensities.shape[-1])
 
@@ -90,28 +101,26 @@ def preprocess_spectrum(x0, x1, intensities,
     if len(wavenumbers_clipped) == 0:
         raise ValueError(f"输入光谱在目标范围 {target_range} 内没有数据")
 
-    # 2. 创建目标波数轴 (等间距) 并初始化为0（补零）
-    new_wavenumbers = np.linspace(target_min, target_max, target_points)
-    output = np.zeros(target_points)
+    # 2. 插值前统一为升序，保证 np.interp 的输入单调递增。
+    if wavenumbers_clipped[0] > wavenumbers_clipped[-1]:
+        wavenumbers_clipped = wavenumbers_clipped[::-1]
+        intensities_clipped = intensities_clipped[::-1]
 
     if len(wavenumbers_clipped) < 2:
-        return new_wavenumbers, output
-
-    # 3. 找到截断数据在目标数组中的索引位置
-    min_idx = np.searchsorted(new_wavenumbers, wavenumbers_clipped[0], side='left')
-    max_idx = np.searchsorted(new_wavenumbers, wavenumbers_clipped[-1], side='right')
-
-    min_idx = max(0, min_idx)
-    max_idx = min(target_points, max_idx)
-
-    # 4. 在有效范围内进行线性插值
-    if max_idx > min_idx:
-        output[min_idx:max_idx] = np.interp(
-            new_wavenumbers[min_idx:max_idx],
+        output = np.zeros(target_points, dtype=np.float32)
+    else:
+        # 3. 创建升序目标波数轴，范围外自动补 0。
+        new_wavenumbers = np.linspace(target_min, target_max, target_points)
+        output = np.interp(
+            new_wavenumbers,
             wavenumbers_clipped,
             intensities_clipped,
-            left=0, right=0  # 边界外补0
+            left=0.0,
+            right=0.0,
         )
+
+    # 4. 模型固定要求倒序输入，即 4000 -> 400。
+    output = output[::-1].copy()
     output = torch.FloatTensor(output)
     output = output.reshape(1, 1, output.shape[-1]) if output.dim() != 3 else output
     return output

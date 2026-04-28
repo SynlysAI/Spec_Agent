@@ -25,7 +25,7 @@ const form = reactive({
   inputMode: 'upload',
   inputPath: '',
   mode: 'function_groups',
-  k: 3,
+  k: 10,
   x0: 400,
   x1: 4000,
   transmittance: false,

@@ -2,19 +2,30 @@
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getApiErrorMessage, runRamanCapture } from '../api/specAgentApi'
+import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
 
 const loading = ref(false)
 const resultData = ref(null)
+const activeTaskId = ref('')
 
 const form = reactive({
-  instrument_ip: '10.26.15.56',
-  callback_port: 9000,
   wavenumber_text: '800.0, 850.0, 900.0',
   power_text: '10.0, 50.0, 100.0',
+  explore_time: 5,
+  integer: 1,
+  power_type: 2,
+  grating_index: 1,
 })
 
 const summary = computed(() => resultData.value?.summary || null)
 const results = computed(() => resultData.value?.results || [])
+const activeSpectrum = computed(() => {
+  if (results.value.length === 0) {
+    return null
+  }
+  const matched = results.value.find((item) => item.task_id === activeTaskId.value)
+  return matched || results.value.find((item) => item.success) || results.value[0]
+})
 
 /**
  * 将逗号分隔文本解析为数字列表。
@@ -50,6 +61,16 @@ function formatNumber(value, digits = 3) {
 }
 
 /**
+ * 处理采集明细行点击。
+ *
+ * Args:
+ *   row: 当前行数据。
+ */
+function handleResultRowClick(row) {
+  activeTaskId.value = row?.task_id || ''
+}
+
+/**
  * 提交拉曼批量采集请求。
  *
  * Returns:
@@ -59,10 +80,6 @@ async function submitCapture() {
   const wavenumberList = parseNumberList(form.wavenumber_text)
   const powerList = parseNumberList(form.power_text)
 
-  if (!form.instrument_ip.trim()) {
-    ElMessage.warning('请输入仪器 IP')
-    return
-  }
   if (wavenumberList.length === 0) {
     ElMessage.warning('请输入至少一个中心波数')
     return
@@ -77,14 +94,17 @@ async function submitCapture() {
   try {
     const data = await runRamanCapture(
       {
-        instrument_ip: form.instrument_ip.trim(),
-        callback_port: Number(form.callback_port),
         wavenumber_list: wavenumberList,
         power_list: powerList,
+        explore_time: Number(form.explore_time),
+        integer: Number(form.integer),
+        power_type: Number(form.power_type),
+        grating_index: Number(form.grating_index),
       },
       { timeout: 900000 },
     )
     resultData.value = data
+    activeTaskId.value = data.results?.[0]?.task_id || ''
     ElMessage.success(`采集完成：成功 ${data.summary?.success || 0} 个，失败 ${data.summary?.failed || 0} 个`)
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
@@ -107,12 +127,30 @@ async function submitCapture() {
               <div class="card-header">采集参数</div>
             </template>
             <el-form label-position="top">
-              <el-form-item label="仪器 IP">
-                <el-input v-model="form.instrument_ip" placeholder="例如：10.26.15.56" />
-              </el-form-item>
-              <el-form-item label="回调端口">
-                <el-input-number v-model="form.callback_port" :min="1" :max="65535" />
-              </el-form-item>
+              <el-row :gutter="12">
+                <el-col :span="12">
+                  <el-form-item label="曝光时间">
+                    <el-input-number v-model="form.explore_time" :min="0.1" :step="0.5" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="积分次数">
+                    <el-input-number v-model="form.integer" :min="1" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="12">
+                <el-col :span="12">
+                  <el-form-item label="功率类型">
+                    <el-input-number v-model="form.power_type" :min="0" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="光栅索引">
+                    <el-input-number v-model="form.grating_index" :min="0" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
               <el-form-item label="中心波数列表">
                 <el-input
                   v-model="form.wavenumber_text"
@@ -153,12 +191,28 @@ async function submitCapture() {
             <template v-else>
               <el-descriptions :column="2" border>
                 <el-descriptions-item label="仪器地址">{{ resultData.instrument_ip }}</el-descriptions-item>
-                <el-descriptions-item label="回调端口">{{ resultData.callback_port }}</el-descriptions-item>
                 <el-descriptions-item label="回调地址">{{ resultData.callback_url }}</el-descriptions-item>
+                <el-descriptions-item label="轮询间隔">{{ resultData.polling_interval_seconds }} 秒</el-descriptions-item>
+                <el-descriptions-item label="单任务超时">{{ resultData.polling_timeout_seconds }} 秒</el-descriptions-item>
                 <el-descriptions-item label="总耗时">{{ formatNumber(summary.duration_seconds) }} 秒</el-descriptions-item>
                 <el-descriptions-item label="总任务">{{ summary.total }}</el-descriptions-item>
                 <el-descriptions-item label="成功/失败">{{ summary.success }} / {{ summary.failed }}</el-descriptions-item>
               </el-descriptions>
+              <div v-if="activeSpectrum?.success" class="chart-section">
+                <SpectrumPreviewChart
+                  :x-values="activeSpectrum.x_values || []"
+                  :y-values="activeSpectrum.y_values || []"
+                  :title="`谱图预览：${activeSpectrum.wavenumber} / ${activeSpectrum.power}`"
+                  x-axis-name="波数"
+                  y-axis-name="强度"
+                />
+              </div>
+              <el-empty
+                v-else-if="resultData && !loading"
+                description="当前未选中可展示谱图，点击下方成功结果行可查看曲线"
+                :image-size="64"
+                class="chart-empty"
+              />
             </template>
           </el-card>
         </el-col>
@@ -166,10 +220,18 @@ async function submitCapture() {
 
       <el-card v-if="resultData" shadow="never" class="block-card">
         <template #header>
-          <div class="card-header">采集明细</div>
+          <div class="card-header">采集明细（点击行可切换右侧谱图）</div>
         </template>
-        <el-table :data="results" size="small" border max-height="420">
+        <el-table
+          :data="results"
+          size="small"
+          border
+          max-height="420"
+          highlight-current-row
+          @row-click="handleResultRowClick"
+        >
           <el-table-column prop="sequence" label="序号" width="80" />
+          <el-table-column prop="task_id" label="req_id" min-width="220" />
           <el-table-column prop="wavenumber" label="中心波数" width="120" />
           <el-table-column prop="power" label="激光功率" width="120" />
           <el-table-column label="状态" width="100">
@@ -190,6 +252,7 @@ async function submitCapture() {
               {{ formatNumber(scope.row.duration_seconds) }}
             </template>
           </el-table-column>
+          <el-table-column prop="response_file" label="结果文件" min-width="220" />
           <el-table-column prop="error_msg" label="错误信息" min-width="220" />
         </el-table>
       </el-card>
@@ -219,6 +282,14 @@ async function submitCapture() {
 
 .result-card {
   min-height: 360px;
+}
+
+.chart-section {
+  margin-top: 14px;
+}
+
+.chart-empty {
+  margin-top: 18px;
 }
 
 .report-preview {

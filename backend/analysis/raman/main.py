@@ -106,12 +106,19 @@ def main(spectrum, x0, x1, device, spectype='raman', mode='greedy_decode', k=3, 
 
 
 if __name__ == '__main__':
-    seed_everything(2026)
-    df = pd.read_pickle(r'E:\github_project\spec2mol\data\test.pkl')
-    spectrum = df['spectrum'].values[66]#torch.randn(1024)
-    print(df['smiles'].values[66] )
-    #
-    x0, x1 = 400, 4000
+    # seed_everything(2026)
+    # df = pd.read_pickle(r'E:\github_project\spec2mol\data\test.pkl')
+    # spectrum = df['spectrum'].values[66]#torch.randn(1024)
+    # print(df['smiles'].values[66] )
+    # #
+
+    txt_data = pd.read_csv(r"E:\spectrum_files\raman\spectrum\RAMAN_00078.txt", sep='\s+', header=None)
+
+    # 取第一列首尾作为输入谱图的 x0 / x1，第二列作为强度序列
+    x0 = float(txt_data.iloc[0, 0])
+    x1 = float(txt_data.iloc[-1, 0])
+    print(x0, x1)
+    spectrum = txt_data.iloc[:, 1].values
     # # 导出为 x, y 两列的 txt 文件
     # output_dir = r'E:\github_project\Spec_Agent'
     # output_file = os.path.join(output_dir, 'spectrum_test2.txt')
@@ -122,25 +129,25 @@ if __name__ == '__main__':
     # print(f"数据点数量: {len(spectrum)}")
 
     device = torch.device('cpu')
-    result = main(spectrum, x0=x0, x1=x1, device=device, spectype='ir', mode='function_groups',)
+    result = main(spectrum, x0=x0, x1=x1, device=device, spectype='raman', mode='retrieval',)
     print(result, 111)
 
 
     # 生成图片
-    if type(result) == dict:
-        mols = [Chem.MolFromSmiles(s) for s in result['structure']]
-        legends = [f'{result['structure'][i]}: {result['score'][i]:.4f}' for i in range(len(result['structure']))]
-    elif type(result) == list:
-        mols = [Chem.MolFromSmarts(i) for i in result]
-        legends = [None]*len(result)
-    else:
-        result = [result]
-        mols = [Chem.MolFromSmiles(s) for s in result]
-        legends = result
-    result = pd.DataFrame({
-        'structure': [mol_to_image(m) for m in mols], # 分子结构的图片
-        'legend:': legends, # 作为分子图片的配字
-    })
+    # if type(result) == dict:
+    #     mols = [Chem.MolFromSmiles(s) for s in result['structure']]
+    #     legends = [f'{result['structure'][i]}: {result['score'][i]:.4f}' for i in range(len(result['structure']))]
+    # elif type(result) == list:
+    #     mols = [Chem.MolFromSmarts(i) for i in result]
+    #     legends = [None]*len(result)
+    # else:
+    #     result = [result]
+    #     mols = [Chem.MolFromSmiles(s) for s in result]
+    #     legends = result
+    # result = pd.DataFrame({
+    #     'structure': [mol_to_image(m) for m in mols], # 分子结构的图片
+    #     'legend:': legends, # 作为分子图片的配字
+    # })
     # # 保存分子为图片：
     # i = 1
     # for m in result['structure'].values:

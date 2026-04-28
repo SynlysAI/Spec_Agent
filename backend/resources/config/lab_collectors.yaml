@@ -28,7 +28,7 @@ collectors:
   raman:
     enabled: false
     share_key: raman_lab
-    remote_root: E:/spectrum_files/remote_test/raman
+    remote_root: \\100.66.91.117\JYInstrument
     local_root: E:/spectrum_files/raman/spectrum
     sample_mode: file
     patterns:
