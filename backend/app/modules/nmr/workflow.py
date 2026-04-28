@@ -136,11 +136,25 @@ class NMRPathWorkflow:
                 "normalized_results": {},
                 "integration_regions": self._build_regions_preview(item.get("integration_regions", [])),
                 "metadata": item.get("metadata", {}),
+                "peak_annotations": [],
             }
             for k, v in (item.get("integration_results") or {}).items():
                 row["integration_results"][str(k)] = float(self._to_builtin_value(v))
             for k, v in (item.get("normalized_results") or {}).items():
                 row["normalized_results"][str(k)] = float(self._to_builtin_value(v))
+            for annotation in (item.get("peak_annotations") or []):
+                if not isinstance(annotation, dict):
+                    continue
+                row["peak_annotations"].append({
+                    "region_name": str(annotation.get("region_name", "")),
+                    "peak_role": str(annotation.get("peak_role", "")),
+                    "is_target": bool(annotation.get("is_target", False)),
+                    "peak_position": float(self._to_builtin_value(annotation.get("peak_position", 0.0))),
+                    "region_start": float(self._to_builtin_value(annotation.get("region_start", 0.0))),
+                    "region_end": float(self._to_builtin_value(annotation.get("region_end", 0.0))),
+                    "multiplet_pattern": str(annotation.get("multiplet_pattern", "")),
+                    "peak_type_label": str(annotation.get("peak_type_label", "")),
+                })
             serializable.append(row)
         return serializable
 

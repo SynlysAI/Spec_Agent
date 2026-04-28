@@ -1,0 +1,108 @@
+"""NMR 目标峰结构化导出服务。"""
+
+from __future__ import annotations
+
+import os
+from typing import Any, Iterable
+
+
+_TARGET_PATTERNS = {"s", "d", "t", "m"}
+
+
+def normalize_nucleus_type(nucleus: Any) -> str:
+    """将核类型统一为导出所需的 H/C 标记。"""
+    nucleus_text = str(nucleus or "").strip().upper().replace("<", "").replace(">", "")
+    if nucleus_text == "13C":
+        return "C"
+    return "H"
+
+
+def classify_peak_role(region_name: str, peak_type: str | None = None) -> str:
+    """根据区域名或峰类型判断峰角色。"""
+    source_text = f"{region_name} {peak_type or ''}".lower()
+    if "solvent" in source_text or "溶剂" in source_text:
+        return "solvent"
+    if "impurity" in source_text or "杂质" in source_text:
+        return "impurity"
+    if "tms" in source_text:
+        return "tms"
+    return "target"
+
+
+def simplify_multiplet_pattern(pattern: Any) -> str:
+    """将裂分模式压缩为导出所需格式。"""
+    pattern_text = str(pattern or "").strip().lower()
+    if not pattern_text:
+        return ""
+    if pattern_text in _TARGET_PATTERNS:
+        return pattern_text
+    return "m"
+
+
+def normalize_multiplet_pattern(pattern: Any) -> str:
+    """保留原始裂分模式的标准化写法。"""
+    return str(pattern or "").strip().lower()
+
+
+def build_peak_annotations(
+    integration_regions: Iterable[tuple[Any, ...]] | list[list[Any]],
+    multiplet_results: Iterable[Any] | None = None,
+) -> list[dict[str, Any]]:
+    """构建峰明细结构，供后续导出与结构化结果复用。"""
+    multiplet_list = list(multiplet_results or [])
+    annotations: list[dict[str, Any]] = []
+
+    for index, region in enumerate(integration_regions or []):
+        if not isinstance(region, (list, tuple)) or len(region) < 3:
+            continue
+
+        region_name = str(region[0])
+        start = float(region[1])
+        end = float(region[2])
+        if len(region) >= 4:
+            peak_position = float(region[3])
+        else:
+            peak_position = (start + end) / 2.0
+
+        multiplet = multiplet_list[index] if index < len(multiplet_list) else None
+        peak_type = getattr(multiplet, "peak_type", None) if multiplet is not None else None
+        peak_role = classify_peak_role(region_name, peak_type)
+        pattern = getattr(multiplet, "pattern", None) if multiplet is not None else None
+
+        annotations.append({
+            "region_name": region_name,
+            "peak_role": peak_role,
+            "is_target": peak_role == "target",
+            "peak_position": peak_position,
+            "region_start": min(start, end),
+            "region_end": max(start, end),
+            "multiplet_pattern": normalize_multiplet_pattern(pattern),
+            "peak_type_label": str(peak_type or ""),
+        })
+
+    return annotations
+
+
+def build_target_peak_export_row(sample_path: str, nmr_result: dict[str, Any]) -> dict[str, str]:
+    """将单个样品结果转换为 Excel 导出行。"""
+    metadata = nmr_result.get("metadata", {}) or {}
+    spectrum_type = normalize_nucleus_type(metadata.get("nucleus"))
+    peak_annotations = nmr_result.get("peak_annotations", []) or []
+
+    target_peaks = [item for item in peak_annotations if item.get("is_target")]
+    chemical_shifts = ",".join(f"{float(item['peak_position']):.2f}" for item in target_peaks)
+
+    split_types = ""
+    if spectrum_type == "H":
+        split_types = ",".join(
+            simplify_multiplet_pattern(item.get("multiplet_pattern"))
+            for item in target_peaks
+        )
+
+    return {
+        "文件路径": sample_path,
+        "文件名": os.path.basename(sample_path.rstrip("\\/")),
+        "所属谱类型(H/C)": spectrum_type,
+        "目标峰化学位移": chemical_shifts,
+        "峰裂分类型": split_types,
+    }
