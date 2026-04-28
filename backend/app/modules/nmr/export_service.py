@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, Iterable
 
@@ -87,6 +88,7 @@ def build_target_peak_export_row(sample_path: str, nmr_result: dict[str, Any]) -
     """将单个样品结果转换为 Excel 导出行。"""
     metadata = nmr_result.get("metadata", {}) or {}
     spectrum_type = normalize_nucleus_type(metadata.get("nucleus"))
+    solvent = str(metadata.get("solvent", "") or "")
     peak_annotations = nmr_result.get("peak_annotations", []) or []
 
     target_peaks = [item for item in peak_annotations if item.get("is_target")]
@@ -99,10 +101,21 @@ def build_target_peak_export_row(sample_path: str, nmr_result: dict[str, Any]) -
             for item in target_peaks
         )
 
+    all_peak_details = []
+    for item in peak_annotations:
+        all_peak_details.append({
+            "region_name": str(item.get("region_name", "")),
+            "peak_role": str(item.get("peak_role", "")),
+            "peak_position": round(float(item.get("peak_position", 0.0)), 4),
+            "multiplet_pattern": str(item.get("multiplet_pattern", "")),
+        })
+
     return {
         "文件路径": sample_path,
         "文件名": os.path.basename(sample_path.rstrip("\\/")),
         "所属谱类型(H/C)": spectrum_type,
+        "溶剂": solvent,
         "目标峰化学位移": chemical_shifts,
         "峰裂分类型": split_types,
+        "全部峰信息JSON": json.dumps(all_peak_details, ensure_ascii=False),
     }

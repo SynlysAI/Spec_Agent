@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from analysis.nmr.multiplet import MultipletResult
@@ -62,33 +63,38 @@ class TestNmrPeakExport(unittest.TestCase):
         row = build_target_peak_export_row(
             sample_path=r"E:\spectrum_files\nmr\偶氮砜小分子核磁原件+结构\1-H",
             nmr_result={
-                "metadata": {"nucleus": "1H"},
+                "metadata": {"nucleus": "1H", "solvent": "CDCl3"},
                 "peak_annotations": [
                     {
+                        "region_name": "【TMS-TMS】",
                         "peak_position": 0.00,
                         "peak_role": "tms",
                         "is_target": False,
                         "multiplet_pattern": "s",
                     },
                     {
+                        "region_name": "【Impurity-Water】",
                         "peak_position": 1.62,
                         "peak_role": "impurity",
                         "is_target": False,
                         "multiplet_pattern": "s",
                     },
                     {
+                        "region_name": "【目标峰】 4",
                         "peak_position": 3.19,
                         "peak_role": "target",
                         "is_target": True,
                         "multiplet_pattern": "s",
                     },
                     {
+                        "region_name": "【目标峰】 6 (dd (J=8.9, 2.1 Hz))",
                         "peak_position": 7.04,
                         "peak_role": "target",
                         "is_target": True,
                         "multiplet_pattern": "dd",
                     },
                     {
+                        "region_name": "【Solvent-Solvent (CHCl3)】",
                         "peak_position": 7.27,
                         "peak_role": "solvent",
                         "is_target": False,
@@ -100,8 +106,13 @@ class TestNmrPeakExport(unittest.TestCase):
 
         self.assertEqual(row["文件名"], "1-H")
         self.assertEqual(row["所属谱类型(H/C)"], "H")
+        self.assertEqual(row["溶剂"], "CDCl3")
         self.assertEqual(row["目标峰化学位移"], "3.19,7.04")
         self.assertEqual(row["峰裂分类型"], "s,m")
+        peaks_json = json.loads(row["全部峰信息JSON"])
+        self.assertEqual(peaks_json[0]["peak_role"], "tms")
+        self.assertEqual(peaks_json[2]["peak_position"], 3.19)
+        self.assertEqual(peaks_json[3]["multiplet_pattern"], "dd")
 
     def test_build_target_peak_export_row_leaves_carbon_split_empty(self) -> None:
         """13C 导出不应输出裂分峰类型。"""
@@ -110,21 +121,24 @@ class TestNmrPeakExport(unittest.TestCase):
         row = build_target_peak_export_row(
             sample_path=r"E:\spectrum_files\nmr\偶氮砜小分子核磁原件+结构\1-C",
             nmr_result={
-                "metadata": {"nucleus": "13C"},
+                "metadata": {"nucleus": "13C", "solvent": "CDCl3"},
                 "peak_annotations": [
                     {
+                        "region_name": "【目标峰】 1",
                         "peak_position": 34.83,
                         "peak_role": "target",
                         "is_target": True,
                         "multiplet_pattern": "s",
                     },
                     {
+                        "region_name": "【Solvent-Solvent (CDCl3)】",
                         "peak_position": 76.98,
                         "peak_role": "solvent",
                         "is_target": False,
                         "multiplet_pattern": "s",
                     },
                     {
+                        "region_name": "【目标峰】 5",
                         "peak_position": 127.37,
                         "peak_role": "target",
                         "is_target": True,
@@ -135,6 +149,7 @@ class TestNmrPeakExport(unittest.TestCase):
         )
 
         self.assertEqual(row["所属谱类型(H/C)"], "C")
+        self.assertEqual(row["溶剂"], "CDCl3")
         self.assertEqual(row["目标峰化学位移"], "34.83,127.37")
         self.assertEqual(row["峰裂分类型"], "")
 
