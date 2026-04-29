@@ -58,6 +58,27 @@ const treeProps = {
 
 const gpcRows = computed(() => structuredData.value.analysis_results || [])
 const nmrRows = computed(() => structuredData.value.nmr_results || [])
+const nmrPeakRows = computed(() => {
+  const rows = []
+  for (const sample of nmrRows.value) {
+    const peakDetails = Array.isArray(sample?.peak_details) ? sample.peak_details : []
+    for (const detail of peakDetails) {
+      rows.push({
+        sample_name: sample?.sample_name || '-',
+        peak_index: detail?.peak_index ?? '-',
+        peak_name: detail?.peak_name || '-',
+        peak_type: detail?.peak_type || '-',
+        multiplet_type: detail?.multiplet_type || '-',
+        j_values_hz: formatJValues(detail?.j_values_hz),
+        peak_position_ppm: formatNumericValue(detail?.peak_position_ppm, 4),
+        ppm_range: formatPpmRange(detail?.ppm_range),
+        integration_result: formatNumericValue(detail?.integration_result, 4),
+        normalized_result: formatNumericValue(detail?.normalized_result, 4),
+      })
+    }
+  }
+  return rows
+})
 
 const irRamanMode = computed(() => String(structuredData.value.mode || ''))
 const irRamanRawOutput = computed(() => structuredData.value.raw_output)
@@ -203,6 +224,82 @@ function toKeyValueRows(source) {
     key,
     value: typeof value === 'object' ? JSON.stringify(value) : String(value),
   }))
+}
+
+/**
+ * 格式化数值显示。
+ *
+ * Args:
+ *   value: 任意待展示值。
+ *   digits: 小数位数。
+ *
+ * Returns:
+ *   格式化后的字符串。
+ */
+function formatNumericValue(value, digits = 4) {
+  if (value === undefined || value === null || value === '') {
+    return '-'
+  }
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue.toFixed(digits) : String(value)
+}
+
+/**
+ * 格式化 J 值列表。
+ *
+ * Args:
+ *   values: J 值数组。
+ *
+ * Returns:
+ *   逗号分隔字符串。
+ */
+function formatJValues(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return '-'
+  }
+  return values.map((item) => formatNumericValue(item, 4)).join(', ')
+}
+
+/**
+ * 格式化 ppm 范围显示。
+ *
+ * Args:
+ *   values: ppm 范围数组。
+ *
+ * Returns:
+ *   范围字符串。
+ */
+function formatPpmRange(values) {
+  if (!Array.isArray(values) || values.length < 2) {
+    return '-'
+  }
+  return `${formatNumericValue(values[0], 4)} - ${formatNumericValue(values[1], 4)}`
+}
+
+/**
+ * 计算 NMR 样品名单元格合并。
+ *
+ * Args:
+ *   param: Element Plus span-method 参数。
+ *
+ * Returns:
+ *   合并行列配置。
+ */
+function nmrPeakSpanMethod({ row, column, rowIndex }) {
+  if (column.property !== 'sample_name') {
+    return { rowspan: 1, colspan: 1 }
+  }
+  if (rowIndex > 0 && nmrPeakRows.value[rowIndex - 1]?.sample_name === row.sample_name) {
+    return { rowspan: 0, colspan: 0 }
+  }
+  let rowspan = 1
+  for (let index = rowIndex + 1; index < nmrPeakRows.value.length; index += 1) {
+    if (nmrPeakRows.value[index]?.sample_name !== row.sample_name) {
+      break
+    }
+    rowspan += 1
+  }
+  return { rowspan, colspan: 1 }
 }
 
 /**
@@ -537,34 +634,17 @@ onBeforeUnmount(() => {
 
         <template v-if="isSuccess() && isNmrTask">
           <h4 style="margin: 8px 0">NMR 结果概览</h4>
-          <el-table :data="nmrRows" stripe>
-            <el-table-column prop="sample_name" label="样品名称" min-width="180" />
-            <el-table-column label="积分结果" min-width="280">
-              <template #default="scope">
-                <el-descriptions :column="1" size="small" border>
-                  <el-descriptions-item
-                    v-for="row in toKeyValueRows(scope.row.integration_results)"
-                    :key="row.key"
-                    :label="row.key"
-                  >
-                    {{ row.value }}
-                  </el-descriptions-item>
-                </el-descriptions>
-              </template>
-            </el-table-column>
-            <el-table-column label="归一化结果" min-width="280">
-              <template #default="scope">
-                <el-descriptions :column="1" size="small" border>
-                  <el-descriptions-item
-                    v-for="row in toKeyValueRows(scope.row.normalized_results)"
-                    :key="row.key"
-                    :label="row.key"
-                  >
-                    {{ row.value }}
-                  </el-descriptions-item>
-                </el-descriptions>
-              </template>
-            </el-table-column>
+          <el-table :data="nmrPeakRows" stripe :span-method="nmrPeakSpanMethod">
+            <el-table-column prop="sample_name" label="样品名称" min-width="140" />
+            <el-table-column prop="peak_index" label="峰序号" width="90" />
+            <el-table-column prop="peak_name" label="峰名称" min-width="220" />
+            <el-table-column prop="peak_type" label="峰类型" width="110" />
+            <el-table-column prop="multiplet_type" label="多重峰类型" width="110" />
+            <el-table-column prop="j_values_hz" label="J值(Hz)" min-width="140" />
+            <el-table-column prop="peak_position_ppm" label="峰ppm位置" width="120" />
+            <el-table-column prop="ppm_range" label="峰ppm范围" min-width="170" />
+            <el-table-column prop="integration_result" label="积分结果" min-width="140" />
+            <el-table-column prop="normalized_result" label="归一化结果" min-width="140" />
           </el-table>
         </template>
 

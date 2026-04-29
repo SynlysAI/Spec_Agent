@@ -169,12 +169,25 @@ class TestNmrPeakExport(unittest.TestCase):
                 "is_target": True,
                 "multiplet_pattern": "s",
             }],
+            "peak_details": [{
+                "peak_index": 1,
+                "peak_name": "【目标峰】 1",
+                "peak_type": "目标峰",
+                "multiplet_type": "s",
+                "j_values_hz": [],
+                "peak_position_ppm": 1.05,
+                "ppm_range": [1.0, 1.1],
+                "integration_result": None,
+                "normalized_result": None,
+            }],
         }]
 
         serialized = workflow._build_serializable_nmr_results(nmr_results)
 
         self.assertIn("peak_annotations", serialized[0])
         self.assertEqual(serialized[0]["peak_annotations"][0]["peak_position"], 1.05)
+        self.assertIn("peak_details", serialized[0])
+        self.assertEqual(serialized[0]["peak_details"][0]["peak_position_ppm"], 1.05)
 
 
 if __name__ == "__main__":

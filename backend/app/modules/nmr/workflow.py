@@ -137,6 +137,7 @@ class NMRPathWorkflow:
                 "integration_regions": self._build_regions_preview(item.get("integration_regions", [])),
                 "metadata": item.get("metadata", {}),
                 "peak_annotations": [],
+                "peak_details": [],
             }
             for k, v in (item.get("integration_results") or {}).items():
                 row["integration_results"][str(k)] = float(self._to_builtin_value(v))
@@ -154,6 +155,34 @@ class NMRPathWorkflow:
                     "region_end": float(self._to_builtin_value(annotation.get("region_end", 0.0))),
                     "multiplet_pattern": str(annotation.get("multiplet_pattern", "")),
                     "peak_type_label": str(annotation.get("peak_type_label", "")),
+                })
+            for detail in (item.get("peak_details") or []):
+                if not isinstance(detail, dict):
+                    continue
+                row["peak_details"].append({
+                    "peak_index": int(self._to_builtin_value(detail.get("peak_index", 0))),
+                    "peak_name": str(detail.get("peak_name", "")),
+                    "peak_type": str(detail.get("peak_type", "")),
+                    "multiplet_type": str(detail.get("multiplet_type", "")),
+                    "j_values_hz": [
+                        float(self._to_builtin_value(value))
+                        for value in (detail.get("j_values_hz") or [])
+                    ],
+                    "peak_position_ppm": float(self._to_builtin_value(detail.get("peak_position_ppm", 0.0))),
+                    "ppm_range": [
+                        float(self._to_builtin_value(value))
+                        for value in (detail.get("ppm_range") or [])
+                    ],
+                    "integration_result": (
+                        None
+                        if detail.get("integration_result") is None
+                        else float(self._to_builtin_value(detail.get("integration_result")))
+                    ),
+                    "normalized_result": (
+                        None
+                        if detail.get("normalized_result") is None
+                        else float(self._to_builtin_value(detail.get("normalized_result")))
+                    ),
                 })
             serializable.append(row)
         return serializable

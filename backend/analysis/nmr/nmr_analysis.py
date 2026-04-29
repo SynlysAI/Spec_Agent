@@ -17,6 +17,14 @@ warnings.filterwarnings("ignore", category=UserWarning, module="nmrglue.fileio.b
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="Casting complex values to real discards the imaginary part")
 
 
+def ensure_nmr_xaxis_direction(ax, ppm_scale):
+    """统一为 NMR 常见的左高右低显示。"""
+    if ax is None:
+        return
+    if not ax.xaxis_inverted():
+        ax.invert_xaxis()
+
+
 def voigt_profile(x, amp, center, sigma, gamma):
     """Voigt 峰形函数：高斯与洛伦兹的卷积"""
     # 高斯部分
@@ -249,7 +257,7 @@ def plot_nmr_spectrum(ppm_scale, data, sample_name, output_dir):
     """绘制并保存 NMR 谱图"""
     plt.figure(figsize=(12, 6))
     plt.plot(ppm_scale, data, 'b-', linewidth=0.8)
-    plt.gca().invert_xaxis()
+    ensure_nmr_xaxis_direction(plt.gca(), ppm_scale)
     plt.xlabel('δ (ppm)', fontsize=12)
     plt.ylabel('Intensity', fontsize=12)
     plt.title(f'NMR Spectrum - {sample_name}', fontsize=14)
@@ -271,7 +279,7 @@ def plot_processing_steps(ppm_scale, processing_steps, sample_name, output_dir, 
         # 1. 绘制积分区域标记
         ax = axes[0]
         ax.plot(ppm_scale, final_data, color='black', linewidth=0.8)
-        ax.invert_xaxis()
+        ensure_nmr_xaxis_direction(ax, ppm_scale)
 
         # 标记积分区域
         for region in integration_regions:
@@ -346,7 +354,7 @@ def plot_processing_steps(ppm_scale, processing_steps, sample_name, output_dir, 
                 ha='center', va='center',
                 bbox=dict(facecolor='white', alpha=0.7))
 
-        ax.invert_xaxis()
+        ensure_nmr_xaxis_direction(ax, ppm_scale)
         ax.set_xlabel('δ (ppm)', fontsize=16)
         ax.set_ylabel('强度', fontsize=16)
         ax.set_title(f'内标峰详细视图', fontsize=18)
@@ -385,7 +393,6 @@ def plot_peak_detection_overview(ppm_scale, data, sample_name, output_dir, detec
 
     peak_ax = axes[0]
     peak_ax.plot(ppm_scale, abs_data, color='black', linewidth=0.9)
-    peak_ax.invert_xaxis()
     peak_ax.set_ylabel('强度', fontsize=12)
     peak_ax.set_title(f'峰检测结果 - {sample_name}', fontsize=14)
     peak_ax.grid(linestyle=':', alpha=0.5)
@@ -409,7 +416,6 @@ def plot_peak_detection_overview(ppm_scale, data, sample_name, output_dir, detec
 
     region_ax = axes[1]
     region_ax.plot(ppm_scale, abs_data, color='black', linewidth=0.9)
-    region_ax.invert_xaxis()
     region_ax.set_xlabel('δ (ppm)', fontsize=12)
     region_ax.set_ylabel('强度', fontsize=12)
     region_ax.set_title(f'积分区域结果 - {sample_name}', fontsize=14)
@@ -428,6 +434,9 @@ def plot_peak_detection_overview(ppm_scale, data, sample_name, output_dir, detec
             region_ax.text(peak_position, np.max(abs_data[mask]) * 0.82, name,
                            fontsize=8, ha='center', va='center',
                            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+    # 该图上下子图共享 x 轴，只能统一反序一次，避免重复翻转回正。
+    ensure_nmr_xaxis_direction(region_ax, ppm_scale)
 
     fig.tight_layout()
     fig.savefig(os.path.join(output_dir, f'{sample_name}_peak_detection_overview.png'), dpi=180, bbox_inches='tight')

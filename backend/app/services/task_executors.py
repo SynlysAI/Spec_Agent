@@ -143,6 +143,8 @@ def sanitize_nmr_structured_data(structured_data: dict[str, Any]) -> dict[str, A
             "normalized_results": _to_basic(row.get("normalized_results", {})),
             "integration_regions": _to_basic(row.get("integration_regions", [])),
             "metadata": _to_basic(row.get("metadata", {})),
+            "peak_annotations": _to_basic(row.get("peak_annotations", [])),
+            "peak_details": _to_basic(row.get("peak_details", [])),
         }
         safe_results.append(safe_row)
     return {"nmr_results": safe_results, "summary_rows": _to_basic(structured_data.get("summary_rows", []))}

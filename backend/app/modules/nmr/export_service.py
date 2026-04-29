@@ -51,6 +51,17 @@ def normalize_multiplet_pattern(pattern: Any) -> str:
     return str(pattern or "").strip().lower()
 
 
+def translate_peak_role(peak_role: str) -> str:
+    """将内部峰角色转换为界面展示文案。"""
+    mapping = {
+        "target": "目标峰",
+        "tms": "TMS",
+        "impurity": "杂质",
+        "solvent": "溶剂",
+    }
+    return mapping.get(str(peak_role or "").strip().lower(), "目标峰")
+
+
 def build_peak_annotations(
     integration_regions: Iterable[tuple[Any, ...]] | list[list[Any]],
     multiplet_results: Iterable[Any] | None = None,
@@ -88,6 +99,48 @@ def build_peak_annotations(
         })
 
     return annotations
+
+
+def build_peak_details(
+    integration_regions: Iterable[tuple[Any, ...]] | list[list[Any]],
+    multiplet_results: Iterable[Any] | None = None,
+    integration_results: dict[str, Any] | None = None,
+    normalized_results: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """构建峰级明细，供前端表格与结构化结果使用。"""
+    integration_value_map = integration_results or {}
+    normalized_value_map = normalized_results or {}
+    annotations = build_peak_annotations(integration_regions, multiplet_results)
+    multiplet_list = list(multiplet_results or [])
+    details: list[dict[str, Any]] = []
+
+    for index, annotation in enumerate(annotations):
+        multiplet = multiplet_list[index] if index < len(multiplet_list) else None
+        region_name = str(annotation.get("region_name", ""))
+        pattern = normalize_multiplet_pattern(annotation.get("multiplet_pattern", ""))
+        j_values = []
+        if multiplet is not None:
+            j_values = [
+                round(float(value), 4)
+                for value in getattr(multiplet, "j_values", []) or []
+            ]
+
+        details.append({
+            "peak_index": index + 1,
+            "peak_name": region_name,
+            "peak_type": translate_peak_role(str(annotation.get("peak_role", ""))),
+            "multiplet_type": pattern,
+            "j_values_hz": j_values,
+            "peak_position_ppm": round(float(annotation.get("peak_position", 0.0)), 4),
+            "ppm_range": [
+                round(float(annotation.get("region_start", 0.0)), 4),
+                round(float(annotation.get("region_end", 0.0)), 4),
+            ],
+            "integration_result": integration_value_map.get(region_name),
+            "normalized_result": normalized_value_map.get(region_name),
+        })
+
+    return details
 
 
 def build_target_peak_export_row(sample_path: str, nmr_result: dict[str, Any]) -> dict[str, str]:

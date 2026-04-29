@@ -19,7 +19,7 @@ from analysis.nmr.peak_detection import (
     smooth_data,
 )
 from app.core.config import settings
-from app.modules.nmr.export_service import build_peak_annotations
+from app.modules.nmr.export_service import build_peak_annotations, build_peak_details
 from app.modules.common.report_service import save_text_report
 
 
@@ -342,6 +342,12 @@ def build_initial_nmr_results(peak_detection_result: dict[str, Any]) -> list[dic
             peak_detection_result["integration_regions"],
             peak_detection_result.get("multiplet_results"),
         ),
+        "peak_details": build_peak_details(
+            integration_regions=peak_detection_result["integration_regions"],
+            multiplet_results=peak_detection_result.get("multiplet_results"),
+            integration_results={},
+            normalized_results={},
+        ),
     }]
 
 
@@ -446,6 +452,12 @@ def run_integration_analysis(
         "peak_annotations": build_peak_annotations(
             peak_results.get("integration_regions", []),
             peak_results.get("multiplet_results"),
+        ),
+        "peak_details": build_peak_details(
+            integration_regions=updated_regions,
+            multiplet_results=peak_results.get("multiplet_results"),
+            integration_results=integration_results,
+            normalized_results=normalized_results,
         ),
     }]
 
