@@ -104,7 +104,7 @@ class TestNmrPeakExport(unittest.TestCase):
             },
         )
 
-        self.assertEqual(row["文件名"], "1-H")
+        self.assertEqual(row["文件名"], '="1-H"')
         self.assertEqual(row["所属谱类型(H/C)"], "H")
         self.assertEqual(row["溶剂"], "CDCl3")
         self.assertEqual(row["目标峰化学位移"], "3.19,7.04")
@@ -148,6 +148,7 @@ class TestNmrPeakExport(unittest.TestCase):
             },
         )
 
+        self.assertEqual(row["文件路径"], '="E:\\spectrum_files\\nmr\\偶氮砜小分子核磁原件+结构\\1-C"')
         self.assertEqual(row["所属谱类型(H/C)"], "C")
         self.assertEqual(row["溶剂"], "CDCl3")
         self.assertEqual(row["目标峰化学位移"], "34.83,127.37")
