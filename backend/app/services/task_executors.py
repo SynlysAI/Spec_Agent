@@ -362,7 +362,7 @@ class NmrTaskExecutor(BaseTaskExecutor):
         }
         if str(params.get("nucleus", "1H")).upper() == "13C":
             peak_detection_params.update(
-                {"threshold": 0.05, "min_distance": 1.0, "min_prominence": 0.03, "smooth_window": 11}
+                {"threshold": 0.05, "min_distance": 1.0, "min_prominence": 0.08, "smooth_window": 11}
             )
         peak_results = build_peak_detection_result(
             folder_path=nmr_folder_path,

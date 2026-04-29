@@ -345,7 +345,7 @@ def default_peak_detection_params(nucleus: str = "1H") -> Dict[str, Any]:
         return {
             "threshold": 0.05,
             "min_distance": 1.0,
-            "min_prominence": 0.03,
+            "min_prominence": 0.08,
             "width_multiplier": 1.0,
             "baseline_degree": 3,
             "smooth_window": 11,
