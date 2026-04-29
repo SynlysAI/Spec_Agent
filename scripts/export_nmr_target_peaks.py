@@ -27,8 +27,8 @@ ROOT_DIRS = [
 ]
 """待扫描的根目录列表；后续新增目录时直接在这里追加。"""
 
-OUTPUT_PATH = str(PROJECT_ROOT / "outputs" / "nmr_target_peaks.csv")
-"""导出结果路径；当前环境缺少 Excel 引擎，默认写 CSV。"""
+OUTPUT_PATH = str(PROJECT_ROOT / "outputs" / "nmr_target_peaks.xlsx")
+"""导出结果路径。"""
 
 
 def _is_loadable_nmr_sample_dir(path: Path) -> bool:
@@ -131,13 +131,6 @@ def export_nmr_target_peaks(root_dirs: list[str], output_path: str) -> tuple[pd.
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    if output_file.suffix.lower() == ".csv":
-        dataframe.to_csv(output_file, index=False, encoding="utf-8-sig")
-        if errors:
-            error_path = output_file.with_name(f"{output_file.stem}_errors.csv")
-            pd.DataFrame(errors).to_csv(error_path, index=False, encoding="utf-8-sig")
-        return dataframe, errors
-
     try:
         with pd.ExcelWriter(output_file) as writer:
             dataframe.to_excel(writer, sheet_name="目标峰汇总", index=False)
@@ -145,8 +138,7 @@ def export_nmr_target_peaks(root_dirs: list[str], output_path: str) -> tuple[pd.
                 pd.DataFrame(errors).to_excel(writer, sheet_name="异常记录", index=False)
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
-            "导出 .xlsx 需要安装 openpyxl 或 xlsxwriter；"
-            "当前可先改用 --output xxx.csv 导出。"
+            "导出 .xlsx 需要安装 openpyxl 或 xlsxwriter。"
         ) from exc
 
     return dataframe, errors
@@ -157,10 +149,7 @@ def main() -> int:
     dataframe, errors = export_nmr_target_peaks(ROOT_DIRS, OUTPUT_PATH)
     print(f"已导出 {len(dataframe)} 条记录到: {OUTPUT_PATH}")
     if errors:
-        if str(OUTPUT_PATH).lower().endswith(".csv"):
-            print(f"另有 {len(errors)} 条异常记录已写入同目录下的错误 CSV 文件。")
-        else:
-            print(f"另有 {len(errors)} 条异常记录已写入 Excel 的“异常记录”工作表。")
+        print(f"另有 {len(errors)} 条异常记录已写入 Excel 的“异常记录”工作表。")
     else:
         print("未发现异常样本。")
     return 0

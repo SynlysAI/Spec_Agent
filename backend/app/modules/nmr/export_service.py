@@ -10,12 +10,6 @@ from typing import Any, Iterable
 _TARGET_PATTERNS = {"s", "d", "t", "m"}
 
 
-def protect_csv_text(value: Any) -> str:
-    """为易被 Excel 误判的文本增加保护，避免自动格式化。"""
-    text = str(value or "")
-    return f'="{text}"'
-
-
 def normalize_nucleus_type(nucleus: Any) -> str:
     """将核类型统一为导出所需的 H/C 标记。"""
     nucleus_text = str(nucleus or "").strip().upper().replace("<", "").replace(">", "")
@@ -170,8 +164,8 @@ def build_target_peak_export_row(sample_path: str, nmr_result: dict[str, Any]) -
         })
 
     return {
-        "文件路径": protect_csv_text(sample_path),
-        "文件名": protect_csv_text(os.path.basename(sample_path.rstrip("\\/"))),
+        "文件路径": sample_path,
+        "文件名": os.path.basename(sample_path.rstrip("\\/")),
         "所属谱类型(H/C)": spectrum_type,
         "溶剂": solvent,
         "目标峰化学位移": chemical_shifts,
