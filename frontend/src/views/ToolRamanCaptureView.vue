@@ -1,12 +1,14 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getApiErrorMessage, runRamanCapture } from '../api/specAgentApi'
+import { getApiErrorMessage, focusRamanCamera, runRamanCapture } from '../api/specAgentApi'
 import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
 
 const loading = ref(false)
+const focusLoading = ref(false)
 const resultData = ref(null)
 const activeTaskId = ref('')
+const focusResult = ref('')
 
 const form = reactive({
   wavenumber_text: '800.0, 850.0, 900.0',
@@ -15,6 +17,12 @@ const form = reactive({
   integer: 1,
   power_type: 2,
   grating_index: 1,
+})
+
+const focusForm = reactive({
+  rt: 8000,
+  rb: 5000,
+  s: 3,
 })
 
 const summary = computed(() => resultData.value?.summary || null)
@@ -112,6 +120,30 @@ async function submitCapture() {
     loading.value = false
   }
 }
+
+/**
+ * 提交自动对焦请求。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function submitFocus() {
+  focusLoading.value = true
+  focusResult.value = ''
+  try {
+    const data = await focusRamanCamera(
+      { rt: focusForm.rt, rb: focusForm.rb, s: focusForm.s },
+      { timeout: 65000 },
+    )
+    focusResult.value = data.msg
+    ElMessage.success(data.msg)
+  } catch (error) {
+    focusResult.value = ''
+    ElMessage.error(getApiErrorMessage(error))
+  } finally {
+    focusLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -122,6 +154,49 @@ async function submitCapture() {
     <div class="panel-body">
       <el-row :gutter="16">
         <el-col :lg="10" :md="24">
+          <el-card shadow="never" class="block-card">
+            <template #header>
+              <div class="card-header">自动对焦</div>
+            </template>
+            <el-form label-position="top">
+              <el-row :gutter="12">
+                <el-col :span="8">
+                  <el-form-item label="上限位置 (rt)">
+                    <el-input-number v-model="focusForm.rt" :min="0" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="下限位置 (rb)">
+                    <el-input-number v-model="focusForm.rb" :min="0" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="步长 (s)">
+                    <el-input-number v-model="focusForm.s" :min="1" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item>
+                <el-button type="warning" :loading="focusLoading" @click="submitFocus">开始对焦</el-button>
+              </el-form-item>
+              <el-alert
+                v-if="focusResult"
+                type="success"
+                :closable="false"
+                show-icon
+                :title="focusResult"
+                style="margin-bottom: 12px"
+              />
+              <el-alert
+                type="info"
+                :closable="false"
+                show-icon
+                title="说明"
+                description="对焦过程约需 30 秒，请在采集前完成对焦操作。"
+              />
+            </el-form>
+          </el-card>
+
           <el-card shadow="never" class="block-card">
             <template #header>
               <div class="card-header">采集参数</div>

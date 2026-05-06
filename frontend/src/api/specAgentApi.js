@@ -339,6 +339,20 @@ export async function runRamanCapture(payload, options = {}) {
   return unwrapResponse(response)
 }
 
+/**
+ * 拉曼光谱仪自动对焦。
+ *
+ * Args:
+ *   payload: 对焦参数（rt, rb, s）。
+ *
+ * Returns:
+ *   对焦结果信息。
+ */
+export async function focusRamanCamera(payload, options = {}) {
+  const response = await apiClient.post('/raman-capture/focus', payload, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
 export async function getTaskStatus(taskId, options = {}) {
   const response = await apiClient.get(`/tasks/${taskId}`, buildRequestConfig(options))
   return unwrapResponse(response)

@@ -5,6 +5,30 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class RamanFocusRequest(BaseModel):
+    """拉曼光谱仪自动对焦请求模型。
+
+    Args:
+        rt: 上限位置。
+        rb: 下限位置。
+        s: 步长。
+    """
+
+    rt: int = Field(default=8000, description="上限位置")
+    rb: int = Field(default=5000, description="下限位置")
+    s: int = Field(default=3, description="步长")
+
+
+class RamanFocusResult(BaseModel):
+    """拉曼光谱仪自动对焦结果模型。
+
+    Args:
+        msg: 对焦结果信息。
+    """
+
+    msg: str
+
+
 class RamanCaptureRunRequest(BaseModel):
     """拉曼光谱仪批量采集请求模型。
 

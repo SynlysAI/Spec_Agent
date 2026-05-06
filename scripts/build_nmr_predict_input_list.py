@@ -12,13 +12,13 @@ import pandas as pd
 
 
 EXCEL_PATH = Path(r"C:\Users\www59\Desktop\nmr_target_peaks.xlsx")
-SHEET_NAME = "nmr_target_peaks"
+SHEET_NAME = "目标峰汇总"
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "outputs" / "nmr_predict_inputs.xlsx"
 
 FILE_PATH_COLUMN = "文件路径"
 FILE_NAME_COLUMN = "文件名"
 SPECTRUM_TYPE_COLUMN = "所属谱类型(H/C)"
-SHIFT_COLUMN = "目标峰化学位移（不含TMS、杂质峰和溶剂峰）"
+SHIFT_COLUMN = "目标峰化学位移"
 SPLIT_COLUMN = "峰裂分类型"
 
 
