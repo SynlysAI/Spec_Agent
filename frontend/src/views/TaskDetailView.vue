@@ -108,6 +108,61 @@ const irRamanScores = computed(() => {
   }
   return []
 })
+const irRamanDisplayRange = computed(() => {
+  const x0Raw = resultMetadata.value?.analysis_x0
+  const x1Raw = resultMetadata.value?.analysis_x1
+  const x0 = Number(x0Raw)
+  const x1 = Number(x1Raw)
+  if (!Number.isFinite(x0) || !Number.isFinite(x1)) {
+    return null
+  }
+  const minValue = Math.min(x0, x1)
+  const maxValue = Math.max(x0, x1)
+  return { min: minValue, max: maxValue }
+})
+const filteredPreviewData = computed(() => {
+  const raw = previewData.value
+  if (!raw || !Array.isArray(raw.x_values) || !Array.isArray(raw.y_values)) {
+    return null
+  }
+  if (!isIrRamanTask.value || !irRamanDisplayRange.value) {
+    return raw
+  }
+  const { min, max } = irRamanDisplayRange.value
+  const filteredX = []
+  const filteredY = []
+  const length = Math.min(raw.x_values.length, raw.y_values.length)
+  for (let index = 0; index < length; index += 1) {
+    const xValue = Number(raw.x_values[index])
+    const yValue = Number(raw.y_values[index])
+    if (!Number.isFinite(xValue) || !Number.isFinite(yValue)) {
+      continue
+    }
+    if (xValue >= min && xValue <= max) {
+      filteredX.push(xValue)
+      filteredY.push(yValue)
+    }
+  }
+  if (filteredX.length === 0) {
+    return raw
+  }
+  return {
+    ...raw,
+    x_values: filteredX,
+    y_values: filteredY,
+    x_min: min,
+    x_max: max,
+    point_count: filteredX.length,
+    display_count: filteredX.length,
+  }
+})
+const irRamanRangeText = computed(() => {
+  const range = irRamanDisplayRange.value
+  if (!range) {
+    return `${structuredData.value.x0 ?? '-'} - ${structuredData.value.x1 ?? '-'}`
+  }
+  return `${range.min} - ${range.max}`
+})
 const previewAxisConfig = computed(() => {
   const spectype = String(previewData.value?.spectype || '').toLowerCase()
   if (spectype === 'nmr') {
@@ -599,13 +654,13 @@ onBeforeUnmount(() => {
           <h4 style="margin: 8px 0">原始谱图预览</h4>
           <div v-loading="previewLoading">
             <SpectrumPreviewChart
-              v-if="previewData?.x_values?.length"
-              :x-values="previewData.x_values"
-              :y-values="previewData.y_values"
+              v-if="filteredPreviewData?.x_values?.length"
+              :x-values="filteredPreviewData.x_values"
+              :y-values="filteredPreviewData.y_values"
               :x-axis-name="previewAxisConfig.xAxisName"
               :y-axis-name="previewAxisConfig.yAxisName"
               :inverse-x-axis="previewAxisConfig.inverseXAxis"
-              :title="`${previewData.spectype?.toUpperCase() || ''} 原始谱图`"
+              :title="`${filteredPreviewData.spectype?.toUpperCase() || ''} 原始谱图`"
             />
             <el-empty v-else description="暂无原始谱图预览数据" />
           </div>
@@ -662,7 +717,7 @@ onBeforeUnmount(() => {
           <el-descriptions :column="3" border size="small">
             <el-descriptions-item label="光谱类型">{{ structuredData.spectype || '-' }}</el-descriptions-item>
             <el-descriptions-item label="分析模式">{{ irRamanMode || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="分析范围">{{ structuredData.x0 }} - {{ structuredData.x1 }}</el-descriptions-item>
+            <el-descriptions-item label="分析范围">{{ irRamanRangeText }}</el-descriptions-item>
           </el-descriptions>
 
           <template v-if="irRamanMode === 'function_groups'">

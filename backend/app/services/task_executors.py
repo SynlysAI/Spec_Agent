@@ -460,7 +460,14 @@ class IrRamanTaskExecutor(BaseTaskExecutor):
             "structured_data": sanitize_ir_raman_structured_data(result.get("structured_data", {})),
             "text_report": str(result.get("text_report", "")),
             "metadata": _to_basic(
-                {**(result.get("metadata") or {}), "spectrum_type": spectype, "mode": mode, "input_path": input_path}
+                {
+                    **(result.get("metadata") or {}),
+                    "spectrum_type": spectype,
+                    "mode": mode,
+                    "input_path": input_path,
+                    "analysis_x0": x0,
+                    "analysis_x1": x1,
+                }
             ),
         }
 
