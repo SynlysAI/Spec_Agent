@@ -27,10 +27,10 @@ class SpectrumPreviewService:
         Returns:
             解码后的文本内容。
         """
-        for encoding in ("utf-16", "utf-8", "utf-8-sig", "gbk"):
+        for encoding in ("utf-8-sig", "utf-8", "gbk", "utf-16"):
             try:
                 return file_bytes.decode(encoding)
-            except UnicodeDecodeError:
+            except UnicodeError:
                 continue
         raise ValueError("无法解析文件编码，请使用 UTF-16/UTF-8/GBK 编码文本文件")
 

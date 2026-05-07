@@ -125,14 +125,14 @@ def _parse_spectrum_file(file_path: Union[str, Path]) -> tuple[np.ndarray, np.nd
         raise ValueError(f"输入路径是目录，不是文件: {p}")
 
     content = None
-    for encoding in ("utf-16", "utf-8"):
+    for encoding in ("utf-16", "utf-8-sig", "utf-8", "gbk"):
         try:
             content = p.read_text(encoding=encoding)
             break
-        except UnicodeDecodeError:
+        except UnicodeError:
             continue
     if content is None:
-        raise ValueError("无法解析文件编码，请使用 UTF-16 或 UTF-8。")
+        raise ValueError("无法解析文件编码，请使用 UTF-16/UTF-8/GBK。")
 
     rows: List[List[float]] = []
     for line in content.splitlines():
