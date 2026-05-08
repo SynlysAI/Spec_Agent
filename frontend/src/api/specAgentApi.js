@@ -14,7 +14,8 @@ function resolveDefaultApiBaseUrl() {
   }
   const protocol = window.location.protocol || 'http:'
   const hostname = window.location.hostname || '127.0.0.1'
-  return `${protocol}//${hostname}:8000/api/v1`
+  const port = window.location.port || '8000'
+  return `${protocol}//${hostname}:${port}/api/v1`
 }
 
 const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl()

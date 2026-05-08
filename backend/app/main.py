@@ -109,6 +109,12 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router, prefix=settings.api_prefix)
     app.mount("/static/outputs", StaticFiles(directory=settings.outputs_root), name="outputs")
+
+    # 生产模式：托管前端静态文件
+    frontend_dist = settings.project_root / "frontend" / "dist"
+    if frontend_dist.is_dir():
+        app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
