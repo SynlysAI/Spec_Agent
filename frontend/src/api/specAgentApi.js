@@ -1,5 +1,7 @@
 import axios from 'axios'
 
+import { clearAuthSession, getAuthorizationHeader } from '../auth/authState'
+
 /**
  * 生成默认 API 基础地址。
  *
@@ -103,6 +105,12 @@ apiClient.interceptors.request.use((config) => {
   const requestId = generateRequestId()
   const headers = config.headers || {}
   headers['X-Request-Id'] = requestId
+  const authorization = getAuthorizationHeader()
+  if (authorization) {
+    headers.Authorization = authorization
+  } else {
+    delete headers.Authorization
+  }
   config.headers = headers
   config.metadata = {
     ...(config.metadata || {}),
@@ -152,6 +160,10 @@ apiClient.interceptors.response.use(
           original: error,
         }),
       )
+    }
+
+    if (responseStatus === 401) {
+      clearAuthSession()
     }
 
     const apiMessage = responseData?.message || '请求失败'
@@ -264,6 +276,31 @@ function buildRequestConfig(options = {}) {
     config.timeout = options.timeout
   }
   return config
+}
+
+/**
+ * 查询服务端登录开关与当前登录状态。
+ *
+ * Returns:
+ *   鉴权状态对象。
+ */
+export async function getAuthStatus(options = {}) {
+  const response = await apiClient.get('/auth/status', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 使用账号密码进行登录。
+ *
+ * Args:
+ *   payload: 登录参数。
+ *
+ * Returns:
+ *   登录结果对象。
+ */
+export async function loginWithPassword(payload, options = {}) {
+  const response = await apiClient.post('/auth/login', payload, buildRequestConfig(options))
+  return unwrapResponse(response)
 }
 
 export async function listTasks(params, options = {}) {

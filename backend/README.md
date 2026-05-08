@@ -24,6 +24,12 @@ python -m celery -A app.worker.celery_app:celery_app worker --loglevel=info -Q s
 ```bash
 APP_ENV=dev
 
+AUTH_ENABLED=false
+AUTH_USERNAME=admin
+AUTH_PASSWORD=admin123456
+# AUTH_SECRET=
+AUTH_TOKEN_EXPIRE_HOURS=12
+
 MONGODB_HOST=100.84.59.58
 MONGODB_PORT=27018
 MONGODB_USERNAME=admin
@@ -101,4 +107,5 @@ python scripts/run_regression.py
 - `backend/resources/config/lab_collectors.yaml` 用于配置 5 类实验仪器的远程共享目录与本地落盘目录。
 - 根级 `backend/config.py` 与 `backend/app/models` 仅保留兼容用途，后续新代码应优先使用 `app.core.config.settings`、`app.schemas.*`、`app.modules.*`。
 - 根级 `backend/agents`、`backend/services` 已缩减为历史遗留与少量兼容保留文件，不再承载主运行实现。
+- 若需启用本地登录保护，可在 `backend/.env` 中设置 `AUTH_ENABLED=true` 并配置 `AUTH_USERNAME`、`AUTH_PASSWORD`。
 - `GPC/NMR/IR/Raman` 任务能力已迁入本仓，运行时不再依赖源项目目录。

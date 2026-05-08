@@ -47,6 +47,8 @@ def _map_http_error(status_code: int) -> tuple[int, str]:
     """
     if status_code == 400:
         return 40001, "invalid parameter"
+    if status_code == 401:
+        return 40101, "unauthorized"
     if status_code == 404:
         return 40401, "resource not found"
     if status_code == 422:

@@ -167,6 +167,22 @@ Copy-Item .env.example .env
 
 后端会自动加载 `backend/.env`。
 
+可选本地登录配置：
+
+```powershell
+AUTH_ENABLED=true
+AUTH_USERNAME=admin
+AUTH_PASSWORD=请改成你自己的密码
+# AUTH_SECRET=建议生产环境显式配置
+AUTH_TOKEN_EXPIRE_HOURS=12
+```
+
+说明：
+
+- `AUTH_ENABLED=false` 时，前后端保持当前免登录访问行为。
+- `AUTH_ENABLED=true` 时，前端会自动显示登录页，登录成功后才能访问现有功能页面。
+- 本地账号密码校验基于 `backend/.env`，适合内网或单实例本地部署场景。
+
 ### 3. 启动 API 服务
 
 ```powershell
@@ -252,6 +268,11 @@ npm run preview
 | `SPEC_AGENT_UPLOAD_ROOT` | 上传目录 | `.runtime/uploads`          |
 | `SPEC_AGENT_OUTPUT_ROOT` | 输出目录 | `.runtime/outputs`          |
 | `SPEC_AGENT_LOG_ROOT` | 日志目录 | `backend/logs`              |
+| `AUTH_ENABLED` | 是否启用本地登录鉴权 | `false` |
+| `AUTH_USERNAME` | 本地登录账号 | `admin` |
+| `AUTH_PASSWORD` | 本地登录密码 | `admin123456` |
+| `AUTH_SECRET` | 本地登录令牌签名密钥，未配置时自动生成 | 空 |
+| `AUTH_TOKEN_EXPIRE_HOURS` | 登录令牌有效期（小时） | `12` |
 | `SPECTRUM_FILES_ROOT` | 谱图样本根目录 | `sample_data`               |
 
 前端 API 地址：

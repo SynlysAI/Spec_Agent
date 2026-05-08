@@ -82,3 +82,7 @@ try:
     CHAT_MODEL = get_llm_client()
 except Exception:
     CHAT_MODEL = None
+
+
+if __name__ == "__main__":
+    print(CHAT_MODEL.invoke("你好"))

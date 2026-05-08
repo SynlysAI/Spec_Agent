@@ -38,6 +38,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.app-loading-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #f3f7fd 0%, #ecf2fa 100%);
+}
+
+.app-loading-card {
+  min-width: 280px;
+  padding: 28px 32px;
+  border-radius: 18px;
+  border: 1px solid #dfe8f5;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 36px rgba(22, 59, 110, 0.08);
+  text-align: center;
+}
+
+.app-loading-title {
+  color: #15345f;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.app-loading-text {
+  margin-top: 10px;
+  color: #7083a2;
+  font-size: 14px;
+}
+
 .app-shell {
   min-height: 100vh;
   background: linear-gradient(180deg, #f3f7fd 0%, #ecf2fa 100%);
@@ -136,6 +165,10 @@ body {
 
 .header-date {
   color: #8ba0bf;
+}
+
+.logout-btn {
+  color: #40608f;
 }
 
 .app-main {

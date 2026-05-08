@@ -1,10 +1,10 @@
-﻿<script setup>
-import { computed, ref } from 'vue'
+<script setup>
+import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   DataAnalysis,
   Document,
-  Files,
   FolderOpened,
   Histogram,
   ChatLineRound,
@@ -12,12 +12,18 @@ import {
   SetUp,
   Fold,
   Expand,
+  SwitchButton,
 } from '@element-plus/icons-vue'
+
+import { getAuthStatus, getApiErrorMessage } from './api/specAgentApi'
+import { authState, clearAuthSession, setAuthEnabled, setAuthSession } from './auth/authState'
 
 const route = useRoute()
 const router = useRouter()
 const sidebarCollapsed = ref(false)
 const currentDate = ref(formatCurrentDate())
+const isLoginPage = computed(() => route.path === '/login')
+const authBootstrapping = ref(true)
 
 /**
  * 解析接口文档地址。
@@ -73,6 +79,14 @@ function toggleSidebar() {
 }
 
 /**
+ * 退出当前登录会话。
+ */
+function handleLogout() {
+  clearAuthSession()
+  router.replace('/login')
+}
+
+/**
  * 生成当前日期字符串（YYYY-MM-DD）。
  *
  * Returns:
@@ -85,10 +99,60 @@ function formatCurrentDate() {
   const day = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+
+/**
+ * 初始化服务端登录开关与当前会话状态。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function initializeAuthState() {
+  try {
+    const data = await getAuthStatus()
+    setAuthEnabled(data.auth_enabled)
+    if (!data.auth_enabled) {
+      if (route.path === '/login') {
+        router.replace('/dashboard')
+      }
+      return
+    }
+    if (data.authenticated) {
+      setAuthSession({
+        username: data.username || authState.username,
+        tokenType: authState.tokenType,
+        accessToken: authState.accessToken,
+        expiresAt: authState.expiresAt,
+      })
+      return
+    }
+    clearAuthSession()
+    if (route.path !== '/login') {
+      router.replace({
+        path: '/login',
+        query: { redirect: route.fullPath },
+      })
+    }
+  } catch (error) {
+    clearAuthSession()
+    setAuthEnabled(false)
+    ElMessage.error(`鉴权状态初始化失败：${getApiErrorMessage(error)}`)
+  } finally {
+    authBootstrapping.value = false
+  }
+}
+
+onMounted(initializeAuthState)
 </script>
 
 <template>
-  <el-container class="app-shell">
+  <div v-if="authBootstrapping" class="app-loading-shell">
+    <div class="app-loading-card">
+      <div class="app-loading-title">Spec Agent</div>
+      <div class="app-loading-text">正在初始化访问控制...</div>
+    </div>
+  </div>
+  <router-view v-else-if="isLoginPage" />
+  <el-container v-else class="app-shell">
     <el-aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }" :width="sidebarCollapsed ? '66px' : '220px'">
       <div class="brand">
         <div class="brand-logo">S</div>
@@ -166,8 +230,13 @@ function formatCurrentDate() {
         </div>
         <div class="header-right">
           <span class="header-date">{{ currentDate }}</span>
+          <el-tag v-if="authState.authEnabled" type="success" effect="plain">已启用登录保护</el-tag>
           <el-avatar size="small">管</el-avatar>
-          <span>实验室管理员</span>
+          <span>{{ authState.authEnabled ? authState.username || '实验室管理员' : '实验室管理员' }}</span>
+          <el-button v-if="authState.authEnabled" text class="logout-btn" @click="handleLogout">
+            <el-icon><SwitchButton /></el-icon>
+            退出登录
+          </el-button>
         </div>
       </el-header>
       <el-main class="app-main">

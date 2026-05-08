@@ -39,6 +39,16 @@ class Settings:
         self.max_upload_size_mb: int = 100
         self.api_prefix: str = "/api/v1"
         self.app_env: str = os.getenv("APP_ENV", "dev")
+        self.auth_enabled: bool = os.getenv("AUTH_ENABLED", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.auth_username: str = os.getenv("AUTH_USERNAME", "admin")
+        self.auth_password: str = os.getenv("AUTH_PASSWORD", "admin123456")
+        self.auth_secret: str = os.getenv("AUTH_SECRET", "")
+        self.auth_token_expire_hours: int = int(os.getenv("AUTH_TOKEN_EXPIRE_HOURS", "12"))
 
         # MongoDB 配置
         self.mongodb_host: str = os.getenv("MONGODB_HOST", "127.0.0.1")

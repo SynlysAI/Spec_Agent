@@ -23,8 +23,11 @@ def classify_peak_role(region_name: str, peak_type: str | None = None) -> str:
     source_text = f"{region_name} {peak_type or ''}".lower()
     if "solvent" in source_text or "溶剂" in source_text:
         return "solvent"
-    if "impurity" in source_text or "杂质" in source_text:
-        return "impurity"
+    if "water" in source_text or "水" in source_text:
+        return "water"
+    # TODO 暂时只排除水峰
+    # if "impurity" in source_text or "杂质" in source_text:
+    #     return "impurity"
     if "tms" in source_text:
         return "tms"
     return "target"

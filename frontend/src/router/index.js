@@ -1,21 +1,24 @@
-﻿import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 
+import { authState } from '../auth/authState'
 import DashboardView from '../views/DashboardView.vue'
-import TaskSubmitGpcView from '../views/TaskSubmitGpcView.vue'
-import TaskSubmitNmrView from '../views/TaskSubmitNmrView.vue'
-import TaskCenterView from '../views/TaskCenterView.vue'
-import TaskDetailView from '../views/TaskDetailView.vue'
-import TaskSubmitIrRamanView from '../views/TaskSubmitIrRamanView.vue'
-import TaskSubmitLcmsView from '../views/TaskSubmitLcmsView.vue'
-import ToolNmrServerView from '../views/ToolNmrServerView.vue'
-import ToolRamanCaptureView from '../views/ToolRamanCaptureView.vue'
 import DialogueView from '../views/DialogueView.vue'
-import ToolAcceptanceView from '../views/ToolAcceptanceView.vue'
 import ExperimentCollectView from '../views/ExperimentCollectView.vue'
 import ExperimentSampleManageView from '../views/ExperimentSampleManageView.vue'
+import LoginView from '../views/LoginView.vue'
+import TaskCenterView from '../views/TaskCenterView.vue'
+import TaskDetailView from '../views/TaskDetailView.vue'
+import TaskSubmitGpcView from '../views/TaskSubmitGpcView.vue'
+import TaskSubmitIrRamanView from '../views/TaskSubmitIrRamanView.vue'
+import TaskSubmitLcmsView from '../views/TaskSubmitLcmsView.vue'
+import TaskSubmitNmrView from '../views/TaskSubmitNmrView.vue'
+import ToolAcceptanceView from '../views/ToolAcceptanceView.vue'
+import ToolNmrServerView from '../views/ToolNmrServerView.vue'
+import ToolRamanCaptureView from '../views/ToolRamanCaptureView.vue'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
+  { path: '/login', component: LoginView, meta: { public: true } },
   { path: '/dashboard', component: DashboardView },
   { path: '/tasks/submit', redirect: '/tasks/submit/gpc' },
   { path: '/tasks/submit/gpc', component: TaskSubmitGpcView },
@@ -36,6 +39,34 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+router.beforeEach((to) => {
+  if (!authState.authEnabled) {
+    if (to.path === '/login') {
+      return '/dashboard'
+    }
+    return true
+  }
+
+  if (!authState.initialized) {
+    return true
+  }
+
+  if (to.meta.public === true) {
+    if (authState.authenticated) {
+      return '/dashboard'
+    }
+    return true
+  }
+
+  if (!authState.authenticated) {
+    return {
+      path: '/login',
+      query: { redirect: to.fullPath },
+    }
+  }
+  return true
 })
 
 export default router
