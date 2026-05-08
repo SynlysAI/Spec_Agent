@@ -33,11 +33,14 @@ const authBootstrapping = ref(true)
  */
 function resolveDocsUrl() {
   if (typeof window === 'undefined') {
-    return 'http://127.0.0.1:8000/docs'
+    return '/docs'
   }
   const protocol = window.location.protocol || 'http:'
   const hostname = window.location.hostname || '127.0.0.1'
-  return `${protocol}//${hostname}:8000/docs`
+  if (window.location.port === '5173') {
+    return `${protocol}//${hostname}:8000/docs`
+  }
+  return `${window.location.origin}/docs`
 }
 
 const activeMenu = computed(() => {

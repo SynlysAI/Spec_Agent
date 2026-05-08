@@ -6,16 +6,10 @@ import { clearAuthSession, getAuthorizationHeader } from '../auth/authState'
  * 生成默认 API 基础地址。
  *
  * Returns:
- *   基于当前页面地址推导的 API 基础地址。
+ *   默认 API 基础地址。
  */
 function resolveDefaultApiBaseUrl() {
-  if (typeof window === 'undefined') {
-    return 'http://127.0.0.1:8000/api/v1'
-  }
-  const protocol = window.location.protocol || 'http:'
-  const hostname = window.location.hostname || '127.0.0.1'
-  const port = window.location.port || '8000'
-  return `${protocol}//${hostname}:${port}/api/v1`
+  return '/api/v1'
 }
 
 const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl()
@@ -254,6 +248,23 @@ export function getApiBaseUrl() {
  */
 export function getStaticBaseUrl() {
   return resolvedBaseUrl.replace(/\/api\/v1\/?$/, '')
+}
+
+/**
+ * 通过鉴权请求获取图片 Blob。
+ *
+ * Args:
+ *   url: 图片接口完整地址或相对地址。
+ *
+ * Returns:
+ *   图片 Blob 数据。
+ */
+export async function fetchProtectedImageBlob(url, options = {}) {
+  const response = await apiClient.get(url, {
+    ...buildRequestConfig(options),
+    responseType: 'blob',
+  })
+  return response.data
 }
 
 /**

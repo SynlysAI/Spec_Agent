@@ -5,6 +5,7 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
 import {
+  fetchProtectedImageBlob,
   getApiBaseUrl,
   getApiErrorMessage,
   getTaskArtifacts,
@@ -28,6 +29,7 @@ const activeRequestController = ref(null)
 const pollingTimer = ref(null)
 const pollingAttempt = ref(0)
 const isUnmounted = ref(false)
+const protectedImageUrlMap = ref({})
 
 const structuredData = computed(() => resultData.value?.result?.structured_data || {})
 const resultMetadata = computed(() => resultData.value?.result?.metadata || {})
@@ -260,6 +262,128 @@ function buildFunctionGroupImageUrl(smarts) {
     return ''
   }
   return `${apiBaseUrl}/chemistry/function-group-image?smarts=${encodeURIComponent(smarts)}&size=260`
+}
+
+/**
+ * 生成结构图缓存键。
+ *
+ * Args:
+ *   kind: 图片类型。
+ *   source: 原始结构标识。
+ *
+ * Returns:
+ *   缓存键字符串。
+ */
+function buildProtectedImageKey(kind, source) {
+  return `${kind}:${String(source || '')}`
+}
+
+/**
+ * 释放已创建的结构图对象 URL。
+ */
+function revokeProtectedImageUrls() {
+  Object.values(protectedImageUrlMap.value).forEach((item) => {
+    if (item?.objectUrl) {
+      URL.revokeObjectURL(item.objectUrl)
+    }
+  })
+  protectedImageUrlMap.value = {}
+}
+
+/**
+ * 读取结构图加载状态。
+ *
+ * Args:
+ *   kind: 图片类型。
+ *   source: 原始结构标识。
+ *
+ * Returns:
+ *   结构图状态对象。
+ */
+function getProtectedImageState(kind, source) {
+  return protectedImageUrlMap.value[buildProtectedImageKey(kind, source)] || null
+}
+
+/**
+ * 获取结构图展示地址。
+ *
+ * Args:
+ *   kind: 图片类型。
+ *   source: 原始结构标识。
+ *
+ * Returns:
+ *   可展示的对象 URL。
+ */
+function getProtectedImageSrc(kind, source) {
+  return getProtectedImageState(kind, source)?.objectUrl || ''
+}
+
+/**
+ * 获取结构图预览列表。
+ *
+ * Args:
+ *   kind: 图片类型。
+ *   source: 原始结构标识。
+ *
+ * Returns:
+ *   Element Plus 预览地址数组。
+ */
+function getProtectedImagePreviewList(kind, source) {
+  const objectUrl = getProtectedImageSrc(kind, source)
+  return objectUrl ? [objectUrl] : []
+}
+
+/**
+ * 判断结构图是否加载失败。
+ *
+ * Args:
+ *   kind: 图片类型。
+ *   source: 原始结构标识。
+ *
+ * Returns:
+ *   是否加载失败。
+ */
+function isProtectedImageFailed(kind, source) {
+  return Boolean(getProtectedImageState(kind, source)?.failed)
+}
+
+/**
+ * 预加载受保护的结构图图片。
+ *
+ * Args:
+ *   items: 待加载的图片任务列表。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function preloadProtectedImages(items) {
+  revokeProtectedImageUrls()
+  if (!Array.isArray(items) || items.length === 0) {
+    return
+  }
+
+  const nextMap = {}
+  await Promise.all(items.map(async (item) => {
+    const key = buildProtectedImageKey(item.kind, item.source)
+    nextMap[key] = {
+      objectUrl: '',
+      failed: false,
+    }
+    try {
+      const imageBlob = await fetchProtectedImageBlob(item.url)
+      const objectUrl = URL.createObjectURL(imageBlob)
+      nextMap[key] = {
+        objectUrl,
+        failed: false,
+      }
+    } catch {
+      nextMap[key] = {
+        objectUrl: '',
+        failed: true,
+      }
+    }
+  }))
+  protectedImageUrlMap.value = nextMap
 }
 
 /**
@@ -562,11 +686,45 @@ async function fetchDetail(options = {}) {
       resultData.value = result
       const artifacts = await getTaskArtifacts(taskId.value, { signal: controller.signal })
       artifactItems.value = artifacts.items || []
+      if (result?.status === 'SUCCESS' && ['ir_analysis', 'raman_analysis'].includes(String(status?.task_type || ''))) {
+        const imageTasks = []
+        if (String(result?.result?.structured_data?.mode || '') === 'function_groups') {
+          const groups = Array.isArray(result?.result?.structured_data?.raw_output)
+            ? result.result.structured_data.raw_output
+            : []
+          groups.forEach((smarts) => {
+            imageTasks.push({
+              kind: 'function_group',
+              source: smarts,
+              url: buildFunctionGroupImageUrl(smarts),
+            })
+          })
+        } else {
+          const rawOutput = result?.result?.structured_data?.raw_output
+          let structures = []
+          if (Array.isArray(rawOutput)) {
+            structures = rawOutput
+          } else if (rawOutput && typeof rawOutput === 'object' && Array.isArray(rawOutput.structure)) {
+            structures = rawOutput.structure
+          }
+          structures.forEach((smiles) => {
+            imageTasks.push({
+              kind: 'molecule',
+              source: smiles,
+              url: buildMoleculeImageUrl(smiles),
+            })
+          })
+        }
+        await preloadProtectedImages(imageTasks)
+      } else {
+        revokeProtectedImageUrls()
+      }
       await fetchSourcePreview(controller.signal)
     } else {
       resultData.value = null
       artifactItems.value = []
       previewData.value = null
+      revokeProtectedImageUrls()
     }
 
     if (isRunningStatus.value) {
@@ -609,6 +767,7 @@ onBeforeUnmount(() => {
   isUnmounted.value = true
   clearPollingTimer()
   cancelActiveRequest()
+  revokeProtectedImageUrls()
 })
 </script>
 
@@ -726,12 +885,21 @@ onBeforeUnmount(() => {
               <el-table-column prop="smarts" label="官能团 SMARTS" min-width="240" />
               <el-table-column label="结构图" min-width="220">
                 <template #default="scope">
-                  <el-image
-                    :src="buildFunctionGroupImageUrl(scope.row.smarts)"
-                    fit="contain"
-                    style="width: 200px; height: 120px; background: #f6f9ff"
-                    :preview-src-list="[buildFunctionGroupImageUrl(scope.row.smarts)]"
-                  />
+                  <div class="protected-image-box">
+                    <el-image
+                      v-if="getProtectedImageSrc('function_group', scope.row.smarts)"
+                      :src="getProtectedImageSrc('function_group', scope.row.smarts)"
+                      fit="contain"
+                      style="width: 200px; height: 120px; background: #f6f9ff"
+                      :preview-src-list="getProtectedImagePreviewList('function_group', scope.row.smarts)"
+                    />
+                    <el-empty
+                      v-else-if="isProtectedImageFailed('function_group', scope.row.smarts)"
+                      description="结构图加载失败"
+                      :image-size="56"
+                    />
+                    <div v-else class="protected-image-loading">加载中...</div>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -753,11 +921,18 @@ onBeforeUnmount(() => {
                   </div>
                 </template>
                 <el-image
-                  :src="buildMoleculeImageUrl(smiles)"
+                  v-if="getProtectedImageSrc('molecule', smiles)"
+                  :src="getProtectedImageSrc('molecule', smiles)"
                   fit="contain"
                   style="width: 100%; height: 180px; background: #f6f9ff"
-                  :preview-src-list="[buildMoleculeImageUrl(smiles)]"
+                  :preview-src-list="getProtectedImagePreviewList('molecule', smiles)"
                 />
+                <el-empty
+                  v-else-if="isProtectedImageFailed('molecule', smiles)"
+                  description="结构图加载失败"
+                  :image-size="72"
+                />
+                <div v-else class="protected-image-loading protected-image-loading-large">加载中...</div>
                 <div class="smiles-line">{{ smiles }}</div>
               </el-card>
             </div>
@@ -844,6 +1019,14 @@ onBeforeUnmount(() => {
   border-radius: 10px;
 }
 
+.protected-image-box {
+  width: 200px;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .ir-raman-card-header {
   display: flex;
   justify-content: space-between;
@@ -861,6 +1044,23 @@ onBeforeUnmount(() => {
   word-break: break-all;
   font-family: Consolas, 'Courier New', monospace;
   font-size: 12px;
+}
+
+.protected-image-loading {
+  width: 200px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7890b2;
+  background: #f6f9ff;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.protected-image-loading-large {
+  width: 100%;
+  height: 180px;
 }
 
 .json-tree {

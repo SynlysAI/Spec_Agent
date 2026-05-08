@@ -11,6 +11,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 from starlette.requests import Request
 
 from app.api.v1.router import api_router
@@ -19,6 +21,49 @@ from app.core.logging import get_logger
 
 
 APP_LOGGER = get_logger("spec_agent.app")
+
+
+class SPAStaticFiles(StaticFiles):
+    """支持 SPA 路由回退的静态文件服务。"""
+
+    async def get_response(self, path: str, scope) -> Response:
+        """获取静态资源响应，不存在时回退到 index.html。
+
+        Args:
+            path: 去掉前导斜杠后的请求路径。
+            scope: ASGI 请求作用域。
+
+        Returns:
+            静态资源响应或 index.html 回退响应。
+        """
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            response = None
+
+        if response is not None and response.status_code != 404:
+            return response
+
+        method = scope.get("method", "GET").upper()
+        if method not in {"GET", "HEAD"}:
+            if response is not None:
+                return response
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        if path.startswith(settings.api_prefix.lstrip("/")):
+            if response is not None:
+                return response
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        filename = path.rsplit("/", maxsplit=1)[-1]
+        if "." in filename:
+            if response is not None:
+                return response
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        return await super().get_response("index.html", scope)
 
 
 def _resolve_request_id(request: Request) -> str:
@@ -113,7 +158,7 @@ def create_app() -> FastAPI:
     # 生产模式：托管前端静态文件
     frontend_dist = settings.project_root / "frontend" / "dist"
     if frontend_dist.is_dir():
-        app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+        app.mount("/", SPAStaticFiles(directory=str(frontend_dist), html=True), name="frontend")
 
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
