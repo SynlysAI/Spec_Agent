@@ -36,8 +36,9 @@ class SPAStaticFiles(StaticFiles):
         Returns:
             静态资源响应或 index.html 回退响应。
         """
+        normalized_path = path.lstrip("/")
         try:
-            response = await super().get_response(path, scope)
+            response = await super().get_response(normalized_path, scope)
         except StarletteHTTPException as exc:
             if exc.status_code != 404:
                 raise
@@ -52,12 +53,12 @@ class SPAStaticFiles(StaticFiles):
                 return response
             raise HTTPException(status_code=404, detail="Not Found")
 
-        if path.startswith(settings.api_prefix.lstrip("/")):
+        if normalized_path.startswith(settings.api_prefix.lstrip("/")):
             if response is not None:
                 return response
             raise HTTPException(status_code=404, detail="Not Found")
 
-        filename = path.rsplit("/", maxsplit=1)[-1]
+        filename = normalized_path.rsplit("/", maxsplit=1)[-1]
         if "." in filename:
             if response is not None:
                 return response

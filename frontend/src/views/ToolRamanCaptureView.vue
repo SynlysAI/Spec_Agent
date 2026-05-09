@@ -11,12 +11,12 @@ const activeTaskId = ref('')
 const focusResult = ref('')
 
 const form = reactive({
-  wavenumber_text: '800.0, 850.0, 900.0',
-  power_text: '10.0, 50.0, 100.0',
+  wavenumber_text: '980',
+  power_text: '1,3,5',
   explore_time: 5,
   integer: 1,
-  power_type: 2,
-  grating_index: 1,
+  power_type: 3,
+  grating_index: 2,
 })
 
 const focusForm = reactive({
@@ -275,7 +275,7 @@ async function submitFocus() {
                   v-model="form.wavenumber_text"
                   type="textarea"
                   :rows="3"
-                  placeholder="逗号分隔，例如：800.0, 850.0, 900.0"
+                  placeholder="逗号分隔，例如：980"
                 />
               </el-form-item>
               <el-form-item label="激光功率列表">
@@ -283,7 +283,7 @@ async function submitFocus() {
                   v-model="form.power_text"
                   type="textarea"
                   :rows="3"
-                  placeholder="逗号分隔，例如：10.0, 50.0, 100.0"
+                  placeholder="逗号分隔，例如：1,3,5"
                 />
               </el-form-item>
               <el-form-item>

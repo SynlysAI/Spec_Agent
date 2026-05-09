@@ -6,6 +6,7 @@ import DialogueView from '../views/DialogueView.vue'
 import ExperimentCollectView from '../views/ExperimentCollectView.vue'
 import ExperimentSampleManageView from '../views/ExperimentSampleManageView.vue'
 import LoginView from '../views/LoginView.vue'
+import NotFoundView from '../views/NotFoundView.vue'
 import TaskCenterView from '../views/TaskCenterView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
 import TaskSubmitGpcView from '../views/TaskSubmitGpcView.vue'
@@ -34,6 +35,7 @@ const routes = [
   { path: '/tools/nmrserver', component: ToolNmrServerView },
   { path: '/tools/raman-capture', component: ToolRamanCaptureView },
   { path: '/tools/acceptance', component: ToolAcceptanceView },
+  { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { public: true } },
 ]
 
 const router = createRouter({

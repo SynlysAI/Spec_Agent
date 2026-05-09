@@ -3,7 +3,7 @@ import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import NmrStickChart from '../components/NmrStickChart.vue'
 import {
-  getApiBaseUrl,
+  buildAbsoluteApiUrl,
   getApiErrorMessage,
   nmrserverForward,
   nmrserverReverse,
@@ -44,7 +44,6 @@ const searchForm = reactive({
 })
 
 const forwardExampleSmiles = ['CCO', 'C(C[C@H]1CCCc2ccccc21)=C1CC1', 'C1=CC=CC=C1'].join('\n')
-const apiBaseUrl = getApiBaseUrl()
 
 /**
  * 将原始预测结果拆分为 13C 与 1H 化学位移列表。
@@ -121,7 +120,7 @@ function buildMolImageUrl(smiles) {
   if (!smiles) {
     return ''
   }
-  return `${apiBaseUrl}/chemistry/molecule-image?smiles=${encodeURIComponent(smiles)}&size=320`
+  return buildAbsoluteApiUrl(`/chemistry/molecule-image?smiles=${encodeURIComponent(smiles)}&size=320`)
 }
 
 /**

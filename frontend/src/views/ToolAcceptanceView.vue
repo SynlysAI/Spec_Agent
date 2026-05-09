@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
+  fetchProtectedFileBlob,
   buildAcceptanceReportUrl,
   createAcceptanceRun,
   getAcceptanceConfig,
@@ -97,11 +98,18 @@ function toMetricEntries(metrics) {
 /**
  * 下载当前批次验收报告。
  */
-function downloadReport() {
+async function downloadReport() {
   if (!runFinal.value?.run_id) {
     return
   }
-  window.open(buildAcceptanceReportUrl(runFinal.value.run_id), '_blank')
+  try {
+    const report = await fetchProtectedFileBlob(buildAcceptanceReportUrl(runFinal.value.run_id))
+    const blobUrl = URL.createObjectURL(report.blob)
+    window.open(blobUrl, '_blank')
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error))
+  }
 }
 
 /**
@@ -110,11 +118,18 @@ function downloadReport() {
  * Args:
  *   runId: 批次运行 ID。
  */
-function openHistoryReport(runId) {
+async function openHistoryReport(runId) {
   if (!runId) {
     return
   }
-  window.open(buildAcceptanceReportUrl(runId), '_blank')
+  try {
+    const report = await fetchProtectedFileBlob(buildAcceptanceReportUrl(runId))
+    const blobUrl = URL.createObjectURL(report.blob)
+    window.open(blobUrl, '_blank')
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error))
+  }
 }
 
 /**

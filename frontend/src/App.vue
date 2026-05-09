@@ -138,8 +138,14 @@ async function initializeAuthState() {
     }
   } catch (error) {
     clearAuthSession()
-    setAuthEnabled(false)
+    setAuthEnabled(true)
     ElMessage.error(`鉴权状态初始化失败：${getApiErrorMessage(error)}`)
+    if (route.path !== '/login') {
+      router.replace({
+        path: '/login',
+        query: { redirect: route.fullPath },
+      })
+    }
   } finally {
     authBootstrapping.value = false
   }

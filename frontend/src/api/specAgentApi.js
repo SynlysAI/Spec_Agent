@@ -254,6 +254,20 @@ export function getApiBaseUrl() {
 }
 
 /**
+ * 构建浏览器可直接访问的绝对 API 地址。
+ *
+ * Args:
+ *   path: 以 `/` 开头的 API 相对路径。
+ *
+ * Returns:
+ *   绝对 API 地址字符串。
+ */
+export function buildAbsoluteApiUrl(path) {
+  const normalizedBase = String(resolvedBaseUrl || '').replace(/\/+$/, '')
+  return new URL(`${normalizedBase}${path}`, window.location.origin).toString()
+}
+
+/**
  * 获取静态产物基础地址。
  *
  * Returns:
@@ -277,7 +291,57 @@ export async function fetchProtectedImageBlob(url, options = {}) {
     ...buildRequestConfig(options),
     responseType: 'blob',
   })
+  const contentType = String(response?.headers?.['content-type'] || '').toLowerCase()
+  if (!contentType.startsWith('image/')) {
+    throw createApiError({
+      kind: 'invalid_content_type',
+      message: '接口未返回有效图片数据',
+      status: response?.status || null,
+      requestId: response?.headers?.['x-request-id'] || null,
+      detail: contentType || 'unknown content-type',
+      original: response,
+    })
+  }
   return response.data
+}
+
+/**
+ * 下载受保护接口返回的文件 Blob。
+ *
+ * Args:
+ *   url: 文件接口完整地址或相对地址。
+ *
+ * Returns:
+ *   包含 Blob、文件名与内容类型的结果对象。
+ */
+export async function fetchProtectedFileBlob(url, options = {}) {
+  const response = await apiClient.get(url, {
+    ...buildRequestConfig(options),
+    responseType: 'blob',
+  })
+  const contentType = String(response?.headers?.['content-type'] || '').toLowerCase()
+  if (contentType.includes('text/html')) {
+    throw createApiError({
+      kind: 'invalid_content_type',
+      message: '接口未返回有效文件数据',
+      status: response?.status || null,
+      requestId: response?.headers?.['x-request-id'] || null,
+      detail: contentType,
+      original: response,
+    })
+  }
+
+  const contentDisposition = String(response?.headers?.['content-disposition'] || '')
+  const fileNameMatch =
+    contentDisposition.match(/filename\*=UTF-8''([^;]+)/i) ||
+    contentDisposition.match(/filename=\"?([^\";]+)\"?/i)
+  const fileName = fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1]) : ''
+
+  return {
+    blob: response.data,
+    contentType,
+    fileName,
+  }
 }
 
 /**
@@ -703,6 +767,5 @@ export async function deleteSpectrumSample(sampleId, options = {}) {
  *   可直接打开下载的 URL。
  */
 export function buildAcceptanceReportUrl(runId) {
-  const base = String(apiClient.defaults.baseURL || '').replace(/\/+$/, '')
-  return `${base}/acceptance/run/${runId}/report`
+  return buildAbsoluteApiUrl(`/acceptance/run/${runId}/report`)
 }

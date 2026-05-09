@@ -5,8 +5,8 @@ import { ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
 import {
+  buildAbsoluteApiUrl,
   fetchProtectedImageBlob,
-  getApiBaseUrl,
   getStaticBaseUrl,
   getApiErrorMessage,
   getTaskArtifacts,
@@ -52,25 +52,10 @@ const isRunningStatus = computed(() =>
   ['PENDING', 'QUEUED', 'RUNNING'].includes(String(statusData.value?.status || '')),
 )
 const imageArtifacts = computed(() => artifactItems.value.filter((item) => item.file_type === 'image'))
-const apiBaseUrl = getApiBaseUrl()
 const staticBaseUrl = getStaticBaseUrl()
 const treeProps = {
   children: 'children',
   label: 'label',
-}
-
-/**
- * 构建绝对 API 地址，避免 Axios 在相对 baseURL 场景下重复拼接路径。
- *
- * Args:
- *   path: API 相对路径，需以 `/` 开头。
- *
- * Returns:
- *   浏览器可直接访问的绝对接口地址。
- */
-function buildAbsoluteApiUrl(path) {
-  const normalizedBase = String(apiBaseUrl || '').replace(/\/+$/, '')
-  return new URL(`${normalizedBase}${path}`, window.location.origin).toString()
 }
 
 const gpcRows = computed(() => structuredData.value.analysis_results || [])
