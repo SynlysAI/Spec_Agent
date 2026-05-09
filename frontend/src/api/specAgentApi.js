@@ -41,10 +41,22 @@ function resolveApiBaseUrl() {
 
 const resolvedBaseUrl = resolveApiBaseUrl()
 
+const AUTH_EXPIRED_EVENT_NAME = 'spec-agent-auth-expired'
+
 const apiClient = axios.create({
   baseURL: resolvedBaseUrl,
   timeout: REQUEST_TIMEOUT_MS,
 })
+
+/**
+ * 通知前端登录态已失效。
+ */
+function notifyAuthExpired() {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT_NAME))
+}
 
 /**
  * 创建标准化 API 错误对象。
@@ -159,6 +171,7 @@ apiClient.interceptors.response.use(
 
     if (responseStatus === 401) {
       clearAuthSession()
+      notifyAuthExpired()
     }
 
     const apiMessage = responseData?.message || '请求失败'

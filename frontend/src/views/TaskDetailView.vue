@@ -7,6 +7,7 @@ import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
 import {
   fetchProtectedImageBlob,
   getApiBaseUrl,
+  getStaticBaseUrl,
   getApiErrorMessage,
   getTaskArtifacts,
   getTaskResult,
@@ -52,10 +53,24 @@ const isRunningStatus = computed(() =>
 )
 const imageArtifacts = computed(() => artifactItems.value.filter((item) => item.file_type === 'image'))
 const apiBaseUrl = getApiBaseUrl()
-const backendOrigin = new URL(apiBaseUrl).origin
+const staticBaseUrl = getStaticBaseUrl()
 const treeProps = {
   children: 'children',
   label: 'label',
+}
+
+/**
+ * 构建绝对 API 地址，避免 Axios 在相对 baseURL 场景下重复拼接路径。
+ *
+ * Args:
+ *   path: API 相对路径，需以 `/` 开头。
+ *
+ * Returns:
+ *   浏览器可直接访问的绝对接口地址。
+ */
+function buildAbsoluteApiUrl(path) {
+  const normalizedBase = String(apiBaseUrl || '').replace(/\/+$/, '')
+  return new URL(`${normalizedBase}${path}`, window.location.origin).toString()
 }
 
 const gpcRows = computed(() => structuredData.value.analysis_results || [])
@@ -216,7 +231,7 @@ function buildImageUrl(relativeUrl) {
   if (relativeUrl.startsWith('http')) {
     return relativeUrl
   }
-  return `${backendOrigin}${relativeUrl}`
+  return `${staticBaseUrl}${relativeUrl}`
 }
 
 /**
@@ -245,7 +260,7 @@ function buildMoleculeImageUrl(smiles) {
   if (!smiles) {
     return ''
   }
-  return `${apiBaseUrl}/chemistry/molecule-image?smiles=${encodeURIComponent(smiles)}&size=300`
+  return buildAbsoluteApiUrl(`/chemistry/molecule-image?smiles=${encodeURIComponent(smiles)}&size=300`)
 }
 
 /**
@@ -261,7 +276,7 @@ function buildFunctionGroupImageUrl(smarts) {
   if (!smarts) {
     return ''
   }
-  return `${apiBaseUrl}/chemistry/function-group-image?smarts=${encodeURIComponent(smarts)}&size=260`
+  return buildAbsoluteApiUrl(`/chemistry/function-group-image?smarts=${encodeURIComponent(smarts)}&size=260`)
 }
 
 /**

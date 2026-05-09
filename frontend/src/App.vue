@@ -1,6 +1,6 @@
 <script setup>
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   DataAnalysis,
@@ -24,6 +24,7 @@ const sidebarCollapsed = ref(false)
 const currentDate = ref(formatCurrentDate())
 const isLoginPage = computed(() => route.path === '/login')
 const authBootstrapping = ref(true)
+const AUTH_EXPIRED_EVENT_NAME = 'spec-agent-auth-expired'
 
 /**
  * 解析接口文档地址。
@@ -144,7 +145,28 @@ async function initializeAuthState() {
   }
 }
 
-onMounted(initializeAuthState)
+/**
+ * 处理登录态失效事件。
+ */
+function handleAuthExpired() {
+  clearAuthSession()
+  if (!authState.authEnabled || route.path === '/login') {
+    return
+  }
+  router.replace({
+    path: '/login',
+    query: { redirect: route.fullPath },
+  })
+}
+
+onMounted(() => {
+  window.addEventListener(AUTH_EXPIRED_EVENT_NAME, handleAuthExpired)
+  initializeAuthState()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(AUTH_EXPIRED_EVENT_NAME, handleAuthExpired)
+})
 </script>
 
 <template>
