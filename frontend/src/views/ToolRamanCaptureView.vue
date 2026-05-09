@@ -101,7 +101,7 @@ function downloadSpectrumText(row) {
     return
   }
 
-  const lines = ['x\ty']
+  const lines = []
   for (let index = 0; index < xValues.length; index += 1) {
     lines.push(`${xValues[index]}\t${yValues[index]}`)
   }
