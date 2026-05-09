@@ -11,7 +11,7 @@ const activeTaskId = ref('')
 const focusResult = ref('')
 
 const form = reactive({
-  wavenumber_text: '980',
+  wavenumber_text: '977.50',
   power_text: '1,3,5',
   explore_time: 5,
   integer: 1,
@@ -133,7 +133,7 @@ async function submitCapture() {
   const powerList = parseNumberList(form.power_text)
 
   if (wavenumberList.length === 0) {
-    ElMessage.warning('请输入至少一个中心波数')
+    ElMessage.warning('请输入至少一个中心波长')
     return
   }
   if (powerList.length === 0) {
@@ -270,12 +270,12 @@ async function submitFocus() {
                   </el-form-item>
                 </el-col>
               </el-row>
-              <el-form-item label="中心波数列表">
+              <el-form-item label="中心波长列表">
                 <el-input
                   v-model="form.wavenumber_text"
                   type="textarea"
                   :rows="3"
-                  placeholder="逗号分隔，例如：980"
+                  placeholder="逗号分隔，例如：977.50"
                 />
               </el-form-item>
               <el-form-item label="激光功率列表">
@@ -295,7 +295,7 @@ async function submitFocus() {
               :closable="false"
               show-icon
               title="说明"
-              description="系统会按中心波数与激光功率组合顺序采集，完成后仅在页面展示报告，不保存到本地文件。"
+              description="系统会按中心波长与激光功率组合顺序采集，完成后仅在页面展示报告，不保存到本地文件。"
             />
           </el-card>
         </el-col>

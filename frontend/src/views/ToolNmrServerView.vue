@@ -1,9 +1,10 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import NmrStickChart from '../components/NmrStickChart.vue'
 import {
   buildAbsoluteApiUrl,
+  fetchProtectedImageBlob,
   getApiErrorMessage,
   nmrserverForward,
   nmrserverReverse,
@@ -20,6 +21,7 @@ const searchLoading = ref(false)
 const forwardItems = ref([])
 const reverseItems = ref([])
 const searchItems = ref([])
+const protectedImageUrlMap = ref({})
 
 const forwardForm = reactive({
   smiles_input: '',
@@ -124,6 +126,116 @@ function buildMolImageUrl(smiles) {
 }
 
 /**
+ * 释放已创建的分子结构对象 URL。
+ */
+function revokeProtectedImageUrls() {
+  Object.values(protectedImageUrlMap.value).forEach((item) => {
+    if (item?.objectUrl) {
+      URL.revokeObjectURL(item.objectUrl)
+    }
+  })
+  protectedImageUrlMap.value = {}
+}
+
+/**
+ * 获取分子结构图状态。
+ *
+ * Args:
+ *   smiles: 分子 SMILES。
+ *
+ * Returns:
+ *   当前结构图状态对象。
+ */
+function getProtectedImageState(smiles) {
+  return protectedImageUrlMap.value[String(smiles || '')] || null
+}
+
+/**
+ * 获取分子结构图展示地址。
+ *
+ * Args:
+ *   smiles: 分子 SMILES。
+ *
+ * Returns:
+ *   可展示的对象 URL。
+ */
+function getProtectedMolImageSrc(smiles) {
+  return getProtectedImageState(smiles)?.objectUrl || ''
+}
+
+/**
+ * 获取结构图预览列表。
+ *
+ * Args:
+ *   smiles: 分子 SMILES。
+ *
+ * Returns:
+ *   预览地址数组。
+ */
+function getProtectedMolImagePreviewList(smiles) {
+  const objectUrl = getProtectedMolImageSrc(smiles)
+  return objectUrl ? [objectUrl] : []
+}
+
+/**
+ * 判断分子结构图是否加载失败。
+ *
+ * Args:
+ *   smiles: 分子 SMILES。
+ *
+ * Returns:
+ *   是否加载失败。
+ */
+function isProtectedMolImageFailed(smiles) {
+  return Boolean(getProtectedImageState(smiles)?.failed)
+}
+
+/**
+ * 预加载分子结构图片。
+ *
+ * Args:
+ *   items: 待处理结果列表。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function preloadMoleculeImages(items) {
+  const smilesList = Array.from(
+    new Set(
+      (Array.isArray(items) ? items : [])
+        .map((item) => String(item?.smiles || '').trim())
+        .filter(Boolean),
+    ),
+  )
+
+  revokeProtectedImageUrls()
+  if (smilesList.length === 0) {
+    return
+  }
+
+  const nextMap = {}
+  await Promise.all(smilesList.map(async (smiles) => {
+    nextMap[smiles] = {
+      objectUrl: '',
+      failed: false,
+    }
+    try {
+      const imageBlob = await fetchProtectedImageBlob(buildMolImageUrl(smiles))
+      nextMap[smiles] = {
+        objectUrl: URL.createObjectURL(imageBlob),
+        failed: false,
+      }
+    } catch {
+      nextMap[smiles] = {
+        objectUrl: '',
+        failed: true,
+      }
+    }
+  }))
+  protectedImageUrlMap.value = nextMap
+}
+
+/**
  * 复制文本到系统剪贴板。
  *
  * Args:
@@ -156,6 +268,7 @@ async function submitForward() {
   try {
     const data = await nmrserverForward({ ...forwardForm })
     forwardItems.value = data.items || []
+    await preloadMoleculeImages(forwardItems.value)
     ElMessage.success(`预测完成，共 ${forwardItems.value.length} 个分子结果`)
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
@@ -179,6 +292,7 @@ async function submitReverse() {
   try {
     const data = await nmrserverReverse({ ...reverseForm })
     reverseItems.value = data.items || []
+    await preloadMoleculeImages(reverseItems.value)
     ElMessage.success(`反向预测完成，共 ${reverseItems.value.length} 条候选结果`)
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
@@ -202,6 +316,7 @@ async function submitSearch() {
   try {
     const data = await nmrserverSearch({ ...searchForm })
     searchItems.value = data.items || []
+    await preloadMoleculeImages(searchItems.value)
     ElMessage.success(`数据库搜索完成，返回 ${searchItems.value.length} 条结果`)
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
@@ -209,6 +324,10 @@ async function submitSearch() {
     searchLoading.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  revokeProtectedImageUrls()
+})
 </script>
 
 <template>
@@ -258,11 +377,18 @@ async function submitSearch() {
                   <div class="molecule-card">
                     <div class="molecule-title">分子结构图</div>
                     <img
-                      v-if="item.smiles"
-                      :src="buildMolImageUrl(item.smiles)"
+                      v-if="getProtectedMolImageSrc(item.smiles)"
+                      :src="getProtectedMolImageSrc(item.smiles)"
                       alt="molecule"
                       class="molecule-image"
                     />
+                    <el-empty
+                      v-else-if="isProtectedMolImageFailed(item.smiles)"
+                      description="结构图加载失败"
+                      :image-size="64"
+                      class="inner-empty"
+                    />
+                    <div v-else class="molecule-image molecule-image-loading">加载中...</div>
                     <div class="smiles-line">{{ item.smiles || '-' }}</div>
                     <el-button text size="small" @click="copyText(item.smiles || '')">复制 SMILES</el-button>
                   </div>
@@ -408,12 +534,19 @@ async function submitSearch() {
                 <el-button text @click="copyText(item.smiles || '')">复制 SMILES</el-button>
               </div>
               <el-image
-                v-if="item.smiles"
-                :src="buildMolImageUrl(item.smiles)"
+                v-if="getProtectedMolImageSrc(item.smiles)"
+                :src="getProtectedMolImageSrc(item.smiles)"
                 fit="contain"
                 class="result-molecule-image"
-                :preview-src-list="[buildMolImageUrl(item.smiles)]"
+                :preview-src-list="getProtectedMolImagePreviewList(item.smiles)"
               />
+              <el-empty
+                v-else-if="isProtectedMolImageFailed(item.smiles)"
+                description="结构图加载失败"
+                :image-size="72"
+                class="inner-empty"
+              />
+              <div v-else class="result-molecule-image molecule-image-loading">加载中...</div>
               <div class="smiles-line">{{ item.smiles || '-' }}</div>
               <div class="score-grid">
                 <div class="score-item">
@@ -494,12 +627,19 @@ async function submitSearch() {
                 <el-button text @click="copyText(item.smiles || '')">复制 SMILES</el-button>
               </div>
               <el-image
-                v-if="item.smiles"
-                :src="buildMolImageUrl(item.smiles)"
+                v-if="getProtectedMolImageSrc(item.smiles)"
+                :src="getProtectedMolImageSrc(item.smiles)"
                 fit="contain"
                 class="result-molecule-image"
-                :preview-src-list="[buildMolImageUrl(item.smiles)]"
+                :preview-src-list="getProtectedMolImagePreviewList(item.smiles)"
               />
+              <el-empty
+                v-else-if="isProtectedMolImageFailed(item.smiles)"
+                description="结构图加载失败"
+                :image-size="72"
+                class="inner-empty"
+              />
+              <div v-else class="result-molecule-image molecule-image-loading">加载中...</div>
               <div class="smiles-line">{{ item.smiles || '-' }}</div>
               <div class="score-grid">
                 <div class="score-item">
@@ -566,6 +706,13 @@ async function submitSearch() {
   border: 1px dashed #d7e2f5;
   border-radius: 8px;
   background: #fff;
+}
+
+.molecule-image-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6f86aa;
 }
 
 .smiles-line {
