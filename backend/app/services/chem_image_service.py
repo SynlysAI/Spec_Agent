@@ -5,6 +5,10 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
+from app.core.logging import get_logger
+
+logger = get_logger("spec_agent.services.chem_image")
+
 
 class ChemImageService:
     """化学结构图片渲染服务。"""
@@ -20,6 +24,7 @@ class ChemImageService:
             from rdkit import Chem
             from rdkit.Chem import Draw
         except ImportError as exc:
+            logger.error("未安装 RDKit，无法生成化学结构图片: %s", exc)
             raise RuntimeError("未安装 RDKit，无法生成化学结构图片") from exc
         return Chem, Draw
 
@@ -49,11 +54,13 @@ class ChemImageService:
         """
         clean_smiles = str(smiles or "").strip()
         if not clean_smiles:
+            logger.warning("smiles 为空")
             raise ValueError("smiles 不能为空")
 
         chem_module, draw_module = self._import_rdkit_modules()
         mol = chem_module.MolFromSmiles(clean_smiles)
         if mol is None:
+            logger.warning("无效的 SMILES，无法解析分子结构: %s", clean_smiles)
             raise ValueError("无效的 SMILES，无法解析分子结构")
 
         image_obj = draw_module.MolToImage(mol, size=(size, size))
@@ -71,11 +78,13 @@ class ChemImageService:
         """
         clean_smarts = str(smarts or "").strip()
         if not clean_smarts:
+            logger.warning("smarts 为空")
             raise ValueError("smarts 不能为空")
 
         chem_module, draw_module = self._import_rdkit_modules()
         mol = chem_module.MolFromSmarts(clean_smarts)
         if mol is None:
+            logger.warning("无效的 SMARTS，无法解析官能团结构: %s", clean_smarts)
             raise ValueError("无效的 SMARTS，无法解析官能团结构")
 
         image_obj = draw_module.MolToImage(mol, size=(size, size), kekulize=False)

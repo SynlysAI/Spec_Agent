@@ -35,6 +35,14 @@ const activeSpectrum = computed(() => {
   return matched || results.value.find((item) => item.success) || results.value[0]
 })
 
+const activeSpectrumSnr = computed(() => {
+  const snr = activeSpectrum.value?.snr
+  if (snr === null || snr === undefined || Number.isNaN(Number(snr))) {
+    return '-'
+  }
+  return formatNumber(snr, 6)
+})
+
 /**
  * 将逗号分隔文本解析为数字列表。
  *
@@ -76,6 +84,42 @@ function formatNumber(value, digits = 3) {
  */
 function handleResultRowClick(row) {
   activeTaskId.value = row?.task_id || ''
+}
+
+/**
+ * 下载单条采集结果的谱图文本。
+ *
+ * Args:
+ *   row: 当前采集结果行。
+ */
+function downloadSpectrumText(row) {
+  const xValues = Array.isArray(row?.x_values) ? row.x_values : []
+  const yValues = Array.isArray(row?.y_values) ? row.y_values : []
+
+  if (xValues.length === 0 || yValues.length === 0 || xValues.length !== yValues.length) {
+    ElMessage.warning('当前行缺少可下载的谱图数据')
+    return
+  }
+
+  const lines = ['x\ty']
+  for (let index = 0; index < xValues.length; index += 1) {
+    lines.push(`${xValues[index]}\t${yValues[index]}`)
+  }
+
+  const textContent = `${lines.join('\n')}\n`
+  const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' })
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const wavenumber = Number(row?.wavenumber)
+  const power = Number(row?.power)
+  const reqId = String(row?.task_id || 'unknown')
+
+  link.href = objectUrl
+  link.download = `raman_${Number.isFinite(wavenumber) ? wavenumber : 'na'}_${Number.isFinite(power) ? power : 'na'}_${reqId}.txt`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(objectUrl)
 }
 
 /**
@@ -272,6 +316,7 @@ async function submitFocus() {
                 <el-descriptions-item label="总耗时">{{ formatNumber(summary.duration_seconds) }} 秒</el-descriptions-item>
                 <el-descriptions-item label="总任务">{{ summary.total }}</el-descriptions-item>
                 <el-descriptions-item label="成功/失败">{{ summary.success }} / {{ summary.failed }}</el-descriptions-item>
+                <el-descriptions-item label="当前信噪比">{{ activeSpectrumSnr }}</el-descriptions-item>
               </el-descriptions>
               <div v-if="activeSpectrum?.success" class="chart-section">
                 <SpectrumPreviewChart
@@ -322,9 +367,26 @@ async function submitFocus() {
               {{ formatNumber(scope.row.y_min) }} ~ {{ formatNumber(scope.row.y_max) }}
             </template>
           </el-table-column>
+          <el-table-column label="信噪比" width="120">
+            <template #default="scope">
+              {{ formatNumber(scope.row.snr, 6) }}
+            </template>
+          </el-table-column>
           <el-table-column label="耗时(s)" width="110">
             <template #default="scope">
               {{ formatNumber(scope.row.duration_seconds) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="下载" width="100" fixed="right">
+            <template #default="scope">
+              <el-button
+                type="primary"
+                link
+                :disabled="!scope.row.success || !scope.row.x_values?.length || !scope.row.y_values?.length"
+                @click.stop="downloadSpectrumText(scope.row)"
+              >
+                下载
+              </el-button>
             </template>
           </el-table-column>
           <el-table-column prop="response_file" label="结果文件" min-width="220" />

@@ -8,6 +8,10 @@ from typing import Any
 
 import paramiko
 
+from app.core.logging import get_logger
+
+logger = get_logger("spec_agent.services.remote_acceptance")
+
 
 class RemoteAcceptanceService:
     """通过 SSH 执行远程验收脚本并解析 JSON 输出。"""
@@ -28,6 +32,7 @@ class RemoteAcceptanceService:
         script = str(remote.get("script") or "").strip()
         password = str(remote.get("password") or "").strip()
         if not host or not user or not script:
+            logger.warning("remote_summary 模式缺少 host/user/script 配置")
             raise ValueError("remote_summary 模式缺少 host/user/script 配置")
 
         port = int(remote.get("port") or 22)
@@ -148,10 +153,12 @@ class RemoteAcceptanceService:
                 start_index = index
                 break
         if start_index is None:
+            logger.error("远程脚本未输出 JSON 结果, stdout 前 500 字符: %s", stdout_text[:500])
             raise ValueError("远程脚本未输出 JSON 结果")
         json_text = "\n".join(lines[start_index:]).strip()
         payload = json.loads(json_text)
         if not isinstance(payload, dict):
+            logger.error("远程脚本 JSON 结果格式非法, 实际类型: %s", type(payload).__name__)
             raise ValueError("远程脚本 JSON 结果格式非法")
         return payload
 

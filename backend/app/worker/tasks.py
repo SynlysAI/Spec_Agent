@@ -5,10 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.infra.repositories import ResultRepository, TaskRepository
 from app.schemas.task_runtime import ResultRecord, TaskErrorInfo
 from app.services.analysis_executor import execute_analysis_sync
 from app.worker.celery_app import celery_app
+
+logger = get_logger("spec_agent.worker.tasks")
 
 
 def _update_task(task_id: str, **kwargs: Any) -> None:
@@ -61,6 +64,7 @@ def execute_analysis_task(task_id: str) -> None:
         )
         _update_task(task_id, status="SUCCESS", progress=100, message="finished", result_ref=result_id, error=None)
     except Exception as exc:
+        logger.error("任务 %s 执行失败: %s", task_id, exc)
         _update_task(task_id, status="FAILED", progress=100, message="failed", error=TaskErrorInfo(detail=str(exc)))
 
 

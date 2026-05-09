@@ -19,6 +19,7 @@ from rdkit.Chem import Fragments
 from rdkit.Chem.Scaffolds import MurckoScaffold
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.infra.repositories import (
     LabCollectRunRepository,
     MolecularStatisticsRepository,
@@ -49,6 +50,8 @@ TYPE_INPUT_KIND = {
     "raman": "file_path",
     "lcms": "file_path",
 }
+
+logger = get_logger("spec_agent.services.lab_collect")
 
 COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "skipped", "failed")
 SAMPLE_SUMMARY_TYPES = ("nmr", "gpc", "ir", "raman", "lcms")
@@ -175,6 +178,7 @@ class LabCollectService:
             run_record.updated_at = datetime.now()
             LabCollectRunRepository.save(run_record)
         except Exception as exc:
+            logger.error("采集批次 %s Celery 派发失败: %s", run_id, exc)
             run_record.status = "FAILED"
             run_record.finished_at = datetime.now()
             run_record.updated_at = datetime.now()
@@ -650,6 +654,7 @@ class LabCollectService:
 
         if candidate.spectrum_type == "gpc":
             if gpc_primary_arw is None:
+                logger.warning("GPC 样本目录未找到 .arw 主文件: %s", local_sample_path)
                 raise ValueError(f"GPC 样本目录未找到 .arw 主文件: {local_sample_path}")
             primary_input_path = str(gpc_primary_arw)
             sample_meta = {
@@ -807,6 +812,7 @@ class LabCollectService:
         start = datetime.strptime(date_from, "%Y-%m-%d").date()
         end = datetime.strptime(date_to, "%Y-%m-%d").date()
         if start > end:
+            logger.warning("date_from 不能大于 date_to: %s > %s", date_from, date_to)
             raise ValueError("date_from 不能大于 date_to")
         items: list[str] = []
         current = start
@@ -881,6 +887,7 @@ class LabCollectService:
             if normalized in allowed and normalized not in items:
                 items.append(normalized)
         if not items:
+            logger.warning("未提供有效的 spectrum_types: %s", spectrum_types)
             raise ValueError("未提供有效的 spectrum_types")
         return items
 

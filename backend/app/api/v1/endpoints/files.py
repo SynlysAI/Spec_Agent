@@ -5,11 +5,13 @@ from __future__ import annotations
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.schemas.common import ApiResponse
 from app.schemas.files import UploadFileData
 from app.services.file_service import FileService
 
 router = APIRouter(prefix="/files", tags=["files"])
+logger = get_logger("spec_agent.api.files")
 
 
 @router.post("/upload", response_model=ApiResponse[UploadFileData])
@@ -36,6 +38,7 @@ def _validate_upload(file: UploadFile, biz_type: str | None) -> None:
     """
     filename = file.filename or ""
     if not filename:
+        logger.warning("上传文件名为空")
         raise HTTPException(status_code=400, detail="文件名不能为空")
 
     ext = filename.lower().rsplit(".", maxsplit=1)
@@ -49,17 +52,21 @@ def _validate_upload(file: UploadFile, biz_type: str | None) -> None:
         "lcms": {".txt", ".csv"},
     }
     if biz_type not in allowed_map:
+        logger.warning("不支持的 biz_type: %s", biz_type)
         raise HTTPException(status_code=400, detail="biz_type 仅支持 gpc/nmr/ir/raman/lcms")
 
     allowed = allowed_map[biz_type]
     if suffix not in allowed:
+        logger.warning("不支持的文件类型: %s, biz_type=%s", suffix, biz_type)
         raise HTTPException(status_code=400, detail=f"不支持的文件类型: {suffix}")
 
     content = file.file.read()
     file.file.seek(0)
     if not content:
+        logger.warning("上传文件内容为空: filename=%s", filename)
         raise HTTPException(status_code=400, detail="空文件不允许上传")
 
     max_size = settings.max_upload_size_mb * 1024 * 1024
     if len(content) > max_size:
+        logger.warning("文件大小超限: filename=%s, size=%d, limit=%dMB", filename, len(content), settings.max_upload_size_mb)
         raise HTTPException(status_code=400, detail=f"文件大小超过限制: {settings.max_upload_size_mb}MB")

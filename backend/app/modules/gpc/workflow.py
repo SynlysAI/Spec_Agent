@@ -16,7 +16,10 @@ from analysis.gpc.tools.gpc_validation import GPCValidator
 from analysis.gpc.utils.gpc_analyzer import GPCAnalyzer
 from analysis.gpc.utils.gpc_plotter import GPCDataPlotter
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.modules.common.llm_service import create_llm_client
+
+logger = get_logger("spec_agent.modules.gpc.workflow")
 
 
 def _parse_manual_interval(value: Optional[str]) -> Optional[List[float]]:
@@ -27,10 +30,12 @@ def _parse_manual_interval(value: Optional[str]) -> Optional[List[float]]:
         return None
     parts = [x.strip() for x in text.split(",")]
     if len(parts) != 2:
+        logger.warning("manual_interval 格式错误: %s", value)
         raise ValueError("manual_interval 格式应为 'start,end'，例如 7.2,8.9")
     start = float(parts[0])
     end = float(parts[1])
     if start >= end:
+        logger.warning("manual_interval 区间无效: start=%s, end=%s", start, end)
         raise ValueError("manual_interval 必须满足 start < end")
     return [start, end]
 
@@ -115,7 +120,7 @@ class GPCPathWorkflow:
             if not found_files:
                 errors.append(f"目录中未找到 .arw 文件: {path}")
 
-        print(f"🔍 扫描完成: 找到 {len(found_files)} 个待处理文件")
+        logger.info("扫描完成: 找到 %d 个待处理文件", len(found_files))
         return {"file_paths": found_files, "errors": errors}
 
     # --- 节点 2: 读取数据 ---
@@ -124,7 +129,7 @@ class GPCPathWorkflow:
             return {}
 
         origin_data_list = []
-        print(f"📖 开始读取 {len(state['file_paths'])} 个谱图文件...")
+        logger.info("开始读取 %d 个谱图文件...", len(state['file_paths']))
 
         for file_path in state["file_paths"]:
             try:
@@ -149,9 +154,9 @@ class GPCPathWorkflow:
                     "output_dir": output_dir
                 }
                 origin_data_list.append(origin_data)
-                print(f"✅ 成功读取: {os.path.basename(file_path)}")
+                logger.info("成功读取: %s", os.path.basename(file_path))
             except Exception as e:
-                print(f"❌ 读取文件异常: {str(e)}")
+                logger.error("读取文件异常: %s", str(e))
 
         return {"analysis_results": origin_data_list}
 
@@ -161,7 +166,7 @@ class GPCPathWorkflow:
             return {}
 
         analysis_results = state.get("analysis_results", [])
-        print(f"🎯 开始 ROI 识别...")
+        logger.info("开始 ROI 识别...")
         
         for data in analysis_results:
             try:
@@ -174,6 +179,7 @@ class GPCPathWorkflow:
                 if explicit_three:
                     three_tuple = tuple(explicit_three)
                     if len(three_tuple) != 3:
+                        logger.warning("three_color_arw_paths 长度错误: %d", len(three_tuple))
                         raise ValueError("three_color_arw_paths 必须为绿、红、白三条 .arw 路径")
                     roi_result = self.roi_processor.calculate_roi(
                         "",
@@ -205,6 +211,7 @@ class GPCPathWorkflow:
                         if three_color_curve_name:
                             break
                     if not three_color_curve_name:
+                        logger.warning("无法根据文件名匹配三色曲线，候选名: %s", candidate_names)
                         raise ValueError(
                             f"无法根据文件名匹配三色曲线，候选名: {candidate_names}"
                         )
@@ -233,9 +240,9 @@ class GPCPathWorkflow:
                 data["roi_result"] = roi_result
                 data["roi_data"] = roi_data  # 直接存储原始 DataFrame
                 data["calibration_func"] = calibration_func
-                print(f"✅ ROI 识别完成: {simple_name}")
+                logger.info("ROI 识别完成: %s", simple_name)
             except Exception as e:
-                print(f"❌ ROI 识别异常: {str(e)}")
+                logger.error("ROI 识别异常: %s", str(e))
 
         return {"analysis_results": analysis_results}
 
@@ -245,7 +252,7 @@ class GPCPathWorkflow:
             return {}
 
         analysis_results = state.get("analysis_results", [])
-        print(f"🔍 开始峰值检测与分子量计算...")
+        logger.info("开始峰值检测与分子量计算...")
         # 从 state 中获取 UI 传来的参数
         detect_mode = state.get("detect_mode", "auto")
         manual_interval = state.get("manual_interval", None)
@@ -278,9 +285,9 @@ class GPCPathWorkflow:
                     "mz": molecular_params.get("Mz", 0),
                     "pdi": molecular_params.get("PDI", 0)
                 }
-                print(f"✅ 峰值检测与分子量计算完成: {simple_name}")
+                logger.info("峰值检测与分子量计算完成: %s", simple_name)
             except Exception as e:
-                print(f"❌ 峰值检测与分子量计算异常: {str(e)}")
+                logger.error("峰值检测与分子量计算异常: %s", str(e))
 
         return {"analysis_results": analysis_results}
 
@@ -292,7 +299,7 @@ class GPCPathWorkflow:
         analysis_results = state.get("analysis_results", [])
         detect_mode = state.get("detect_mode", "auto")
         manual_interval = state.get("manual_interval", None)
-        print(f"📊 开始绘制分析结果图...")
+        logger.info("开始绘制分析结果图...")
         
         for data in analysis_results:
             try:
@@ -330,10 +337,10 @@ class GPCPathWorkflow:
                 peaks_plotly = gpc_plotter.get_peak_detect_plot(peak_index=0, detect_mode=detect_mode, manual_interval=manual_interval)
                 data["peaks_plotly"] = peaks_plotly
 
-                print(f"✅ 绘图完成: {simple_name}")
+                logger.info("绘图完成: %s", simple_name)
             except Exception as e:
                 traceback.print_exc()
-                print(f"❌ 绘图异常: {str(e)}")
+                logger.error("绘图异常: %s", str(e))
 
         return {"analysis_results": analysis_results}
 
@@ -343,7 +350,7 @@ class GPCPathWorkflow:
             return {}
 
         analysis_results = state.get("analysis_results", [])
-        print(f"📄 开始从PDF报告中提取分子量数据...")
+        logger.info("开始从PDF报告中提取分子量数据...")
         manual_pdf = (state.get("comparison_report_pdf_path") or "").strip() or None
         shared_pdf_data: Optional[Dict[str, Any]] = None
         if manual_pdf and os.path.isfile(manual_pdf):
@@ -361,9 +368,9 @@ class GPCPathWorkflow:
                 
                 # 将PDF提取的数据添加到结果中
                 data["pdf_data"] = pdf_data
-                print(f"✅ PDF数据提取完成: {base_name}")
+                logger.info("PDF数据提取完成: %s", base_name)
             except Exception as e:
-                print(f"❌ PDF数据提取异常: {str(e)}")
+                logger.error("PDF数据提取异常: %s", str(e))
 
         return {"analysis_results": analysis_results}
 
@@ -372,7 +379,7 @@ class GPCPathWorkflow:
         if not self.llm_client or not state["analysis_results"]:
             return {}
 
-        print("🤖 LLM 正在生成数据解读报告...")
+        logger.info("LLM 正在生成数据解读报告...")
         new_insights = []
 
         # 只取最新的分析结果进行解读（如果需要的话）
@@ -401,7 +408,7 @@ class GPCPathWorkflow:
             return {}
 
         analysis_results = state.get("analysis_results", [])
-        print(f"📝 开始保存分析报告...")
+        logger.info("开始保存分析报告...")
         
         for data in analysis_results:
             try:
@@ -508,11 +515,11 @@ class GPCPathWorkflow:
                     f.write(f"# GPC 分析报告\n")
                     f.writelines(report_content)
                 
-                print(f"✅ 报告保存完成: {report_path}")
+                logger.info("报告保存完成: %s", report_path)
                 # 将报告路径添加到结果中
                 data["report_content"] = "".join(report_content)
             except Exception as e:
-                print(f"❌ 保存报告异常: {str(e)}")
+                logger.error("保存报告异常: %s", str(e))
 
         return {"analysis_results": analysis_results}
 

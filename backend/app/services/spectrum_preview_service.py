@@ -10,8 +10,11 @@ import numpy as np
 import pandas as pd
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.infra.mongo import get_files_collection
 from app.modules.nmr.service import get_nmr_sample_data
+
+logger = get_logger("spec_agent.services.spectrum_preview")
 
 
 class SpectrumPreviewService:
@@ -32,6 +35,7 @@ class SpectrumPreviewService:
                 return file_bytes.decode(encoding)
             except UnicodeError:
                 continue
+        logger.warning("无法解析文件编码，尝试了 UTF-8/GBK/UTF-16 均失败")
         raise ValueError("无法解析文件编码，请使用 UTF-16/UTF-8/GBK 编码文本文件")
 
     @staticmethod
@@ -54,6 +58,7 @@ class SpectrumPreviewService:
             except ValueError:
                 continue
         if not rows:
+            logger.warning("未解析到有效谱图数据，文件内容可能不包含两列数值")
             raise ValueError("未解析到有效谱图数据，请确保文件至少包含两列数值")
         arr = np.asarray(rows, dtype=np.float64)
         return arr[:, 0], arr[:, 1]
@@ -105,6 +110,7 @@ class SpectrumPreviewService:
                 names=["retention_time", "intensity"],
             )
         except Exception as exc:
+            logger.error("GPC .arw 文件读取失败: %s", exc)
             raise ValueError(f"GPC .arw 文件读取失败: {exc}") from exc
 
     def _preview_gpc_arw(self, file_path: str) -> tuple[np.ndarray, np.ndarray]:
@@ -118,12 +124,15 @@ class SpectrumPreviewService:
         """
         curve_df = self._read_gpc_arw_file(file_path=file_path)
         if not isinstance(curve_df, pd.DataFrame) or curve_df.empty:
+            logger.warning("GPC .arw 文件为空或无法解析")
             raise ValueError("GPC .arw 文件为空或无法解析")
         if "retention_time" not in curve_df.columns or "intensity" not in curve_df.columns:
+            logger.warning("GPC .arw 文件缺少必要列, 实际列: %s", list(curve_df.columns))
             raise ValueError("GPC .arw 文件缺少 retention_time/intensity 列")
 
         curve_df = curve_df[["retention_time", "intensity"]].dropna()
         if curve_df.empty:
+            logger.warning("GPC .arw 文件未解析到有效数值")
             raise ValueError("GPC .arw 文件未解析到有效数值")
         return (
             np.asarray(curve_df["retention_time"].astype(float), dtype=np.float64),
@@ -143,11 +152,13 @@ class SpectrumPreviewService:
         if file_id:
             file_doc = get_files_collection().find_one({"file_id": file_id}, {"_id": 0})
             if not file_doc:
+                logger.warning("file_id 不存在: %s", file_id)
                 raise ValueError("file_id 不存在")
             storage_path = str(file_doc.get("storage_path", "")).replace("\\", "/")
             return str(settings.project_root / storage_path), str(file_doc.get("file_name") or file_id)
         if input_path:
             return str(input_path), Path(str(input_path)).name
+        logger.warning("file_id 与 input_path 同时为空")
         raise ValueError("file_id 与 input_path 不能同时为空")
 
     def preview_from_bytes(
@@ -231,6 +242,7 @@ class SpectrumPreviewService:
         path_str, source_name = self._resolve_source_path(file_id=file_id, input_path=input_path)
         source_path = Path(path_str)
         if not source_path.exists():
+            logger.warning("输入路径不存在: %s", source_path)
             raise ValueError(f"输入路径不存在: {source_path}")
 
         inferred = (spectype or "auto").lower()
@@ -263,6 +275,7 @@ class SpectrumPreviewService:
             if source_path.is_dir():
                 arw_files = sorted(source_path.rglob("*.arw"))
                 if not arw_files:
+                    logger.warning("GPC 目录中未找到可预览的 .arw 文件: %s", source_path)
                     raise ValueError("GPC 目录中未找到可预览的 .arw 文件")
                 source_path = arw_files[0]
                 source_name = source_path.name
@@ -271,6 +284,7 @@ class SpectrumPreviewService:
             if source_path.is_dir():
                 text_files = sorted(source_path.rglob("*.txt")) + sorted(source_path.rglob("*.csv"))
                 if not text_files:
+                    logger.warning("目录中未找到可预览的 txt/csv 文件: %s", source_path)
                     raise ValueError("目录中未找到可预览的 txt/csv 文件")
                 source_path = text_files[0]
                 source_name = source_path.name
@@ -308,8 +322,10 @@ class SpectrumPreviewService:
             统一预览返回字典。
         """
         if len(x_values) != len(y_values):
+            logger.warning("谱图 x/y 数据长度不一致: x=%d, y=%d", len(x_values), len(y_values))
             raise ValueError("谱图 x/y 数据长度不一致")
         if len(x_values) == 0:
+            logger.warning("谱图数据为空")
             raise ValueError("谱图数据为空")
 
         display_x, display_y = self._downsample(x_values, y_values, max_points=max_points)

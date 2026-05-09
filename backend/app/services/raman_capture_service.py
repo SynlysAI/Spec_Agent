@@ -43,6 +43,7 @@ class CaptureTask:
     point_count: int = 0
     y_min: float | None = None
     y_max: float | None = None
+    snr: float | None = None
     response_file: str | None = None
     error_msg: str | None = None
     duration_seconds: float = 0.0
@@ -347,9 +348,29 @@ class RamanCaptureService:
         task.point_count = len(y_numbers)
         task.y_min = float(np.min(y_array)) if len(y_array) > 0 else None
         task.y_max = float(np.max(y_array)) if len(y_array) > 0 else None
+        task.snr = RamanCaptureService._calculate_snr(y_array=y_array)
         task.response_file = data_wrapper.get("response_file")
         task.duration_seconds = duration_seconds
         task.error_msg = None
+
+    @staticmethod
+    def _calculate_snr(y_array: np.ndarray) -> float | None:
+        """计算谱图信噪比。
+
+        Args:
+            y_array: 谱图强度数组。
+
+        Returns:
+            信噪比；当数据为空或标准差为 0 时返回 ``None``。
+        """
+        if y_array.size == 0:
+            return None
+
+        std_value = float(np.std(y_array))
+        if np.isclose(std_value, 0.0):
+            return None
+
+        return float(np.mean(y_array) / std_value)
 
     @staticmethod
     def _build_result_item(task: CaptureTask) -> RamanCaptureResultItem:
@@ -375,6 +396,7 @@ class RamanCaptureService:
             point_count=task.point_count,
             y_min=task.y_min,
             y_max=task.y_max,
+            snr=task.snr,
             duration_seconds=task.duration_seconds,
             error_msg=task.error_msg,
             response_file=task.response_file,
@@ -415,13 +437,14 @@ class RamanCaptureService:
             "",
             "## 采集明细",
             "",
-            "| 序号 | req_id | 中心波数 | 激光功率 | 状态 | 数据点 | 强度范围 | 结果文件 | 耗时(s) | 错误信息 |",
-            "| --- | --- | ---: | ---: | --- | ---: | --- | --- | ---: | --- |",
+            "| 序号 | req_id | 中心波数 | 激光功率 | 状态 | 数据点 | 强度范围 | 信噪比 | 结果文件 | 耗时(s) | 错误信息 |",
+            "| --- | --- | ---: | ---: | --- | ---: | --- | ---: | --- | ---: | --- |",
         ]
         for item in results:
             y_range = "-"
             if item.y_min is not None and item.y_max is not None:
                 y_range = f"{item.y_min:.3f} ~ {item.y_max:.3f}"
+            snr_text = f"{item.snr:.6f}" if item.snr is not None else "-"
             lines.append(
                 "| "
                 f"{item.sequence} | "
@@ -431,6 +454,7 @@ class RamanCaptureService:
                 f"{'成功' if item.success else '失败'} | "
                 f"{item.point_count} | "
                 f"{y_range} | "
+                f"{snr_text} | "
                 f"{item.response_file or '-'} | "
                 f"{item.duration_seconds:.3f} | "
                 f"{item.error_msg or '-'} |"

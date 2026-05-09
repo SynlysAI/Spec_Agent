@@ -6,6 +6,7 @@ import requests
 from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.schemas.common import ApiResponse
 from app.schemas.raman_capture import (
     RamanCaptureRunData,
@@ -16,6 +17,7 @@ from app.schemas.raman_capture import (
 from app.services.raman_capture_service import raman_capture_service
 
 router = APIRouter(prefix="/raman-capture", tags=["raman-capture"])
+logger = get_logger("spec_agent.api.raman_capture")
 
 RAMAN_CAMERA_FOCUS_TIMEOUT = 60
 
@@ -35,12 +37,15 @@ def raman_auto_focus(payload: RamanFocusRequest) -> ApiResponse[RamanFocusResult
         )
         resp.raise_for_status()
     except requests.exceptions.Timeout as exc:
+        logger.error("自动对焦请求超时")
         raise HTTPException(status_code=504, detail="自动对焦请求超时") from exc
     except requests.exceptions.RequestException as exc:
+        logger.error("自动对焦请求失败: %s", exc)
         raise HTTPException(status_code=502, detail=f"自动对焦请求失败: {exc}") from exc
 
     data = resp.json()
     if data.get("code") != 0:
+        logger.error("自动对焦失败: %s", data.get("msg"))
         raise HTTPException(status_code=502, detail=data.get("msg", "自动对焦失败"))
 
     return ApiResponse(
@@ -67,10 +72,13 @@ def run_raman_capture(payload: RamanCaptureRunRequest) -> ApiResponse[RamanCaptu
             grating_index=payload.grating_index,
         )
     except ValueError as exc:
+        logger.warning("拉曼光谱仪请求参数错误: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except requests.exceptions.Timeout as exc:
+        logger.error("拉曼光谱仪请求超时")
         raise HTTPException(status_code=504, detail="拉曼光谱仪请求超时") from exc
     except requests.exceptions.RequestException as exc:
+        logger.error("拉曼光谱仪请求失败: %s", exc)
         raise HTTPException(status_code=502, detail=f"拉曼光谱仪请求失败: {exc}") from exc
 
     return ApiResponse(code=0, message="ok", data=data)

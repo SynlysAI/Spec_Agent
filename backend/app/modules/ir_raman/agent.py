@@ -16,7 +16,10 @@ import numpy as np
 import torch
 import yaml
 
+from app.core.logging import get_logger
 from app.modules.ir_raman.schemas import SpectrumAgentResult
+
+logger = get_logger("spec_agent.modules.ir_raman.agent")
 
 # 延迟导入重型依赖，避免未使用 IR/Raman 时拖慢启动
 def _run_main(
@@ -120,8 +123,10 @@ def _parse_spectrum_file(file_path: Union[str, Path]) -> tuple[np.ndarray, np.nd
     """解析本地谱图文件，返回 (x_values, y_values)。"""
     p = Path(file_path)
     if not p.exists():
+        logger.error("谱图文件不存在: %s", p)
         raise FileNotFoundError(f"谱图文件不存在: {p}")
     if p.is_dir():
+        logger.warning("输入路径是目录，不是文件: %s", p)
         raise ValueError(f"输入路径是目录，不是文件: {p}")
 
     content = None
@@ -132,6 +137,7 @@ def _parse_spectrum_file(file_path: Union[str, Path]) -> tuple[np.ndarray, np.nd
         except UnicodeError:
             continue
     if content is None:
+        logger.warning("无法解析文件编码，请使用 UTF-16/UTF-8/GBK: %s", p)
         raise ValueError("无法解析文件编码，请使用 UTF-16/UTF-8/GBK。")
 
     rows: List[List[float]] = []
@@ -145,10 +151,12 @@ def _parse_spectrum_file(file_path: Union[str, Path]) -> tuple[np.ndarray, np.nd
             continue
 
     if not rows:
+        logger.warning("未解析到有效谱图数据，请确保文件至少有两列数值: %s", p)
         raise ValueError("未解析到有效谱图数据，请确保文件至少有两列数值。")
 
     arr = np.asarray(rows, dtype=np.float64)
     if arr.shape[1] < 2:
+        logger.warning("谱图文件列数不足，至少需要两列（x, y）: %s", p)
         raise ValueError("谱图文件列数不足，至少需要两列（x, y）。")
 
     return arr[:, 0], arr[:, 1]
@@ -321,6 +329,7 @@ class IRRamanSpectrumAgent:
                 "metadata": {"spectrum_type": spectype, "mode": mode},
             }
         except Exception as e:
+            logger.error("IR/Raman 分析异常: %s", e)
             errors.append(str(e))
             return {
                 "structured_data": {},
@@ -456,6 +465,7 @@ if __name__ == "__main__":
     device = None
     if args.device:
         if args.device == "cuda" and not torch.cuda.is_available():
+            logger.error("指定了 CUDA，但当前环境不可用。")
             raise RuntimeError("指定了 CUDA，但当前环境不可用。")
         device = torch.device(args.device)
 

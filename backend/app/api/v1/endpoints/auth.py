@@ -10,10 +10,13 @@ from app.core.auth import build_access_token
 from app.core.auth import resolve_authenticated_username
 from app.core.auth import verify_local_credentials
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.schemas.auth import AuthStatusData
 from app.schemas.auth import LoginData
 from app.schemas.auth import LoginRequest
 from app.schemas.common import ApiResponse
+
+logger = get_logger("spec_agent.api.auth")
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -58,8 +61,10 @@ def login(payload: LoginRequest) -> ApiResponse[LoginData]:
         登录成功后的令牌与会话信息。
     """
     if not settings.auth_enabled:
+        logger.warning("登录失败：当前服务未启用登录校验")
         raise HTTPException(status_code=400, detail="当前服务未启用登录校验")
     if not verify_local_credentials(payload.username, payload.password):
+        logger.warning("登录失败：账号或密码错误，用户名=%s", payload.username)
         raise HTTPException(status_code=401, detail="账号或密码错误")
 
     token, expires_at = build_access_token(payload.username)

@@ -66,6 +66,7 @@ class RamanCaptureResultItem(BaseModel):
         point_count: 数据点数量。
         y_min: 强度最小值。
         y_max: 强度最大值。
+        snr: 信噪比。
         duration_seconds: 采集耗时。
         error_msg: 错误信息。
         response_file: 结果文件名。
@@ -86,6 +87,7 @@ class RamanCaptureResultItem(BaseModel):
     point_count: int = 0
     y_min: float | None = None
     y_max: float | None = None
+    snr: float | None = None
     duration_seconds: float = 0.0
     error_msg: str | None = None
     response_file: str | None = None

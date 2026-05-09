@@ -9,8 +9,10 @@ from torch.autograd import Variable
 from transformers import AutoTokenizer
 
 from analysis.raman.models.Transformer import make_model
+from app.core.logging import get_logger
 from config import GLOBAL_CONFIG
 
+logger = get_logger("spec_agent.analysis.raman.greedy_search")
 PARENT_PATH = os.path.dirname(os.path.realpath(__file__))
 TOKENIZER_PATH = str(GLOBAL_CONFIG["resources"]["raman_tokenizer_root"])
 VOCAB_PATH = os.path.join(TOKENIZER_PATH, 'vocab.json')
@@ -55,7 +57,7 @@ def load_net_state(net, state_dict):
             # load the weight
             net.state_dict()[key].copy_(state_dict[key])
         else:
-            print('key error: ', key)
+            logger.warning("模型权重缺失: %s", key)
     net.load_state_dict(net.state_dict())
     return net
 
@@ -82,6 +84,7 @@ def preprocess_spectrum(x0, x1, intensities,
     """
     intensities = np.asarray(intensities, dtype=np.float32).reshape(-1)
     if intensities.size == 0:
+        logger.warning("输入光谱强度不能为空")
         raise ValueError("输入光谱强度不能为空")
 
     # 把透射率转换为吸光度
@@ -99,6 +102,7 @@ def preprocess_spectrum(x0, x1, intensities,
     intensities_clipped = intensities[mask]
 
     if len(wavenumbers_clipped) == 0:
+        logger.warning("输入光谱在目标范围 %s 内没有数据", target_range)
         raise ValueError(f"输入光谱在目标范围 {target_range} 内没有数据")
 
     # 2. 插值前统一为升序，保证 np.interp 的输入单调递增。

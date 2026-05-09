@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
+from app.core.logging import get_logger
 from app.services.chem_image_service import chem_image_service
+
+logger = get_logger("spec_agent.api.chemistry")
 
 router = APIRouter(prefix="/chemistry", tags=["chemistry"])
 
@@ -26,8 +29,10 @@ def get_molecule_image(
     try:
         image_bytes = chem_image_service.render_smiles_png(smiles=smiles, size=size)
     except ValueError as exc:
+        logger.warning("分子图片渲染参数错误: smiles=%s, %s", smiles, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
+        logger.error("分子图片渲染失败: smiles=%s, %s", smiles, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return Response(
@@ -54,8 +59,10 @@ def get_function_group_image(
     try:
         image_bytes = chem_image_service.render_smarts_png(smarts=smarts, size=size)
     except ValueError as exc:
+        logger.warning("官能团图片渲染参数错误: smarts=%s, %s", smarts, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
+        logger.error("官能团图片渲染失败: smarts=%s, %s", smarts, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return Response(

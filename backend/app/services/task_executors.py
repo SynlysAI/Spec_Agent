@@ -11,9 +11,12 @@ from typing import Any
 import yaml
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.infra.repositories import FileRepository
 from app.schemas.tasks import TaskArtifactItem, TaskKind
 from app.services.lcms_service import lcms_service
+
+logger = get_logger("spec_agent.services.task_executors")
 
 
 def _to_basic(value: Any) -> Any:
@@ -85,17 +88,21 @@ def resolve_input_path(input_data: dict[str, Any]) -> str:
     if input_type in {"file_path", "folder_path"}:
         path = input_data.get("input_path")
         if not path:
+            logger.warning("input_path 为空, input_type=%s", input_type)
             raise ValueError("input_path 不能为空")
         return str(path)
     if input_type == "file_id":
         file_id = input_data.get("file_id")
         if not file_id:
+            logger.warning("file_id 为空")
             raise ValueError("file_id 不能为空")
         file_record = FileRepository.find_by_file_id(file_id)
         if not file_record:
+            logger.warning("file_id 不存在: %s", file_id)
             raise ValueError("file_id 不存在")
         storage_path = str(file_record.storage_path).replace("\\", "/")
         return str(settings.project_root / storage_path)
+    logger.warning("不支持的 input_type: %s", input_type)
     raise ValueError(f"不支持的 input_type: {input_type}")
 
 
@@ -329,6 +336,7 @@ class NmrTaskExecutor(BaseTaskExecutor):
             if len(children) == 1:
                 return str(children[0])
             return str(extract_root)
+        logger.warning("NMR 输入路径不合法: %s", source_path)
         raise ValueError("NMR 输入必须是 Bruker 目录路径或 zip 压缩包路径")
 
     def execute(self, input_data: dict[str, Any], params: dict[str, Any], output_dir: Path) -> dict[str, Any]:
@@ -426,6 +434,7 @@ class IrRamanTaskExecutor(BaseTaskExecutor):
 
         input_path = resolve_input_path(input_data)
         if not Path(input_path).is_file():
+            logger.warning("IR/Raman 输入必须是谱图文件路径: %s", input_path)
             raise ValueError("IR/Raman 输入必须是谱图文件路径")
         spectype = str(params.get("spectype") or "ir").lower()
         mode = str(params.get("mode") or "greedy_decode")
@@ -455,7 +464,9 @@ class IrRamanTaskExecutor(BaseTaskExecutor):
         )
         errors = result.get("errors") or []
         if errors:
-            raise ValueError("; ".join([str(item) for item in errors]))
+            error_msg = "; ".join([str(item) for item in errors])
+            logger.error("IR/Raman 分析失败: %s", error_msg)
+            raise ValueError(error_msg)
         return {
             "structured_data": sanitize_ir_raman_structured_data(result.get("structured_data", {})),
             "text_report": str(result.get("text_report", "")),
@@ -480,6 +491,7 @@ class LcmsTaskExecutor(BaseTaskExecutor):
         input_path = resolve_input_path(input_data)
         input_file = Path(input_path)
         if not input_file.is_file():
+            logger.warning("LCMS 输入必须是文件路径: %s", input_path)
             raise ValueError("LCMS 输入必须是文件路径")
         output_dir.mkdir(parents=True, exist_ok=True)
         infer_result = lcms_service.infer_mass(input_path)
@@ -489,6 +501,7 @@ class LcmsTaskExecutor(BaseTaskExecutor):
         if predicted_mass is None and isinstance(infer_result, dict):
             predicted_mass = infer_result.get("molecular_weight")
         if predicted_mass is None:
+            logger.error("LCMS 返回中未找到分子量字段, 原始返回: %s", infer_result)
             raise ValueError("LCMS 返回中未找到分子量字段")
         try:
             normalized_mass: float | str = float(predicted_mass)
@@ -539,6 +552,7 @@ class TaskExecutorRegistry:
         """执行指定任务类型。"""
         executor = self._executors.get(task_type)
         if not executor:
+            logger.warning("不支持的任务类型: %s", task_type)
             raise ValueError(f"不支持的任务类型: {task_type}")
         result_payload = executor.execute(input_data=input_data, params=params, output_dir=output_dir)
         result_payload["artifacts"] = [item.model_dump(mode="json") for item in list_output_artifacts(output_dir)]

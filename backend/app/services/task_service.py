@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.infra.repositories import FileRepository, ResultRepository, TaskRepository
 from app.schemas.task_runtime import TaskErrorInfo, TaskRecord
 from app.schemas.tasks import (
@@ -22,6 +23,8 @@ from app.schemas.tasks import (
     TaskStatusData,
 )
 from app.worker.tasks import execute_analysis_task
+
+logger = get_logger("spec_agent.services.task")
 
 
 class TaskService:
@@ -70,6 +73,7 @@ class TaskService:
             TaskRepository.update(task_id, status="QUEUED", progress=5, message="queued")
             return {"task_id": task_id, "task_type": task_type, "status": "QUEUED"}
         except Exception as exc:
+            logger.error("任务 %s 派发到 Celery 失败: %s", task_id, exc)
             TaskRepository.update(
                 task_id,
                 status="FAILED",
@@ -217,20 +221,25 @@ class TaskService:
             file_id = input_data.get("file_id")
             file_record = FileRepository.find_by_file_id(file_id)
             if not file_record:
+                logger.warning("file_id 不存在: %s", file_id)
                 raise ValueError("file_id 不存在")
             return
 
         input_path = input_data.get("input_path")
         if input_type in {"file_path", "folder_path"}:
             if not input_path:
+                logger.warning("input_path 不能为空, input_type=%s", input_type)
                 raise ValueError("input_path 不能为空")
             target_path = Path(str(input_path))
             if not target_path.exists():
+                logger.warning("输入路径不存在: %s", target_path)
                 raise ValueError(f"输入路径不存在: {target_path}")
             if input_type == "folder_path" and not target_path.is_dir():
+                logger.warning("folder_path 必须是目录: %s", target_path)
                 raise ValueError(f"folder_path 必须是目录: {target_path}")
             return
 
+        logger.warning("不支持的 input_type: %s", input_type)
         raise ValueError(f"不支持的 input_type: {input_type}")
 
 

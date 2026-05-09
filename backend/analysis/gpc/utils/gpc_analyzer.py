@@ -10,6 +10,9 @@ from scipy.signal import savgol_filter
 from analysis.gpc.tools.gpc_curve_roi_processor import GPCCurveROIProcessor
 from analysis.gpc.tools.gpc_data_name_parser import GPCDataNameParser
 from analysis.gpc.utils.gpc_plotter import GPCDataPlotter
+from app.core.logging import get_logger
+
+logger = get_logger("spec_agent.analysis.gpc.analyzer")
 
 
 class GPCAnalyzer:
@@ -108,6 +111,7 @@ class GPCAnalyzer:
             right_bound: 右边界索引
         """
         if peak_index < 0 or peak_index >= len(peaks):
+            logger.warning("峰值索引 %s 超出范围 [0, %s]", peak_index, len(peaks) - 1)
             raise ValueError(f"峰值索引 {peak_index} 超出范围 [0, {len(peaks)-1}]")
 
         # 自动模式处理（原有逻辑）
@@ -266,6 +270,7 @@ class GPCAnalyzer:
 
         # 确保峰值索引有效
         if peak_idx < 0 or peak_idx >= n:
+            logger.warning("峰值索引 %s 超出信号范围 [0, %s]", peak_idx, n - 1)
             raise ValueError(f"峰值索引 {peak_idx} 超出信号范围 [0, {n-1}]")
 
         # 步骤1: 使用阈值方法寻找左右边界

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from app.core.logging import get_logger
 from app.schemas.common import ApiResponse
 from app.schemas.tasks import (
     TaskArtifactsData,
@@ -21,6 +22,7 @@ from app.schemas.tasks import (
 from app.services.task_service import task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+logger = get_logger("spec_agent.api.tasks")
 
 
 @router.get("", response_model=ApiResponse[TaskListData])
@@ -60,6 +62,7 @@ def create_gpc_task(payload: CreateGpcTaskRequest) -> ApiResponse[CreateTaskData
             params=payload.params.model_dump(),
         )
     except ValueError as exc:
+        logger.warning("创建 GPC 任务参数校验失败: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
@@ -81,6 +84,7 @@ def create_nmr_task(payload: CreateNmrTaskRequest) -> ApiResponse[CreateTaskData
             params=payload.params.model_dump(),
         )
     except ValueError as exc:
+        logger.warning("创建 NMR 任务参数校验失败: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
@@ -104,6 +108,7 @@ def create_ir_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTaskD
             params=params,
         )
     except ValueError as exc:
+        logger.warning("创建 IR 任务参数校验失败: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
@@ -127,6 +132,7 @@ def create_raman_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTa
             params=params,
         )
     except ValueError as exc:
+        logger.warning("创建 Raman 任务参数校验失败: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
@@ -150,6 +156,7 @@ def create_lcms_task(payload: CreateLcmsTaskRequest) -> ApiResponse[CreateTaskDa
             params=payload.params.model_dump(),
         )
     except ValueError as exc:
+        logger.warning("创建 LCMS 任务参数校验失败: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     data = CreateTaskData(task_id=entity["task_id"], task_type=entity["task_type"], status=entity["status"])
@@ -166,6 +173,7 @@ def get_task_status(task_id: str) -> ApiResponse[TaskStatusData]:
     """
     data = task_service.get_task_status(task_id)
     if not data:
+        logger.warning("查询任务状态失败, task_id 不存在: %s", task_id)
         raise HTTPException(status_code=404, detail="任务不存在")
     return ApiResponse(code=0, message="ok", data=data)
 
@@ -180,6 +188,7 @@ def get_task_result(task_id: str) -> ApiResponse[TaskResultData]:
     """
     payload = task_service.get_task_result(task_id)
     if not payload:
+        logger.warning("查询任务结果失败, task_id 不存在: %s", task_id)
         raise HTTPException(status_code=404, detail="任务不存在")
     return ApiResponse(code=0, message="ok", data=payload)
 

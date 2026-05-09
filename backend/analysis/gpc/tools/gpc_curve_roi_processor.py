@@ -271,10 +271,12 @@ class GPCCurveROIProcessor:
             # 1. 读取三条曲线数据
             if three_arw_paths is not None:
                 if len(three_arw_paths) != 3:
+                    logger.warning("three_arw_paths 长度异常: %d, 需要 3 条", len(three_arw_paths))
                     raise ValueError("three_arw_paths 必须为 (green, red, white) 三条 .arw 路径")
                 g_path, r_path, w_path = three_arw_paths
                 for p, label in ((g_path, "green"), (r_path, "red"), (w_path, "white")):
                     if not p or not os.path.isfile(p):
+                        logger.warning("三色曲线文件不存在 (%s): %s", label, p)
                         raise ValueError(f"三色曲线文件不存在 ({label}): {p}")
                 curves = [
                     self.read_arw_file(g_path),

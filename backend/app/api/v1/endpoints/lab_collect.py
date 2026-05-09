@@ -16,7 +16,10 @@ from app.schemas.lab_collect import (
     SpectrumSampleListData,
     SpectrumSampleSummaryData,
 )
+from app.core.logging import get_logger
 from app.services.lab_collect_service import lab_collect_service
+
+logger = get_logger("spec_agent.api.lab_collect")
 
 router = APIRouter(prefix="/lab-collect", tags=["lab-collect"])
 
@@ -40,6 +43,7 @@ def create_lab_collect_run(payload: LabCollectRunRequest) -> ApiResponse[LabColl
             overwrite_existing=payload.overwrite_existing,
         )
     except ValueError as exc:
+        logger.warning("创建采集批次失败: %s", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ApiResponse(code=0, message="ok", data=data)
 
@@ -56,6 +60,7 @@ def get_lab_collect_run(run_id: str) -> ApiResponse[LabCollectRunRecord]:
     """查询采集批次详情。"""
     data = lab_collect_service.get_run(run_id=run_id)
     if not data:
+        logger.warning("采集批次不存在: run_id=%s", run_id)
         raise HTTPException(status_code=404, detail="采集批次不存在")
     return ApiResponse(code=0, message="ok", data=data)
 
@@ -105,6 +110,7 @@ def get_spectrum_sample_detail(sample_id: str) -> ApiResponse[SpectrumSampleDeta
     """查询实验样本详情。"""
     data = lab_collect_service.get_sample_detail(sample_id=sample_id)
     if not data:
+        logger.warning("样本不存在: sample_id=%s", sample_id)
         raise HTTPException(status_code=404, detail="样本不存在")
     return ApiResponse(code=0, message="ok", data=data)
 
@@ -114,5 +120,6 @@ def delete_spectrum_sample(sample_id: str) -> ApiResponse[dict[str, bool]]:
     """删除实验样本。"""
     deleted = lab_collect_service.delete_sample(sample_id=sample_id)
     if not deleted:
+        logger.warning("删除样本失败，样本不存在: sample_id=%s", sample_id)
         raise HTTPException(status_code=404, detail="样本不存在")
     return ApiResponse(code=0, message="ok", data={"deleted": True})

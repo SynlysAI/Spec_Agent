@@ -19,8 +19,11 @@ from analysis.nmr.peak_detection import (
     smooth_data,
 )
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.modules.nmr.export_service import build_peak_annotations, build_peak_details
 from app.modules.common.report_service import save_text_report
+
+logger = get_logger("spec_agent.modules.nmr.service")
 
 
 def get_ppm_range(folder_path: str, uploaded_ppm_scale=None, experiment_idx: int = 0) -> tuple[float, float]:
@@ -40,10 +43,12 @@ def get_ppm_range(folder_path: str, uploaded_ppm_scale=None, experiment_idx: int
     """
     if folder_path == "UPLOADED_FILE":
         if uploaded_ppm_scale is None:
+            logger.warning("get_ppm_range: 上传文件模式下未提供 ppm_scale 数据")
             raise ValueError("请先上传谱图文件")
         return float(np.min(uploaded_ppm_scale)), float(np.max(uploaded_ppm_scale))
 
     if not folder_path or not os.path.exists(folder_path):
+        logger.warning("get_ppm_range: 样品目录不存在, folder_path=%s", folder_path)
         raise ValueError("文件夹不存在，请检查路径")
 
     _, ppm_scale, _, _ = get_nmr_sample_data(folder_path, index=experiment_idx)
@@ -54,12 +59,14 @@ def load_nmr_basic_info(folder_path: str, uploaded_ppm_scale=None, experiment_id
     """加载 NMR 基础信息，包含 ppm 范围和实验元数据。"""
     if folder_path == "UPLOADED_FILE":
         if uploaded_ppm_scale is None:
+            logger.warning("load_nmr_basic_info: 上传文件模式下未提供 ppm_scale 数据")
             raise ValueError("请先上传谱图文件")
         return float(np.min(uploaded_ppm_scale)), float(np.max(uploaded_ppm_scale)), {
             "solvent": "未知", "nucleus": "未知", "tms_offset": 0.0
         }
 
     if not folder_path or not os.path.exists(folder_path):
+        logger.warning("load_nmr_basic_info: 样品目录不存在, folder_path=%s", folder_path)
         raise ValueError("文件夹不存在，请检查路径")
 
     _, ppm_scale, _, metadata = get_nmr_sample_data(folder_path, index=experiment_idx)
@@ -101,6 +108,7 @@ def _load_peak_detection_input(folder_path: str, peak_detection_params: dict[str
     """
     if folder_path == "UPLOADED_FILE":
         if not uploaded_data or "ppm_scale" not in uploaded_data or "data" not in uploaded_data:
+            logger.warning("_load_peak_detection_input: 上传数据不完整, uploaded_data=%s", bool(uploaded_data))
             raise ValueError("请先上传谱图文件")
 
         sample_name = os.path.splitext(uploaded_data.get("file_name", "uploaded_spectrum"))[0]
@@ -119,6 +127,7 @@ def _load_peak_detection_input(folder_path: str, peak_detection_params: dict[str
         }
 
     if not os.path.exists(folder_path):
+        logger.warning("_load_peak_detection_input: 样品目录不存在, folder_path=%s", folder_path)
         raise ValueError("样品目录不存在，请检查路径")
 
     sample_name = os.path.basename(folder_path)
@@ -181,6 +190,7 @@ def build_peak_detection_result(
                     detection_data = data[mask]
                     detection_ppm_scale = ppm_scale[mask]
                 else:
+                    logger.warning("build_peak_detection_result: 指定检测范围 %.1f-%.1f ppm 内无数据点", range_min, range_max)
                     raise ValueError(f"指定的检测范围 {range_min:.1f} - {range_max:.1f} ppm 内没有数据点")
 
         nuc = str(metadata.get('nucleus', '1H')).strip()
@@ -226,6 +236,7 @@ def build_peak_detection_result(
         )
 
         if not detected_peaks:
+            logger.warning("build_peak_detection_result: 自动检测峰失败, threshold=%.3f, min_distance=%.2f", threshold, effective_min_distance)
             raise ValueError("自动检测峰失败，请尝试调整参数或使用手动模式")
 
         json_path = str(settings.solvent_impurities_path)
@@ -300,6 +311,7 @@ def build_peak_detection_result(
         )
     else:
         if not integration_regions_config:
+            logger.warning("build_peak_detection_result: 手动模式下未配置积分区域")
             raise ValueError("手动模式下缺少积分区域配置")
         integration_regions = build_manual_integration_regions(integration_regions_config)
         detection_range = None
@@ -382,6 +394,7 @@ def run_integration_analysis(
     multiplet_results = peak_results.get("multiplet_results")
 
     if not integration_regions:
+        logger.warning("run_integration_analysis: 积分区域为空, sample_name=%s", sample_name)
         raise ValueError("请至少配置一个积分区域")
 
     updated_regions = []
@@ -404,6 +417,7 @@ def run_integration_analysis(
     if internal_standard_idx is not None:
         internal_standard_name = updated_regions[internal_standard_idx][0]
         if internal_standard_name not in integration_results:
+            logger.warning("run_integration_analysis: 内标峰区域 '%s' 不在积分结果中, sample_name=%s", internal_standard_name, sample_name)
             raise ValueError("内标峰区域不在积分结果中，请检查配置")
 
         internal_standard_value = integration_results[internal_standard_name]

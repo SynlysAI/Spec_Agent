@@ -8,8 +8,10 @@ import scipy.integrate as spi
 from scipy.optimize import curve_fit
 
 from analysis.nmr.peak_detection import calculate_baseline
+from app.core.logging import get_logger
 from config import setup_matplotlib_font
 
+logger = get_logger("spec_agent.analysis.nmr")
 setup_matplotlib_font()
 
 # 过滤无关警告
@@ -44,7 +46,7 @@ def integrate_region(data, ppm_scale, ppm_start, ppm_end, method='trapezoid'):
     mask = (ppm_scale >= ppm_end) & (ppm_scale <= ppm_start)
     # 处理掩码为空的情况
     if not np.any(mask):
-        print(f"警告：积分范围 [{ppm_end}-{ppm_start}] ppm 内没有数据点")
+        logger.warning("积分范围 [%s-%s] ppm 内没有数据点", ppm_end, ppm_start)
         return 0.0
 
     # 获取积分区域内的数据
@@ -213,6 +215,7 @@ def get_nmr_sample_data(sample_path: str, index: int = 0):
 
     # 边界检查
     if index < 0 or index >= len(subdirs):
+        logger.warning("index %d 超出范围，样品目录下共有 %d 个文件夹", index, len(subdirs))
         raise IndexError(f"index {index} 超出范围，样品目录下共有 {len(subdirs)} 个文件夹")
 
     # 选取第 index 个文件夹作为 Bruker 数据目录

@@ -10,8 +10,10 @@ from analysis.raman.greedy_search import greedy_decode, preprocess_spectrum, mol
 from analysis.raman.greedy_search import load_net_state
 from analysis.raman.models.Transformer import make_model
 from analysis.raman.retrieval import retrieval
+from app.core.logging import get_logger
 from config import GLOBAL_CONFIG
 
+logger = get_logger("spec_agent.analysis.raman")
 PARENT_PATH = os.path.dirname(os.path.realpath(__file__))
 RAMAN_RESOURCES = GLOBAL_CONFIG["resources"]
 IR_CHECKPOINT = os.path.join(RAMAN_RESOURCES["raman_checkpoints_root"], "ir_generation.pth")
@@ -53,6 +55,7 @@ def main(spectrum, x0, x1, device, spectype='raman', mode='greedy_decode', k=3, 
     if mode == 'greedy_decode':
         model, src_length = make_model(181, depth=4, d_model=512, mode=mode)
         if spectype == 'raman':
+            logger.warning("暂不支持 Raman 的 greedy_decode 模式")
             raise ValueError("暂不支持Raman的greedy_decode模式")
         if spectype == 'ir':
             checkpoint = IR_CHECKPOINT

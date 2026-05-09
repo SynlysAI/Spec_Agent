@@ -14,8 +14,11 @@ from app.schemas.acceptance import (
     AcceptanceRunHistoryData,
     AcceptanceRunRequest,
 )
+from app.core.logging import get_logger
 from app.schemas.common import ApiResponse
 from app.services.acceptance_service import acceptance_service
+
+logger = get_logger("spec_agent.api.acceptance")
 
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])
 
@@ -64,6 +67,7 @@ def get_acceptance_run(run_id: str) -> ApiResponse[AcceptanceRunData]:
     """
     run_data = acceptance_service.get_run(run_id=run_id)
     if not run_data:
+        logger.warning("查询验收运行失败: run_id=%s 不存在", run_id)
         raise HTTPException(status_code=404, detail="run not found")
     return ApiResponse(code=0, message="ok", data=run_data)
 
@@ -77,11 +81,14 @@ def download_acceptance_report(run_id: str) -> FileResponse:
     """
     run_data = acceptance_service.get_run(run_id=run_id)
     if not run_data:
+        logger.warning("下载验收报告失败: run_id=%s 不存在", run_id)
         raise HTTPException(status_code=404, detail="run not found")
     if not run_data.report_path:
+        logger.warning("下载验收报告失败: run_id=%s 无报告路径", run_id)
         raise HTTPException(status_code=404, detail="report not found")
     report_path = Path(run_data.report_path)
     if not report_path.exists() or not report_path.is_file():
+        logger.warning("下载验收报告失败: 报告文件不存在, path=%s", run_data.report_path)
         raise HTTPException(status_code=404, detail="report not found")
     return FileResponse(
         path=str(report_path),

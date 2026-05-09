@@ -7,6 +7,10 @@ from pathlib import Path
 import requests
 
 from app.core.config import settings
+from app.core.logging import get_logger
+
+
+logger = get_logger("spec_agent.services.lcms")
 
 
 class LcmsService:
@@ -34,6 +38,7 @@ class LcmsService:
         """
         target_path = Path(file_path)
         if not target_path.exists() or not target_path.is_file():
+            logger.warning("LCMS 输入文件不存在: %s", target_path)
             raise ValueError(f"LCMS 输入文件不存在: {target_path}")
 
         mime_type = "text/plain"
@@ -56,6 +61,7 @@ class LcmsService:
         response.raise_for_status()
         payload = response.json()
         if not isinstance(payload, dict):
+            logger.error("LCMS 服务返回格式异常, 实际类型: %s", type(payload).__name__)
             raise RuntimeError("LCMS 服务返回格式异常")
         return payload
 

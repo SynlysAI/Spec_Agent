@@ -6,6 +6,10 @@ import requests
 from requests import Session
 
 from app.core.config import settings
+from app.core.logging import get_logger
+
+
+logger = get_logger("spec_agent.services.nmr_server")
 
 
 class NmrServerProtocolError(RuntimeError):
@@ -43,24 +47,31 @@ class NmrServerService:
         try:
             result = response.json()
         except ValueError as exc:
+            logger.error("NMRServer 返回非 JSON 响应: %s", exc)
             raise NmrServerProtocolError("NMRServer 返回非 JSON 响应") from exc
 
         if not isinstance(result, dict):
+            logger.error("NMRServer 返回结构不是对象, 实际类型: %s", type(result).__name__)
             raise NmrServerProtocolError("NMRServer 返回结构不是对象")
 
         if result.get("code") != 0:
-            raise NmrServerBusinessError(result.get("msg", "NMRServer 业务返回异常"))
+            error_msg = result.get("msg", "NMRServer 业务返回异常")
+            logger.error("NMRServer 业务错误: code=%s, msg=%s", result.get("code"), error_msg)
+            raise NmrServerBusinessError(error_msg)
 
         data_wrapper = result.get("data")
         if not isinstance(data_wrapper, dict):
+            logger.error("NMRServer 返回缺少 data 对象, 实际值: %s", data_wrapper)
             raise NmrServerProtocolError("NMRServer 返回缺少 data 对象")
 
         result_wrapper = data_wrapper.get("result")
         if not isinstance(result_wrapper, dict):
+            logger.error("NMRServer 返回缺少 data.result 对象, 实际值: %s", result_wrapper)
             raise NmrServerProtocolError("NMRServer 返回缺少 data.result 对象")
 
         items = result_wrapper.get("data")
         if not isinstance(items, list):
+            logger.error("NMRServer 返回缺少 data.result.data 列表, 实际值: %s", type(items).__name__)
             raise NmrServerProtocolError("NMRServer 返回缺少 data.result.data 列表")
         return items
 
@@ -78,6 +89,7 @@ class NmrServerService:
         """执行正向预测：SMILES -> NMR 化学位移。"""
         smiles_list = [item.strip() for item in smiles_input.strip().split("\n") if item.strip()]
         if not smiles_list:
+            logger.warning("正向预测输入 SMILES 为空")
             raise ValueError("请输入至少一个有效的 SMILES")
 
         payload = {
