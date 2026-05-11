@@ -38,13 +38,16 @@ def setup_matplotlib_font() -> None:
 
 def setup_logging(log_level: int = logging.INFO, logger_name: str = "spec_agent") -> logging.Logger:
     """统一日志初始化，兼容旧模块调用方式。"""
-    filename = "worker.log" if "worker" in logger_name.lower() else "app.log"
-    return configure_named_logger(
-        logger_name,
-        filename=filename,
-        level=log_level,
-        error_filename="error.log",
-    )
+    logger = logging.getLogger(logger_name)
+    if logger.handlers:
+        return logger
+    if "worker" in logger_name.lower():
+        filename = "worker.log"
+    else:
+        worker_logger = logging.getLogger("spec_agent.worker")
+        app_logger = logging.getLogger("spec_agent.app")
+        filename = "worker.log" if worker_logger.handlers and not app_logger.handlers else "app.log"
+    return configure_named_logger(logger_name, filename=filename, level=log_level, error_filename="error.log")
 
 
 def _build_database_config() -> dict[str, Any]:

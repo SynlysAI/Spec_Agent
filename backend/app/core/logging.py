@@ -82,6 +82,32 @@ def _reset_logger(logger: logging.Logger, level: int) -> logging.Logger:
     return logger
 
 
+def _has_configured_handlers(logger_name: str) -> bool:
+    """判断指定日志记录器是否已完成处理器配置。
+
+    Args:
+        logger_name: 日志记录器名称。
+
+    Returns:
+        若日志记录器已绑定至少一个处理器则返回 True。
+    """
+    return bool(logging.getLogger(logger_name).handlers)
+
+
+def _should_use_worker_log(logger_name: str) -> bool:
+    """判断当前日志记录器是否应写入 worker 日志文件。
+
+    Args:
+        logger_name: 目标日志记录器名称。
+
+    Returns:
+        若当前处于 worker 日志上下文则返回 True。
+    """
+    if logger_name.startswith("spec_agent.worker"):
+        return True
+    return _has_configured_handlers("spec_agent.worker") and not _has_configured_handlers("spec_agent.app")
+
+
 def configure_named_logger(
     logger_name: str,
     *,
@@ -155,8 +181,18 @@ def get_logger(logger_name: str = "spec_agent.app") -> logging.Logger:
         目标日志记录器；若尚未配置则先按应用日志初始化。
     """
     logger = logging.getLogger(logger_name)
-    if not logger.handlers:
-        if logger_name.startswith("spec_agent.worker"):
-            return configure_worker_logging()
-        return configure_app_logging()
-    return logger
+    if logger.handlers:
+        return logger
+    if _should_use_worker_log(logger_name):
+        return configure_named_logger(
+            logger_name,
+            filename="worker.log",
+            level=logging.INFO,
+            error_filename="error.log",
+        )
+    return configure_named_logger(
+        logger_name,
+        filename="app.log",
+        level=logging.INFO,
+        error_filename="error.log",
+    )
