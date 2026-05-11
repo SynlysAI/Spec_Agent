@@ -64,6 +64,76 @@ class TestLabCollectService(unittest.TestCase):
             self.assertEqual(sample_meta["experiment_json_name"], "params.json")
             self.assertIn("experiment_json_parse_error", sample_meta)
 
+    def test_build_local_sample_path_converts_raman_dat_to_txt_name(self) -> None:
+        """Raman DAT 文件落盘时应改为同名 TXT。"""
+        candidate = CollectCandidate(
+            spectrum_type="raman",
+            source_date="2026-05-11",
+            sample_name="20260511112859936.dat",
+            remote_path=Path("E:/spectrum_files/raman/20260511112859936.dat"),
+            remote_date_dir=Path("E:/spectrum_files/raman"),
+            sample_mode="file",
+            local_root=Path("E:/mock/local"),
+            share_key="raman_lab",
+            patterns=["*.txt", "*.csv", "*.dat"],
+        )
+        local_sample_path = LabCollectService._build_local_sample_path(
+            candidate=candidate,
+            local_date_dir=Path("E:/mock/local/2026-05-11"),
+        )
+        self.assertEqual(local_sample_path.name, "20260511112859936.txt")
+
+    def test_extract_raman_shift_value_rows(self) -> None:
+        """Raman DAT 文件应提取 RamanShift 与 Value 两列。"""
+        lines = [
+            "bGennerate:0",
+            'capture_settings:{"laser":"785"}',
+            "Pixel\tWavelength\tRamanShift\tValue",
+            "1\t783.174\t-29.69\t6321.000",
+            "2\t783.369\t-26.52\t12078.000",
+        ]
+        extracted_rows = LabCollectService._extract_raman_shift_value_rows(
+            lines=lines,
+            source_path=Path("E:/mock/raman.dat"),
+        )
+        self.assertEqual(extracted_rows, ["-29.69\t6321.000", "-26.52\t12078.000"])
+
+    def test_convert_raman_dat_to_txt_extracts_capture_settings(self) -> None:
+        """Raman DAT 转换后应生成两列 TXT，并保留采集参数。"""
+        dat_content = "\n".join(
+            [
+                "bGennerate:0",
+                'capture_settings:{"laser":"785","acquisitionMode":1}',
+                "Pixel\tWavelength\tRamanShift\tValue",
+                "1\t783.174\t-29.69\t6321.000",
+                "2\t783.369\t-26.52\t12078.000",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_path = root / "sample.dat"
+            target_path = root / "sample.txt"
+            source_path.write_text(dat_content, encoding="utf-8")
+
+            sample_meta = LabCollectService._convert_raman_dat_to_txt(
+                source_path=source_path,
+                target_path=target_path,
+            )
+
+            self.assertTrue(target_path.exists())
+            self.assertEqual(
+                target_path.read_text(encoding="utf-8"),
+                "-29.69\t6321.000\n-26.52\t12078.000\n",
+            )
+            self.assertEqual(sample_meta["capture_settings"], {"laser": "785", "acquisitionMode": 1})
+            self.assertEqual(sample_meta["source_file_format"], "dat")
+            self.assertEqual(sample_meta["converted_to_format"], "txt")
+
+    def test_resolve_collect_patterns_appends_raman_dat(self) -> None:
+        """Raman 采集规则应自动补充 DAT 匹配。"""
+        patterns = LabCollectService._resolve_collect_patterns("raman", ["*.txt", "*.csv"])
+        self.assertIn("*.dat", patterns)
+
     def test_lab_collect_request_overwrite_existing_defaults_false(self) -> None:
         """采集请求默认不覆盖已入库样品。"""
         payload = LabCollectRunRequest(collect_date="2026-04-21", spectrum_types=["ir"])

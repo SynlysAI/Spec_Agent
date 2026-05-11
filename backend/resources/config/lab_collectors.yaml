@@ -17,7 +17,7 @@ collectors:
       - "*.pdf"
       - "*.json"
   ir:
-    enabled: true
+    enabled: false
     share_key: ir_lab
     remote_root: E:/spectrum_files/remote_test/ir
     local_root: E:/spectrum_files/ir/spectrum
@@ -26,7 +26,7 @@ collectors:
       - "*.txt"
       - "*.csv"
   raman:
-    enabled: false
+    enabled: true
     share_key: raman_lab
     remote_root: \\100.66.91.117\JYInstrument
     local_root: E:/spectrum_files/raman/spectrum
@@ -34,6 +34,7 @@ collectors:
     patterns:
       - "*.txt"
       - "*.csv"
+      - "*.dat"
   lcms:
     enabled: true
     share_key: lcms_lab

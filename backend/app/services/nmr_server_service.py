@@ -146,7 +146,35 @@ class NmrServerService:
             "name": "case_reverse_predict",
             "input_data": {
                 "reverse_predict": reverse_predict_data,
-                "config": {"topk": 50}
+                # 默认配置参数，写死召回50条数据
+                "config": {
+                  "sigma_h": 1,
+                  "sigma_c": 10,
+                  "split_coef": 0.8,
+                  "max_iter": 2,
+                  "num_search": 1000,
+                  "num_pool": 1000,
+                  "num_filter_pair": 200000,
+                  "num_filter_mol": 1000,
+                  "num_mutate_mol": 1000,
+                  "topk": 50,
+                  "max_cycle_length": 6,
+                  "use_H_split": False,
+                  "use_stereo": False,
+                  "optional_halogens": [
+                    "F",
+                    "Cl",
+                    "Br",
+                    "I"
+                  ],
+                  "invalid_patterns": [
+                    "[O][O]",
+                    "[R]=[R]=[R]",
+                    "[r3,r4]=[r3,r4]",
+                    "[O][F,Cl,Br,I]"
+                  ],
+                  "include_active_hs": "yes"
+                }
             },
         }
         return self._post(payload)

@@ -57,6 +57,11 @@ COLLECT_SUMMARY_KEYS = ("candidates", "imported", "updated", "skipped", "failed"
 SAMPLE_SUMMARY_TYPES = ("nmr", "gpc", "ir", "raman", "lcms")
 RUN_PROGRESS_SAVE_INTERVAL = 100
 MOLECULAR_STATS_KEY = "sample_smiles_overview"
+DEFAULT_FILE_PATTERNS = {
+    "ir": ["*.txt", "*.csv"],
+    "raman": ["*.txt", "*.csv", "*.dat"],
+    "lcms": ["*.txt", "*.csv"],
+}
 
 
 @dataclass
@@ -511,7 +516,7 @@ class LabCollectService:
         sample_id = existed.sample_id if existed else f"sp_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
         local_date_dir = candidate.local_root / candidate.source_date
         local_date_dir.mkdir(parents=True, exist_ok=True)
-        local_sample_path = local_date_dir / candidate.sample_name
+        local_sample_path = self._build_local_sample_path(candidate=candidate, local_date_dir=local_date_dir)
 
         if local_sample_path.exists():
             if local_sample_path.is_dir():
@@ -519,11 +524,18 @@ class LabCollectService:
             else:
                 local_sample_path.unlink()
 
+        transform_meta: dict[str, Any] = {}
         if candidate.sample_mode == "directory":
             shutil.copytree(candidate.remote_path, local_sample_path)
             local_files = [path for path in sorted(local_sample_path.rglob("*")) if path.is_file()]
         else:
-            shutil.copy2(candidate.remote_path, local_sample_path)
+            if self._should_convert_raman_dat(candidate=candidate):
+                transform_meta = self._convert_raman_dat_to_txt(
+                    source_path=candidate.remote_path,
+                    target_path=local_sample_path,
+                )
+            else:
+                shutil.copy2(candidate.remote_path, local_sample_path)
             local_files = [local_sample_path]
 
         file_records, analysis_input, sample_meta, total_size = self._build_sample_files_and_meta(
@@ -532,6 +544,7 @@ class LabCollectService:
             candidate=candidate,
             local_sample_path=local_sample_path,
             local_files=local_files,
+            transform_meta=transform_meta,
         )
 
         now = datetime.now()
@@ -588,6 +601,7 @@ class LabCollectService:
         candidate: CollectCandidate,
         local_sample_path: Path,
         local_files: list[Path],
+        transform_meta: dict[str, Any] | None = None,
     ) -> tuple[list[SpectrumSampleFileRecord], dict[str, Any], dict[str, Any], int]:
         """构建文件清单、分析输入和样本元数据。"""
         total_size = 0
@@ -685,12 +699,142 @@ class LabCollectService:
                 "local_file_path": str(primary_input_path),
                 "file_format": suffix,
             }
+            if transform_meta:
+                sample_meta.update(transform_meta)
 
         analysis_input = {
             "input_type": TYPE_INPUT_KIND[candidate.spectrum_type],
             "input_path": primary_input_path,
         }
         return file_records, analysis_input, sample_meta, total_size
+
+    @staticmethod
+    def _build_local_sample_path(candidate: CollectCandidate, local_date_dir: Path) -> Path:
+        """构建样本本地落盘路径。
+
+        Args:
+            candidate: 当前待采集样本候选。
+            local_date_dir: 采集日期对应的本地目录。
+
+        Returns:
+            样本落盘路径；Raman 的 `.dat` 文件会映射为同名 `.txt` 文件。
+        """
+        if (
+            candidate.sample_mode == "file"
+            and candidate.spectrum_type == "raman"
+            and candidate.remote_path.suffix.lower() == ".dat"
+        ):
+            return local_date_dir / f"{candidate.remote_path.stem}.txt"
+        return local_date_dir / candidate.sample_name
+
+    @staticmethod
+    def _should_convert_raman_dat(candidate: CollectCandidate) -> bool:
+        """判断当前候选样本是否需要执行 Raman DAT 转换。
+
+        Args:
+            candidate: 当前待采集样本候选。
+
+        Returns:
+            若为 Raman 单文件 `.dat` 样本则返回 `True`，否则返回 `False`。
+        """
+        return (
+            candidate.sample_mode == "file"
+            and candidate.spectrum_type == "raman"
+            and candidate.remote_path.suffix.lower() == ".dat"
+        )
+
+    @staticmethod
+    def _convert_raman_dat_to_txt(source_path: Path, target_path: Path) -> dict[str, Any]:
+        """将 Raman DAT 文件转换为两列 TXT，并提取采集参数。
+
+        Args:
+            source_path: 远程采集到的 Raman DAT 文件路径。
+            target_path: 转换后的本地 TXT 文件路径。
+
+        Returns:
+            记录转换信息与 `capture_settings` 的样本元数据字典。
+        """
+        lines = source_path.read_text(encoding="utf-8-sig").splitlines()
+        capture_settings, capture_settings_raw = LabCollectService._extract_raman_capture_settings(lines=lines)
+        raman_points = LabCollectService._extract_raman_shift_value_rows(lines=lines, source_path=source_path)
+        target_path.write_text("\n".join(raman_points) + "\n", encoding="utf-8")
+
+        sample_meta = {
+            "source_file_format": source_path.suffix.lower().lstrip("."),
+            "converted_to_format": target_path.suffix.lower().lstrip("."),
+            "converted_from_dat": True,
+            "capture_settings_raw": capture_settings_raw,
+            "data_point_count": len(raman_points),
+        }
+        if capture_settings is not None:
+            sample_meta["capture_settings"] = capture_settings
+        return sample_meta
+
+    @staticmethod
+    def _extract_raman_capture_settings(lines: list[str]) -> tuple[dict[str, Any] | None, str | None]:
+        """提取 Raman DAT 文件中的 capture_settings 信息。
+
+        Args:
+            lines: DAT 文件按行拆分后的内容。
+
+        Returns:
+            二元组：第一个元素为解析后的采集参数字典，第二个元素为原始字符串。
+        """
+        prefix = "capture_settings:"
+        for line in lines:
+            stripped = line.strip()
+            if not stripped.startswith(prefix):
+                continue
+            raw_payload = stripped[len(prefix):].strip()
+            if not raw_payload:
+                return None, None
+            try:
+                parsed = json.loads(raw_payload)
+            except json.JSONDecodeError:
+                return None, raw_payload
+            return parsed if isinstance(parsed, dict) else {"raw": parsed}, raw_payload
+        return None, None
+
+    @staticmethod
+    def _extract_raman_shift_value_rows(lines: list[str], source_path: Path) -> list[str]:
+        """从 Raman DAT 文件中提取 RamanShift 与 Value 两列。
+
+        Args:
+            lines: DAT 文件按行拆分后的内容。
+            source_path: 原始 DAT 文件路径。
+
+        Returns:
+            可直接写入两列 TXT 的文本行列表。
+        """
+        header_index = -1
+        for index, line in enumerate(lines):
+            columns = re.split(r"\s+", line.strip())
+            lowered = [column.lower() for column in columns if column]
+            if "ramanshift" in lowered and "value" in lowered:
+                header_index = index
+                break
+
+        if header_index < 0:
+            raise ValueError(f"Raman DAT 文件缺少 RamanShift/Value 表头: {source_path}")
+
+        header_columns = re.split(r"\s+", lines[header_index].strip())
+        normalized_columns = [column.lower() for column in header_columns if column]
+        shift_index = normalized_columns.index("ramanshift")
+        value_index = normalized_columns.index("value")
+        extracted_rows: list[str] = []
+
+        for line in lines[header_index + 1:]:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            columns = re.split(r"\s+", stripped)
+            if len(columns) <= max(shift_index, value_index):
+                continue
+            extracted_rows.append(f"{columns[shift_index]}\t{columns[value_index]}")
+
+        if not extracted_rows:
+            raise ValueError(f"Raman DAT 文件未解析出有效数据行: {source_path}")
+        return extracted_rows
 
     @staticmethod
     def _append_gpc_experiment_json_meta(sample_meta: dict[str, Any], json_files: list[Path]) -> None:
@@ -739,7 +883,7 @@ class LabCollectService:
                 return "experiment_json"
             return "other"
         if spectrum_type in {"ir", "raman", "lcms"}:
-            if suffix in {".txt", ".csv"}:
+            if suffix in {".txt", ".csv"} or (spectrum_type == "raman" and suffix == ".dat"):
                 return "primary_spectrum"
             return "other"
         relative_parts = local_file.relative_to(local_sample_path).parts if local_sample_path.is_dir() else ()
@@ -761,7 +905,10 @@ class LabCollectService:
         local_root = Path(str(config.get("local_root") or ""))
         share_key = str(config.get("share_key") or spectrum_type)
         sample_mode = str(config.get("sample_mode") or ("directory" if spectrum_type in {"nmr", "gpc"} else "file"))
-        patterns = [str(pattern) for pattern in (config.get("patterns", []) or []) if str(pattern).strip()]
+        patterns = self._resolve_collect_patterns(
+            spectrum_type=spectrum_type,
+            patterns=[str(pattern) for pattern in (config.get("patterns", []) or []) if str(pattern).strip()],
+        )
         candidates: list[CollectCandidate] = []
 
         for date_text in dates:
@@ -786,8 +933,6 @@ class LabCollectService:
                         )
                     )
             else:
-                if not patterns:
-                    patterns = ["*.txt", "*.csv"]
                 for sample_file in sorted([item for item in remote_date_dir.iterdir() if item.is_file()]):
                     if not any(fnmatch.fnmatch(sample_file.name.lower(), pattern.lower()) for pattern in patterns):
                         continue
@@ -805,6 +950,23 @@ class LabCollectService:
                         )
                     )
         return candidates
+
+    @staticmethod
+    def _resolve_collect_patterns(spectrum_type: str, patterns: list[str]) -> list[str]:
+        """解析指定谱图类型的实际采集匹配规则。
+
+        Args:
+            spectrum_type: 谱图类型。
+            patterns: 配置文件中的原始匹配规则。
+
+        Returns:
+            去重后的实际匹配规则列表；Raman 会自动补充 `.dat`。
+        """
+        resolved = list(patterns) if patterns else list(DEFAULT_FILE_PATTERNS.get(spectrum_type, ["*"]))
+        for pattern in DEFAULT_FILE_PATTERNS.get(spectrum_type, []):
+            if not any(existing.lower() == pattern.lower() for existing in resolved):
+                resolved.append(pattern)
+        return resolved
 
     @staticmethod
     def _build_date_list(date_from: str, date_to: str) -> list[str]:
