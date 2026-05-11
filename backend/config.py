@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import sys
 from typing import Any
 
 from app.core.config import settings
@@ -23,6 +24,16 @@ from app.core.logging import configure_named_logger
 COMPATIBILITY_NOTE = (
     "backend/config.py 为兼容层；新代码请改用 app.core.config.settings。"
 )
+
+
+def _is_worker_runtime() -> bool:
+    """判断当前 Python 进程是否运行在 Celery Worker 上下文中。"""
+    argv = [arg.lower() for arg in sys.argv if arg]
+    if not argv:
+        return False
+    if "celery" not in argv[0]:
+        return False
+    return "worker" in argv[1:]
 
 
 def setup_matplotlib_font() -> None:
@@ -45,8 +56,7 @@ def setup_logging(log_level: int = logging.INFO, logger_name: str = "spec_agent"
         filename = "worker.log"
     else:
         worker_logger = logging.getLogger("spec_agent.worker")
-        app_logger = logging.getLogger("spec_agent.app")
-        filename = "worker.log" if worker_logger.handlers and not app_logger.handlers else "app.log"
+        filename = "worker.log" if _is_worker_runtime() and worker_logger.handlers else "app.log"
     return configure_named_logger(logger_name, filename=filename, level=log_level, error_filename="error.log")
 
 

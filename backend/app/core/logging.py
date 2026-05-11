@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
@@ -94,6 +95,20 @@ def _has_configured_handlers(logger_name: str) -> bool:
     return bool(logging.getLogger(logger_name).handlers)
 
 
+def _is_worker_runtime() -> bool:
+    """判断当前 Python 进程是否运行在 Celery Worker 上下文中。
+
+    Returns:
+        若当前命令行为 Celery Worker 进程则返回 True。
+    """
+    argv = [arg.lower() for arg in sys.argv if arg]
+    if not argv:
+        return False
+    if "celery" not in argv[0]:
+        return False
+    return "worker" in argv[1:]
+
+
 def _should_use_worker_log(logger_name: str) -> bool:
     """判断当前日志记录器是否应写入 worker 日志文件。
 
@@ -105,7 +120,9 @@ def _should_use_worker_log(logger_name: str) -> bool:
     """
     if logger_name.startswith("spec_agent.worker"):
         return True
-    return _has_configured_handlers("spec_agent.worker") and not _has_configured_handlers("spec_agent.app")
+    if not _is_worker_runtime():
+        return False
+    return _has_configured_handlers("spec_agent.worker")
 
 
 def configure_named_logger(
