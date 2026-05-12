@@ -132,7 +132,7 @@ if __name__ == '__main__':
     # print(f"数据点数量: {len(spectrum)}")
 
     device = torch.device('cpu')
-    result = main(spectrum, x0=x0, x1=x1, device=device, spectype='raman', mode='retrieval',)
+    result = main(spectrum, x0=x0, x1=x1, device=device, spectype='raman', mode='function_groups',)
     print(result, 111)
 
 

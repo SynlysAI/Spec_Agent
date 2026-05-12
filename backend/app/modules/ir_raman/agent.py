@@ -399,8 +399,8 @@ def run_ir_raman_analysis_from_file(
         mode=mode,
         raw=raw_output,
         source_file=str(spectrum_file),
-        x0=actual_x0,
-        x1=actual_x1,
+        x0=x0,
+        x1=x1,
     )
 
     result.setdefault("metadata", {})

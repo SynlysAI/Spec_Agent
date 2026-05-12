@@ -14,6 +14,7 @@ from celery.signals import task_success
 from app.core.config import settings
 from app.core.logging import configure_worker_logging
 from app.core.logging import get_logger
+from app.core.logging import _is_worker_runtime
 
 celery_app = Celery(
     "spec_agent_worker",
@@ -40,13 +41,16 @@ if os.name == "nt":
 
 celery_app.autodiscover_tasks(["app.worker"])
 
-WORKER_LOGGER = configure_worker_logging(level=INFO)
+WORKER_LOGGER = None
+if _is_worker_runtime():
+    WORKER_LOGGER = configure_worker_logging(level=INFO)
 
 
 @after_setup_logger.connect
 def on_after_setup_logger(*args, **kwargs) -> None:
     """在 Celery 启动日志阶段确保项目日志已初始化。"""
-    configure_worker_logging(level=INFO)
+    if _is_worker_runtime():
+        configure_worker_logging(level=INFO)
 
 
 @task_prerun.connect
