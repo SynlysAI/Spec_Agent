@@ -10,7 +10,7 @@ carboxylic_acid = '[CX3](=O)[OX2H]'
 acid_anhydride = '[CX3](=[OX1])[OX2][CX3](=[OX1])'
 acyl_halide = '[CX3](=[OX1])[F,Cl,Br,I]'
 ester = '[#6][CX3](=O)[OX2H0][#6]'
-ether = '[OD2]([#6])[#6]'
+allene = '[#6]=[#6]=[#6]' # 联烯的累积双键
 amine = '[NX3;H2,H1,H0;!$(NC=O)]'
 amide = '[NX3][CX3](=[OX1])[#6]'
 nitrile = '[NX1]#[CX2]'
@@ -49,7 +49,7 @@ fg_list = [
         acid_anhydride, 
         acyl_halide, 
         ester, 
-        ether, 
+        allene, # 联烯
         amine, 
         amide, 
         nitrile, 
