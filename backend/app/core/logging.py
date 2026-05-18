@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import sys
-from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+
+from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
 
 from app.core.config import settings
 
@@ -16,6 +17,9 @@ LOG_FORMAT = (
 )
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 DEFAULT_REQUEST_ID = "-"
+APP_ERROR_FILENAME = "app.error.log"
+WORKER_ERROR_FILENAME = "worker.error.log"
+HANDLER_MARKER = "_spec_agent_managed"
 
 
 class RequestIdFilter(logging.Filter):
@@ -41,8 +45,8 @@ def _ensure_logs_root() -> Path:
     return settings.logs_root
 
 
-def _build_file_handler(filename: str, level: int) -> TimedRotatingFileHandler:
-    """创建按天轮转的文件日志处理器。
+def _build_file_handler(filename: str, level: int) -> ConcurrentTimedRotatingFileHandler:
+    """创建按天轮转的并发安全文件日志处理器。
 
     Args:
         filename: 日志文件名。
@@ -52,7 +56,7 @@ def _build_file_handler(filename: str, level: int) -> TimedRotatingFileHandler:
         配置完成的文件日志处理器。
     """
     logs_root = _ensure_logs_root()
-    handler = TimedRotatingFileHandler(
+    handler = ConcurrentTimedRotatingFileHandler(
         filename=logs_root / filename,
         when="midnight",
         interval=1,
@@ -62,37 +66,37 @@ def _build_file_handler(filename: str, level: int) -> TimedRotatingFileHandler:
     handler.setLevel(level)
     handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
     handler.addFilter(RequestIdFilter())
+    setattr(handler, HANDLER_MARKER, True)
     return handler
 
 
-def _reset_logger(logger: logging.Logger, level: int) -> logging.Logger:
+def _reset_logger(logger: logging.Logger, level: int, *, propagate: bool) -> logging.Logger:
     """清理并重建日志记录器的基础状态。
 
     Args:
         logger: 目标日志记录器。
         level: 记录器日志等级。
+        propagate: 是否向父级日志记录器传播。
 
     Returns:
         已重置的日志记录器。
     """
     logger.setLevel(level)
-    logger.propagate = False
+    logger.propagate = propagate
     for handler in list(logger.handlers):
         logger.removeHandler(handler)
         handler.close()
     return logger
 
 
-def _has_configured_handlers(logger_name: str) -> bool:
-    """判断指定日志记录器是否已完成处理器配置。
+def _is_managed_handler(handler: logging.Handler) -> bool:
+    """判断处理器是否由当前项目日志模块管理。"""
+    return bool(getattr(handler, HANDLER_MARKER, False))
 
-    Args:
-        logger_name: 日志记录器名称。
 
-    Returns:
-        若日志记录器已绑定至少一个处理器则返回 True。
-    """
-    return bool(logging.getLogger(logger_name).handlers)
+def _has_configured_handlers() -> bool:
+    """判断根日志记录器是否已完成项目日志处理器配置。"""
+    return any(_is_managed_handler(handler) for handler in logging.getLogger().handlers)
 
 
 def _is_worker_runtime() -> bool:
@@ -109,20 +113,44 @@ def _is_worker_runtime() -> bool:
     return "worker" in argv[1:]
 
 
-def _should_use_worker_log(logger_name: str) -> bool:
-    """判断当前日志记录器是否应写入 worker 日志文件。
+def _normalize_child_logger(logger_name: str) -> logging.Logger:
+    """规范化子级日志记录器，避免重复绑定文件处理器。
 
     Args:
-        logger_name: 目标日志记录器名称。
+        logger_name: 子级日志记录器名称。
 
     Returns:
-        若当前处于 worker 日志上下文则返回 True。
+        仅通过根日志记录器输出的子级日志记录器。
     """
-    if logger_name.startswith("spec_agent.worker"):
-        return True
-    if not _is_worker_runtime():
-        return False
-    return _has_configured_handlers("spec_agent.worker")
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.NOTSET)
+    logger.propagate = True
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        handler.close()
+    return logger
+
+
+def _configure_root_logging(
+    filename: str,
+    level: int = logging.INFO,
+    error_filename: str | None = None,
+) -> logging.Logger:
+    """创建进程级根日志记录器。
+
+    Args:
+        filename: 主日志文件名。
+        level: 日志等级。
+        error_filename: 错误日志文件名；未传则不额外输出错误日志。
+
+    Returns:
+        配置完成的日志记录器。
+    """
+    logger = _reset_logger(logging.getLogger(), level, propagate=False)
+    logger.addHandler(_build_file_handler(filename, level))
+    if error_filename:
+        logger.addHandler(_build_file_handler(error_filename, logging.ERROR))
+    return logger
 
 
 def configure_named_logger(
@@ -132,7 +160,7 @@ def configure_named_logger(
     level: int = logging.INFO,
     error_filename: str | None = None,
 ) -> logging.Logger:
-    """创建指定名称的双写日志记录器。
+    """兼容旧接口，统一转为根日志配置并返回命名日志记录器。
 
     Args:
         logger_name: 日志记录器名称。
@@ -141,13 +169,14 @@ def configure_named_logger(
         error_filename: 错误日志文件名；未传则不额外输出错误日志。
 
     Returns:
-        配置完成的日志记录器。
+        配置完成的命名日志记录器。
     """
-    logger = _reset_logger(logging.getLogger(logger_name), level)
-    logger.addHandler(_build_file_handler(filename, level))
-    if error_filename:
-        logger.addHandler(_build_file_handler(error_filename, logging.ERROR))
-    return logger
+    _configure_root_logging(
+        filename=filename,
+        level=level,
+        error_filename=error_filename,
+    )
+    return _normalize_child_logger(logger_name)
 
 
 def configure_app_logging(level: int = logging.INFO) -> logging.Logger:
@@ -159,12 +188,12 @@ def configure_app_logging(level: int = logging.INFO) -> logging.Logger:
     Returns:
         应用日志记录器。
     """
-    logger = configure_named_logger(
-        "spec_agent.app",
+    _configure_root_logging(
         filename="app.log",
         level=level,
-        error_filename="error.log",
+        error_filename=APP_ERROR_FILENAME,
     )
+    logger = _normalize_child_logger("spec_agent.app")
     logger.info("应用日志初始化完成", extra={"request_id": DEFAULT_REQUEST_ID})
     return logger
 
@@ -178,12 +207,12 @@ def configure_worker_logging(level: int = logging.INFO) -> logging.Logger:
     Returns:
         Worker 日志记录器。
     """
-    logger = configure_named_logger(
-        "spec_agent.worker",
+    _configure_root_logging(
         filename="worker.log",
         level=level,
-        error_filename="error.log",
+        error_filename=WORKER_ERROR_FILENAME,
     )
+    logger = _normalize_child_logger("spec_agent.worker")
     logger.info("Worker 日志初始化完成", extra={"request_id": DEFAULT_REQUEST_ID})
     return logger
 
@@ -197,19 +226,10 @@ def get_logger(logger_name: str = "spec_agent.app") -> logging.Logger:
     Returns:
         目标日志记录器；若尚未配置则先按应用日志初始化。
     """
-    logger = logging.getLogger(logger_name)
-    if logger.handlers:
-        return logger
-    if _should_use_worker_log(logger_name):
-        return configure_named_logger(
-            logger_name,
-            filename="worker.log",
-            level=logging.INFO,
-            error_filename="error.log",
-        )
-    return configure_named_logger(
-        logger_name,
-        filename="app.log",
-        level=logging.INFO,
-        error_filename="error.log",
-    )
+    if not _has_configured_handlers():
+        if _is_worker_runtime():
+            configure_worker_logging(level=logging.INFO)
+        else:
+            configure_app_logging(level=logging.INFO)
+
+    return _normalize_child_logger(logger_name)

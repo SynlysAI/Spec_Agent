@@ -52,24 +52,29 @@ class TestLoggingSetup(unittest.TestCase):
     @staticmethod
     def _close_loggers() -> None:
         """关闭测试过程中创建的日志处理器。"""
-        for logger_name in ("spec_agent.app", "spec_agent.worker"):
+        root_logger = logging.getLogger()
+        for handler in list(root_logger.handlers):
+            root_logger.removeHandler(handler)
+            handler.close()
+
+        for logger_name in ("spec_agent", "spec_agent.app", "spec_agent.worker"):
             logger = logging.getLogger(logger_name)
             for handler in list(logger.handlers):
                 logger.removeHandler(handler)
                 handler.close()
 
     def test_configure_app_logging_creates_log_files(self) -> None:
-        """应用日志初始化后应创建 app 与 error 日志文件。"""
+        """应用日志初始化后应创建 app 与应用错误日志文件。"""
         logging_module = importlib.import_module("app.core.logging")
 
         logging_module.configure_app_logging()
 
         logs_dir = Path(self.temp_dir.name) / "logs"
         self.assertTrue((logs_dir / "app.log").exists())
-        self.assertTrue((logs_dir / "error.log").exists())
+        self.assertTrue((logs_dir / "app.error.log").exists())
 
     def test_create_app_initializes_request_logging(self) -> None:
-        """创建 FastAPI 应用后应初始化应用日志记录器。"""
+        """创建 FastAPI 应用后应初始化命名空间根日志记录器。"""
         from fastapi import APIRouter
 
         router_module = types.ModuleType("app.api.v1.router")
@@ -79,34 +84,50 @@ class TestLoggingSetup(unittest.TestCase):
 
         main_module.create_app()
 
-        app_logger = logging.getLogger("spec_agent.app")
+        root_logger = logging.getLogger()
         file_handler_paths = {
             Path(handler.baseFilename).name
-            for handler in app_logger.handlers
+            for handler in root_logger.handlers
             if hasattr(handler, "baseFilename")
         }
         self.assertIn("app.log", file_handler_paths)
+        self.assertIn("app.error.log", file_handler_paths)
         stream_handler_count = sum(
             1
-            for handler in app_logger.handlers
+            for handler in root_logger.handlers
             if isinstance(handler, logging.StreamHandler) and not hasattr(handler, "baseFilename")
         )
         self.assertEqual(stream_handler_count, 0)
 
+        app_logger = logging.getLogger("spec_agent.app")
+        self.assertEqual(len(app_logger.handlers), 0)
+        self.assertTrue(app_logger.propagate)
+
     def test_configure_worker_logging_creates_worker_log_file(self) -> None:
-        """Worker 日志初始化后应创建 worker 日志文件。"""
+        """Worker 日志初始化后应创建 worker 与 worker 错误日志文件。"""
         logging_module = importlib.import_module("app.core.logging")
 
         worker_logger = logging_module.configure_worker_logging()
 
         logs_dir = Path(self.temp_dir.name) / "logs"
         self.assertTrue((logs_dir / "worker.log").exists())
+        self.assertTrue((logs_dir / "worker.error.log").exists())
         stream_handler_count = sum(
             1
             for handler in worker_logger.handlers
             if isinstance(handler, logging.StreamHandler) and not hasattr(handler, "baseFilename")
         )
         self.assertEqual(stream_handler_count, 0)
+
+    def test_get_logger_reuses_root_handlers_for_child_logger(self) -> None:
+        """子级日志记录器应复用根日志处理器，不再直接绑定文件处理器。"""
+        logging_module = importlib.import_module("app.core.logging")
+
+        logging_module.configure_app_logging()
+        child_logger = logging_module.get_logger("spec_agent.api.spectra")
+
+        self.assertEqual(len(child_logger.handlers), 0)
+        self.assertTrue(child_logger.propagate)
 
 
 if __name__ == "__main__":

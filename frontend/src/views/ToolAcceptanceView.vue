@@ -103,10 +103,7 @@ async function downloadReport() {
     return
   }
   try {
-    const report = await fetchProtectedFileBlob(buildAcceptanceReportUrl(runFinal.value.run_id))
-    const blobUrl = URL.createObjectURL(report.blob)
-    window.open(blobUrl, '_blank')
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+    await triggerReportDownload(runFinal.value.run_id)
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
   }
@@ -123,13 +120,32 @@ async function openHistoryReport(runId) {
     return
   }
   try {
-    const report = await fetchProtectedFileBlob(buildAcceptanceReportUrl(runId))
-    const blobUrl = URL.createObjectURL(report.blob)
-    window.open(blobUrl, '_blank')
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+    await triggerReportDownload(runId)
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
   }
+}
+
+/**
+ * 触发验收报告浏览器下载。
+ *
+ * Args:
+ *   runId: 批次运行 ID。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function triggerReportDownload(runId) {
+  const report = await fetchProtectedFileBlob(buildAcceptanceReportUrl(runId))
+  const blobUrl = URL.createObjectURL(report.blob)
+  const link = document.createElement('a')
+
+  link.href = blobUrl
+  link.download = report.fileName || `${runId}.md`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(blobUrl)
 }
 
 /**
@@ -456,10 +472,6 @@ onBeforeUnmount(() => {
               <template #header><span>NMR（可自动计算）</span></template>
               <div>样本数：{{ aggregateNmr.sample_count || 0 }}</div>
               <div>任务成功率：{{ formatMetric(aggregateNmr.task_success_rate, 1, '%') }}</div>
-              <div>基线RMSE均值：{{ formatMetric(aggregateNmr.baseline_rmse_avg, 4) }}</div>
-              <div>基线达标率：{{ formatMetric(aggregateNmr.baseline_rmse_pass_rate, 1, '%') }}</div>
-              <div>溶剂峰ppm误差均值：{{ formatMetric(aggregateNmr.solvent_ppm_error_avg, 4) }}</div>
-              <div>溶剂峰达标率：{{ formatMetric(aggregateNmr.solvent_ppm_error_pass_rate, 1, '%') }}</div>
             </el-card>
           </div>
           <div>

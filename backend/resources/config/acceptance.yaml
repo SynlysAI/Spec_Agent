@@ -44,6 +44,12 @@ samples:
       script: run_raman_acceptance_json.sh
       workdir: /home/lyt/projects/sub_id-main
       timeout_seconds: 7200
+#    execution_mode: local
+#    dirs:
+#      - E:\spectrum_files\acceptance\raman
+#    patterns:
+#      - "*.txt"
+#      - "*.csv"
   lcms:
     execution_mode: local
     dirs:
