@@ -25,6 +25,7 @@ const currentDate = ref(formatCurrentDate())
 const isLoginPage = computed(() => route.path === '/login')
 const authBootstrapping = ref(true)
 const AUTH_EXPIRED_EVENT_NAME = 'spec-agent-auth-expired'
+const APP_VERSION = '1.2.9'
 
 /**
  * 解析接口文档地址。
@@ -249,6 +250,10 @@ onBeforeUnmount(() => {
           <span>接口文档</span>
         </el-menu-item>
       </el-menu>
+      <div class="sidebar-version" :class="{ collapsed: sidebarCollapsed }">
+        <span class="sidebar-version-label">版本</span>
+        <span class="sidebar-version-value">{{ APP_VERSION }}</span>
+      </div>
     </el-aside>
     <el-container>
       <el-header class="app-header">

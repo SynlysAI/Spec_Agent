@@ -19,12 +19,11 @@ from app.modules.nmr.workflow import default_peak_detection_params, run_nmr_anal
 
 
 ROOT_DIRS = [
-    r"E:\spectrum_files\nmr\自测0508\氢谱",
-    r"E:\spectrum_files\nmr\自测0508\碳谱",
+    r"E:\spectrum_files\nmr\核磁数据0515",
 ]
 """待扫描的根目录列表；后续新增目录时直接在这里追加。"""
 
-OUTPUT_PATH = str(PROJECT_ROOT / "outputs" / "nmr_target_peaks(自测0508).xlsx")
+OUTPUT_PATH = str(PROJECT_ROOT / "outputs" / "nmr_target_peaks(自测0515).xlsx")
 """导出结果路径。"""
 
 

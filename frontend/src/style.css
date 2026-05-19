@@ -118,7 +118,7 @@ body {
 
 .sidebar-menu {
   border-right: none !important;
-  padding: 8px;
+  padding: 8px 8px 72px;
 }
 
 .sidebar-menu .el-menu-item {
@@ -138,6 +138,38 @@ body {
 
 .sidebar-menu .el-menu-item.is-active {
   background: linear-gradient(90deg, rgba(56, 134, 255, 0.95), rgba(38, 90, 210, 0.95)) !important;
+}
+
+.sidebar-version {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dce6fb;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.sidebar-version.collapsed {
+  left: 10px;
+  right: 10px;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar-version-label {
+  color: #a9bde5;
+}
+
+.sidebar-version-value {
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .app-header {
@@ -306,6 +338,10 @@ body {
 
 @media (max-width: 900px) {
   .app-sidebar {
+    display: none;
+  }
+
+  .sidebar-version {
     display: none;
   }
 

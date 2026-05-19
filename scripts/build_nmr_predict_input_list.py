@@ -11,9 +11,9 @@ from pathlib import Path
 import pandas as pd
 
 
-EXCEL_PATH = Path(r"C:\Users\www59\Desktop\nmr_target_peaks.xlsx")
+EXCEL_PATH = Path(r"E:\xx_project\Spec_Agent\outputs\nmr_target_peaks(自测0515).xlsx")
 SHEET_NAME = "目标峰汇总"
-OUTPUT_PATH = Path(__file__).resolve().parents[1] / "outputs" / "nmr_predict_inputs.xlsx"
+OUTPUT_PATH = Path(__file__).resolve().parents[1] / "outputs" / "nmr_predict_inputs(自测0515).xlsx"
 
 FILE_PATH_COLUMN = "文件路径"
 FILE_NAME_COLUMN = "文件名"
@@ -65,7 +65,7 @@ def build_sample_key(file_name: str, spectrum_type: str) -> str:
     normalized_name = file_name.strip()
     normalized_type = spectrum_type.strip().upper()
     suffix_pattern = re.compile(
-        rf"^(?P<sample>.+?)(?:\s*[-_]\s*|\s+){re.escape(normalized_type)}\s*$",
+        rf"^(?P<sample>.+?)(?:\s*[-_]\s*|\s+){re.escape(normalized_type)}(?:[-_].*|\s+.*)?$",
         re.IGNORECASE,
     )
     matched = suffix_pattern.match(normalized_name)

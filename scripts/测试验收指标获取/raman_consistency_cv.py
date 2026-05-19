@@ -10,6 +10,7 @@ IDS = [0, 1, 2]
 PEAK_PROMINENCE = 0.1
 PEAK_TOLERANCE = 10  # 峰匹配容差（cm⁻¹）
 HEADER_LINES = 3  # dat文件头部跳过行数
+REPORT_DIR = os.path.join(os.path.dirname(__file__), "reports")
 
 
 def load_raman_data(filepath: str) -> tuple[np.ndarray, np.ndarray]:
@@ -124,6 +125,7 @@ def calc_peak_cv(all_peaks: list[list[tuple]], matched_groups: list[list[int]]) 
     """
     position_cvs = []
     intensity_cvs = []
+    peak_details = []
 
     for indices in matched_groups:
         positions = []
@@ -146,6 +148,11 @@ def calc_peak_cv(all_peaks: list[list[tuple]], matched_groups: list[list[int]]) 
 
         position_cvs.append(pos_cv)
         intensity_cvs.append(int_cv)
+        peak_details.append({
+            "mean_pos": np.mean(positions),
+            "pos_cv": pos_cv,
+            "int_cv": int_cv,
+        })
 
     return {
         "mean_pos_cv": np.mean(position_cvs) if position_cvs else float("nan"),
@@ -153,6 +160,7 @@ def calc_peak_cv(all_peaks: list[list[tuple]], matched_groups: list[list[int]]) 
         "max_pos_cv": np.max(position_cvs) if position_cvs else float("nan"),
         "max_int_cv": np.max(intensity_cvs) if intensity_cvs else float("nan"),
         "num_peaks": len(position_cvs),
+        "peak_details": peak_details,
     }
 
 
@@ -185,33 +193,58 @@ def main():
         cv_result = calc_peak_cv(all_peaks, matched)
         results.append({"name": sample_name, **cv_result})
 
-    # 输出表格
-    header = f"{'样品名称':<20} {'峰数量':>6} {'位置CV(%)':>10} {'强度CV(%)':>10} {'最大位置CV(%)':>14} {'最大强度CV(%)':>14}"
-    separator = "=" * len(header)
-    print(separator)
-    print("Raman 一致性测试 — 基于峰检测的 CV 系数")
-    print(separator)
-    print(header)
-    print("-" * len(header))
+    # 构建报告内容
+    lines = []
+    lines.append(f"# Raman 一致性测试报告 — 基于峰检测的 CV 系数")
+    lines.append(f"")
+    lines.append(f"**测试目录**: `{DATA_DIR}`")
+    lines.append(f"**测量次数**: {len(IDS)} 次（id={IDS}）")
+    lines.append(f"")
+    lines.append(f"## 汇总结果")
+    lines.append(f"")
+    lines.append(f"| 样品名称 | 峰数量 | 位置CV(%) | 强度CV(%) | 最大位置CV(%) | 最大强度CV(%) |")
+    lines.append(f"|---|---:|---:|---:|---:|---:|")
 
     for r in results:
         if "error" in r:
-            print(f"{r['name']:<20} {r['error']}")
+            lines.append(f"| {r['name']} | {r['error']} | | | | |")
             continue
-        print(f"{r['name']:<20} {r['num_peaks']:>6} "
-              f"{r['mean_pos_cv']:>10.4f} {r['mean_int_cv']:>10.4f} "
-              f"{r['max_pos_cv']:>14.4f} {r['max_int_cv']:>14.4f}")
-
-    print(separator)
+        lines.append(f"| {r['name']} | {r['num_peaks']} | {r['mean_pos_cv']:.4f} | "
+                     f"{r['mean_int_cv']:.4f} | {r['max_pos_cv']:.4f} | {r['max_int_cv']:.4f} |")
 
     # 汇总统计
     valid = [r for r in results if "error" not in r]
     if valid:
         avg_pos = np.mean([r["mean_pos_cv"] for r in valid])
         avg_int = np.mean([r["mean_int_cv"] for r in valid])
-        print(f"\n{'汇总 (' + str(len(valid)) + ' 个样品)':<20} "
-              f"{'':>6} {avg_pos:>10.4f} {avg_int:>10.4f}")
-        print(separator)
+        lines.append(f"| **汇总（{len(valid)} 个样品）** | | **{avg_pos:.4f}** | **{avg_int:.4f}** | | |")
+
+    # 各样品峰详情
+    lines.append(f"")
+    lines.append(f"## 各样品峰详情")
+    for r in results:
+        if "error" in r or "peak_details" not in r:
+            continue
+        lines.append(f"")
+        lines.append(f"### {r['name']}")
+        lines.append(f"")
+        lines.append(f"| 峰位(cm⁻¹) | 位置CV(%) | 强度CV(%) |")
+        lines.append(f"|---|---:|---:|")
+        for p in r["peak_details"]:
+            lines.append(f"| {p['mean_pos']:.2f} | {p['pos_cv']:.4f} | {p['int_cv']:.4f} |")
+
+    report_text = "\n".join(lines)
+
+    # 控制台输出
+    print(report_text)
+
+    # 保存为 md 文件
+    os.makedirs(REPORT_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = os.path.join(REPORT_DIR, "raman_cv_report.md")
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(report_text)
+    print(f"\n报告已保存: {report_path}")
 
 
 if __name__ == "__main__":

@@ -34,14 +34,17 @@ def execute_analysis_task(task_id: str) -> None:
     """
     task = TaskRepository.find_by_task_id(task_id)
     if not task:
+        logger.warning("任务 %s 不存在，跳过执行", task_id)
         return
 
     try:
         _update_task(task_id, status="RUNNING", progress=20, message="running")
+        logger.info("任务 %s 开始执行，类型: %s", task_id, task.task_type)
         task_type = task.task_type
         input_data = task.input
         params = task.params
         _update_task(task_id, progress=45, message="preparing")
+        logger.info("任务 %s 开始调用分析引擎，输出目录: %s", task_id, settings.outputs_root / "tasks" / task_id)
         result_payload = execute_analysis_sync(
             task_type=task_type,
             input_data=input_data,
@@ -62,7 +65,9 @@ def execute_analysis_task(task_id: str) -> None:
                 created_at=task.updated_at,
             )
         )
+        logger.info("任务 %s 结果已保存，result_id: %s", task_id, result_id)
         _update_task(task_id, status="SUCCESS", progress=100, message="finished", result_ref=result_id, error=None)
+        logger.info("任务 %s 执行完成", task_id)
     except Exception as exc:
         logger.error("任务 %s 执行失败: %s", task_id, exc)
         _update_task(task_id, status="FAILED", progress=100, message="failed", error=TaskErrorInfo(detail=str(exc)))
@@ -77,7 +82,9 @@ def execute_acceptance_run_task(run_id: str) -> None:
     """
     from app.services.acceptance_service import acceptance_service
 
+    logger.info("开始执行批量验收批次，run_id: %s", run_id)
     acceptance_service.run_batch(run_id=run_id)
+    logger.info("批量验收批次执行完成，run_id: %s", run_id)
 
 
 @celery_app.task(name="app.worker.tasks.execute_lab_collect_run_task")
@@ -89,4 +96,6 @@ def execute_lab_collect_run_task(run_id: str) -> None:
     """
     from app.services.lab_collect_service import lab_collect_service
 
+    logger.info("开始执行实验室数据采集批次，run_id: %s", run_id)
     lab_collect_service.run_collect(run_id=run_id)
+    logger.info("实验室数据采集批次执行完成，run_id: %s", run_id)

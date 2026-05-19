@@ -17,6 +17,7 @@ setup_matplotlib_font()
 # 过滤无关警告
 warnings.filterwarnings("ignore", category=UserWarning, module="nmrglue.fileio.bruker")
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="Casting complex values to real discards the imaginary part")
+warnings.filterwarnings("ignore", message=".*tight_layout.*", category=UserWarning)
 
 
 def ensure_nmr_xaxis_direction(ax, ppm_scale):
