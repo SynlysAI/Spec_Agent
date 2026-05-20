@@ -16,17 +16,27 @@ class GPCDataNameParser:
     
     def __init__(self):
         """初始化GPC数据名称解析器"""
+        # 仪器编号正则：支持带连字符的编号，如 GPC_01 或 GPC_01-2279
+        _instrument = r"GPC_\d+(?:-\d+)?"
+
         # 仪器特性曲线编码正则表达式
-        # 新格式：GPC_01_20241121_Cal001_PS_THF
-        self.curve_pattern = re.compile(r"^(GPC_\d{2})_(\d{8})_(Cal\d{3})_([A-Za-z0-9_]+)_([A-Za-z0-9_]+)$")
-        
+        # 完整格式：GPC_01_20241121_Cal001_PS_THF
+        # 短格式：GPC_03_20240920_Cal001（无样品和溶剂信息）
+        # 支持：带连字符编号、中文字符
+        self.curve_pattern = re.compile(
+            rf"^({_instrument})_(\d{{8}})_(Cal\d{{3}})(?:_([^_]+))?(?:_([^_]+))?$"
+        )
+
         # 原始数据编码正则表达式
-        # 新格式：GPC_01_20241121-1_Cal001_(PS,0.2mg/ml,6000)_THF_pure
-        # 同时支持样品信息带括号和不带括号的格式
-        self.data_pattern = re.compile(r"^(GPC_\d{2})_(\d{8}-\d+)_(Cal\d{3})_([^_]+)_([A-Za-z0-9_]+)_([A-Za-z0-9_]+)$")
-        
+        # 完整格式：GPC_01_20241121-1_Cal001_(PS,0.2mg/ml,6000)_THF_pure
+        # 简化格式（无样品信息）：GPC_01-2279_20260518-1_Cal002_四氢呋喃_pure4904
+        # 样品信息为可选字段
+        self.data_pattern = re.compile(
+            rf"^({_instrument})_(\d{{8}}-\d+)_(Cal\d{{3}})(?:_([^_]+))?_([^_]+)_([^_]+)$"
+        )
+
         # 简化的数据文件名正则表达式（用于匹配可能的变体）
-        self.simple_data_pattern = re.compile(r"^(GPC_\d{2})_(.*)$")
+        self.simple_data_pattern = re.compile(rf"^({_instrument})_(.+)$")
 
     
     def parse_curve_filename(self, filename: str) -> Optional[Dict[str, Any]]:
@@ -55,14 +65,14 @@ class GPCDataNameParser:
             instrument_info = match.group(1)
             test_date = match.group(2)
             curve_number = match.group(3)
-            sample_info = match.group(4)
-            solvent_info = match.group(5)
-            
+            sample_info = match.group(4)  # 可选字段，可能为None
+            solvent_info = match.group(5)  # 可选字段，可能为None
+
             # 解析仪器类型和编号
             instrument_parts = instrument_info.split('_')
             instrument_type = instrument_parts[0]
             instrument_number = instrument_parts[1] if len(instrument_parts) > 1 else ""
-            
+
             # 构建解析结果
             result = {
                 "filename": filename,
@@ -73,10 +83,12 @@ class GPCDataNameParser:
                 "instrument_info": instrument_info,
                 "curve_number": curve_number,
                 "test_date": test_date,
-                "sample_info": sample_info,
-                "solvent_info": solvent_info,
                 "full_pattern_matched": True
             }
+            if sample_info:
+                result["sample_info"] = sample_info
+            if solvent_info:
+                result["solvent_info"] = solvent_info
             
             logger.info(f"仪器特性曲线文件名解析成功: {filename}")
             return result
@@ -107,18 +119,18 @@ class GPCDataNameParser:
                 instrument_info = match.group(1)
                 test_date = match.group(2)
                 curve_number = match.group(3)
-                sample_info_str = match.group(4)
+                sample_info_str = match.group(4)  # 可选字段，可能为None
                 solvent_info = match.group(5)
                 mix_type = match.group(6)
-                
+
                 # 解析仪器类型和编号
                 instrument_parts = instrument_info.split('_')
                 instrument_type = instrument_parts[0]
                 instrument_number = instrument_parts[1] if len(instrument_parts) > 1 else ""
-                
-                # 解析样品信息
-                sample_info = self._parse_sample_info(sample_info_str)
-                
+
+                # 解析样品信息（可选字段）
+                sample_info = self._parse_sample_info(sample_info_str) if sample_info_str else {}
+
                 # 构建解析结果
                 result = {
                     "filename": filename,
@@ -130,11 +142,12 @@ class GPCDataNameParser:
                     "test_date": test_date,
                     "curve_number": curve_number,
                     "sample_info": sample_info,
-                    "sample_info_raw": sample_info_str,
                     "solvent_info": solvent_info,
                     "mix_type": mix_type,
                     "full_pattern_matched": True
                 }
+                if sample_info_str:
+                    result["sample_info_raw"] = sample_info_str
                 
                 logger.info(f"原始数据文件名解析成功: {filename}")
                 return result
@@ -145,11 +158,17 @@ class GPCDataNameParser:
                     logger.warning(f"原始数据文件名格式不完全匹配，使用简化解析: {filename}")
                     instrument_info = simple_match.group(1)
                     remaining_part = simple_match.group(2)
-                    
+
                     instrument_parts = instrument_info.split('_')
                     instrument_type = instrument_parts[0]
                     instrument_number = instrument_parts[1] if len(instrument_parts) > 1 else ""
-                    
+
+                    # 尝试从剩余部分提取标定曲线编号
+                    curve_number = None
+                    curve_match = re.search(r'(Cal\d{3})', remaining_part)
+                    if curve_match:
+                        curve_number = curve_match.group(1)
+
                     # 构建简化解析结果
                     result = {
                         "filename": filename,
@@ -158,6 +177,7 @@ class GPCDataNameParser:
                         "instrument_type": instrument_type,
                         "instrument_number": instrument_number,
                         "instrument_info": instrument_info,
+                        "curve_number": curve_number,
                         "remaining_part": remaining_part,
                         "full_pattern_matched": False
                     }
@@ -285,11 +305,15 @@ class GPCDataNameParser:
             # 提取匹配关键字：仪器名称和标定曲线名称
             instrument_info = actual_parsed.get('instrument_info')
             curve_number = actual_parsed.get('curve_number')
-            
+
+            # 提取基础仪器编号（去掉连字符后的批次部分），如 GPC_01-2279 → GPC_01
+            base_instrument_match = re.match(r'GPC_\d+', instrument_info or '')
+            base_instrument = base_instrument_match.group(0) if base_instrument_match else instrument_info
+
             if not instrument_info:
                 logger.warning(f"无法获取实际洗脱曲线的仪器信息: {actual_curve_name}")
                 return None
-            
+
             if not curve_number:
                 logger.warning(f"无法获取实际洗脱曲线的标定曲线名称: {actual_curve_name}")
                 return None
@@ -330,8 +354,11 @@ class GPCDataNameParser:
                         three_color_instrument_info = three_color_parsed.get('instrument_info')
                         three_color_curve_number = three_color_parsed.get('curve_number')
                         
-                        # 检查匹配关键字
-                        if three_color_instrument_info == instrument_info and three_color_curve_number == curve_number:
+                        # 检查匹配关键字（支持完整匹配和基础仪器号匹配）
+                        if three_color_curve_number == curve_number and (
+                            three_color_instrument_info == instrument_info
+                            or three_color_instrument_info == base_instrument
+                        ):
                             logger.info(f"成功匹配三色曲线文件: {curve_base_name} 对应实际洗脱曲线: {actual_curve_name}")
                             matched_curve_name = curve_base_name
                             break
@@ -352,7 +379,9 @@ class GPCDataNameParser:
                     
                     if curve_base_name:
                         # 检查文件名中是否包含仪器信息和曲线编号
-                        if instrument_info in curve_base_name and curve_number in curve_base_name:
+                        if curve_number in curve_base_name and (
+                            instrument_info in curve_base_name or base_instrument in curve_base_name
+                        ):
                             logger.info(f"宽松匹配三色曲线文件: {curve_base_name} 对应实际洗脱曲线: {actual_curve_name}")
                             matched_curve_name = curve_base_name
                             break

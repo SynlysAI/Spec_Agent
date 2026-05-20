@@ -135,6 +135,8 @@ def _configure_root_logging(
     filename: str,
     level: int = logging.INFO,
     error_filename: str | None = None,
+    *,
+    console: bool = False,
 ) -> logging.Logger:
     """创建进程级根日志记录器。
 
@@ -142,6 +144,7 @@ def _configure_root_logging(
         filename: 主日志文件名。
         level: 日志等级。
         error_filename: 错误日志文件名；未传则不额外输出错误日志。
+        console: 是否同时输出到控制台。
 
     Returns:
         配置完成的日志记录器。
@@ -150,6 +153,13 @@ def _configure_root_logging(
     logger.addHandler(_build_file_handler(filename, level))
     if error_filename:
         logger.addHandler(_build_file_handler(error_filename, logging.ERROR))
+    if console:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(level)
+        console_handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
+        console_handler.addFilter(RequestIdFilter())
+        setattr(console_handler, HANDLER_MARKER, True)
+        logger.addHandler(console_handler)
     return logger
 
 
@@ -171,11 +181,12 @@ def configure_named_logger(
     Returns:
         配置完成的命名日志记录器。
     """
-    _configure_root_logging(
-        filename=filename,
-        level=level,
-        error_filename=error_filename,
-    )
+    if not _has_configured_handlers():
+        _configure_root_logging(
+            filename=filename,
+            level=level,
+            error_filename=error_filename,
+        )
     return _normalize_child_logger(logger_name)
 
 
@@ -211,6 +222,7 @@ def configure_worker_logging(level: int = logging.INFO) -> logging.Logger:
         filename="worker.log",
         level=level,
         error_filename=WORKER_ERROR_FILENAME,
+        console=True,
     )
     logger = _normalize_child_logger("spec_agent.worker")
     logger.info("Worker 日志初始化完成", extra={"request_id": DEFAULT_REQUEST_ID})
