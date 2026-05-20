@@ -13,7 +13,7 @@ import TaskSubmitGpcView from '../views/TaskSubmitGpcView.vue'
 import TaskSubmitIrRamanView from '../views/TaskSubmitIrRamanView.vue'
 import TaskSubmitLcmsView from '../views/TaskSubmitLcmsView.vue'
 import TaskSubmitNmrView from '../views/TaskSubmitNmrView.vue'
-import ToolAcceptanceView from '../views/ToolAcceptanceView.vue'
+import ToolEvaluationCenterView from '../views/ToolEvaluationCenterView.vue'
 import ToolLcmsConvertView from '../views/ToolLcmsConvertView.vue'
 import ToolNmrServerView from '../views/ToolNmrServerView.vue'
 import ToolRamanCaptureView from '../views/ToolRamanCaptureView.vue'
@@ -36,7 +36,7 @@ const routes = [
   { path: '/tools/nmrserver', component: ToolNmrServerView },
   { path: '/tools/raman-capture', component: ToolRamanCaptureView },
   { path: '/tools/lcms-convert', component: ToolLcmsConvertView },
-  { path: '/tools/acceptance', component: ToolAcceptanceView },
+  { path: '/tools/acceptance', component: ToolEvaluationCenterView },
   { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { public: true } },
 ]
 

@@ -1,0 +1,22 @@
+devices:
+  nmr:
+    enabled: true
+    label: NMR 核磁
+    data_path: E:/spectrum_files/nmr/0000一致性测试
+    summary_description: 特征峰化学位移(ppm)变异系数（CV）
+  gpc:
+    enabled: true
+    label: GPC 凝胶色谱
+    data_path: E:/spectrum_files/gpc/0000一致性测试
+    summary_description: 重均分子量（Mw）/数均分子量（Mn）变异系数（CV）
+  raman:
+    enabled: true
+    label: Raman 拉曼
+    data_path: E:/spectrum_files/raman/0000一致性测试
+    summary_description: 特征峰峰位偏移/峰强度变异系数（CV）
+  lcms:
+    enabled: true
+    label: LCMS 质谱
+    data_path: E:/spectrum_files/lcms/0000一致性测试/mzml
+    summary_description: TIC 主峰保留时间/峰面积变异系数（CV）
+    config_path: E:/LCMS/config/example_config.yaml

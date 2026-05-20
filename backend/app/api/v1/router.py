@@ -8,6 +8,7 @@ from fastapi import Depends
 from app.api.v1.endpoints.acceptance import router as acceptance_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.chemistry import router as chemistry_router
+from app.api.v1.endpoints.consistency import router as consistency_router
 from app.api.v1.endpoints.dialogue import router as dialogue_router
 from app.api.v1.endpoints.files import router as files_router
 from app.api.v1.endpoints.health import router as health_router
@@ -32,3 +33,4 @@ api_router.include_router(chemistry_router, dependencies=[Depends(require_authen
 api_router.include_router(spectra_router, dependencies=[Depends(require_authenticated)])
 api_router.include_router(dialogue_router, dependencies=[Depends(require_authenticated)])
 api_router.include_router(acceptance_router, dependencies=[Depends(require_authenticated)])
+api_router.include_router(consistency_router, dependencies=[Depends(require_authenticated)])

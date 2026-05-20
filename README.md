@@ -18,7 +18,7 @@ Spec Agent 是一个面向表征实验谱图的智能解析与分析平台，当
 - 报告问答对话
 - NMRServer 正向预测、反向预测与数据库搜索
 - 拉曼光谱仪批量采集
-- 批量验收运行、历史查询与 Markdown 报告下载
+- 评测中心：解析准确性评测、设备重复性评测、历史查询与 Markdown 报告下载
 - 实验室共享目录数据采集、样本主档管理与分子资产统计
 - 谱图预览、化学结构图与官能团图辅助展示
 
@@ -408,23 +408,31 @@ npm run preview
 - 批量设置中心波数列表与激光功率列表
 - 调用后端接口执行采集并展示成功/失败结果
 
-### 批量验收测试
+### 评测中心
 
 路由：`/tools/acceptance`
 
-页面：`frontend/src/views/ToolAcceptanceView.vue`
+页面：`frontend/src/views/ToolEvaluationCenterView.vue`
 
 能力：
 
-- 读取验收配置摘要
-- 启动批量验收
-- 查询验收历史
-- 查看验收状态与样本详情
-- 下载 Markdown 验收报告
+- 解析准确性评测：
+  - 读取验收配置摘要
+  - 启动解析准确性评测
+  - 查询历史批次
+  - 查看样本详情
+  - 下载 Markdown 报告
+- 设备重复性评测：
+  - 读取设备重复性评测配置摘要
+  - 启动 NMR、GPC、Raman、LCMS 设备重复性评测
+  - 查询历史批次
+  - 查看设备级汇总与样品组明细
+  - 下载 Markdown 报告
 
 配置文件：
 
 - `backend/resources/config/acceptance.yaml`
+- `backend/resources/config/consistency.yaml`
 
 ---
 
@@ -448,6 +456,7 @@ npm run preview
 - `spectra`
 - `dialogue`
 - `acceptance`
+- `consistency`
 
 核心接口：
 
@@ -494,6 +503,12 @@ POST   /api/v1/acceptance/run
 GET    /api/v1/acceptance/runs
 GET    /api/v1/acceptance/run/{run_id}
 GET    /api/v1/acceptance/run/{run_id}/report
+
+GET    /api/v1/consistency/config
+POST   /api/v1/consistency/run
+GET    /api/v1/consistency/runs
+GET    /api/v1/consistency/run/{run_id}
+GET    /api/v1/consistency/run/{run_id}/report
 
 GET    /api/v1/chemistry/molecule-image
 GET    /api/v1/chemistry/function-group-image
@@ -597,14 +612,14 @@ backend/logs
 7. 任务完成后查看结构化结果、文本报告和输出产物。
 8. 如任务失败，优先查看任务详情错误信息与 Worker 日志。
 
-### 批量验收
+### 评测中心
 
-1. 打开“工具服务 / 批量验收测试”。
-2. 读取验收配置。
-3. 选择谱图类型并启动验收批次。
+1. 打开“工具服务 / 评测中心”。
+2. 在“解析准确性评测”页签中执行谱解准确性评测，或在“设备重复性评测”页签中执行设备重复性评测。
+3. 选择谱图类型或设备类型并启动批次。
 4. 等待批次完成。
-5. 查看样本详情、总体指标与产物链接。
-6. 下载 Markdown 验收报告归档。
+5. 查看样本详情、设备级汇总、样品组明细与产物链接。
+6. 下载 Markdown 报告归档。
 
 ### 实验室数据采集
 
@@ -639,7 +654,7 @@ backend/logs
 - 任务提交页可访问
 - 任务中心可查询任务
 - 任务详情可展示结果与产物
-- 报告问答、实验采集、样本管理、NMRServer、拉曼批量采集、批量验收页面可进入
+- 报告问答、实验采集、样本管理、NMRServer、拉曼批量采集、评测中心页面可进入
 
 ---
 

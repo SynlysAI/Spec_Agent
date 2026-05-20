@@ -87,6 +87,20 @@ def execute_acceptance_run_task(run_id: str) -> None:
     logger.info("批量验收批次执行完成，run_id: %s", run_id)
 
 
+@celery_app.task(name="app.worker.tasks.execute_consistency_run_task")
+def execute_consistency_run_task(run_id: str) -> None:
+    """执行设备重复性评测批次。
+
+    Args:
+        run_id: 一致性评测运行 ID。
+    """
+    from app.services.consistency_service import consistency_service
+
+    logger.info("开始执行设备重复性评测批次，run_id: %s", run_id)
+    consistency_service.run_batch(run_id=run_id)
+    logger.info("设备重复性评测批次执行完成，run_id: %s", run_id)
+
+
 @celery_app.task(name="app.worker.tasks.execute_lab_collect_run_task")
 def execute_lab_collect_run_task(run_id: str) -> None:
     """执行实验室数据采集批次。

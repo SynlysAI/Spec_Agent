@@ -7,6 +7,7 @@ from typing import Any
 
 from app.infra.mongo import (
     get_acceptance_runs_collection,
+    get_consistency_runs_collection,
     get_files_collection,
     get_lab_collect_runs_collection,
     get_molecular_statistics_collection,
@@ -125,6 +126,15 @@ class AcceptanceRunRepository:
     def collection():
         """返回验收集合。"""
         return get_acceptance_runs_collection()
+
+
+class ConsistencyRunRepository:
+    """一致性评测批次仓储。"""
+
+    @staticmethod
+    def collection():
+        """返回一致性评测集合。"""
+        return get_consistency_runs_collection()
 
 
 class LabCollectRunRepository:

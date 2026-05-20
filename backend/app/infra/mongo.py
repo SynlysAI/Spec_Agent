@@ -72,6 +72,16 @@ def get_acceptance_runs_collection() -> Collection:
     return get_database()["acceptance_runs"]
 
 
+def get_consistency_runs_collection() -> Collection:
+    """获取 consistency_runs 集合。
+
+    函数名称: get_consistency_runs_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["consistency_runs"]
+
+
 def get_lab_collect_runs_collection() -> Collection:
     """获取 lab_collect_runs 集合。
 

@@ -651,6 +651,68 @@ export async function getAcceptanceRuns(limit = 20, options = {}) {
 }
 
 /**
+ * 查询设备重复性评测配置摘要。
+ *
+ * Returns:
+ *   一致性评测配置数据。
+ */
+export async function getConsistencyConfig(options = {}) {
+  const response = await apiClient.get('/consistency/config', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 启动设备重复性评测运行。
+ *
+ * Args:
+ *   deviceTypes: 设备类型列表，为空表示全量。
+ *
+ * Returns:
+ *   运行创建结果。
+ */
+export async function createConsistencyRun(deviceTypes, options = {}) {
+  const response = await apiClient.post(
+    '/consistency/run',
+    {
+      device_types: deviceTypes,
+    },
+    buildRequestConfig(options),
+  )
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询设备重复性评测运行状态。
+ *
+ * Args:
+ *   runId: 批次运行 ID。
+ *
+ * Returns:
+ *   批次运行数据。
+ */
+export async function getConsistencyRun(runId, options = {}) {
+  const response = await apiClient.get(`/consistency/run/${runId}`, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询设备重复性评测历史列表。
+ *
+ * Args:
+ *   limit: 返回条数上限。
+ *
+ * Returns:
+ *   历史批次列表数据。
+ */
+export async function getConsistencyRuns(limit = 20, options = {}) {
+  const response = await apiClient.get('/consistency/runs', {
+    ...buildRequestConfig(options),
+    params: { limit },
+  })
+  return unwrapResponse(response)
+}
+
+/**
  * 查询实验室采集配置摘要。
  *
  * Returns:
@@ -795,4 +857,17 @@ export async function deleteSpectrumSample(sampleId, options = {}) {
  */
 export function buildAcceptanceReportUrl(runId) {
   return buildAbsoluteApiUrl(`/acceptance/run/${runId}/report`)
+}
+
+/**
+ * 构建设备重复性评测报告下载地址。
+ *
+ * Args:
+ *   runId: 批次运行 ID。
+ *
+ * Returns:
+ *   可直接打开下载的 URL。
+ */
+export function buildConsistencyReportUrl(runId) {
+  return buildAbsoluteApiUrl(`/consistency/run/${runId}/report`)
 }
