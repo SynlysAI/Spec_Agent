@@ -238,7 +238,11 @@ function buildGroupMetricSummary(group) {
   }
   if (currentGroupTableMode.value === 'lcms') {
     const peaks = metrics.peaks || []
-    return `TIC/EIC 峰目标数=${peaks.length}`
+    const ticPeak = peaks.find((item) => item.type === 'TIC' && item.analyte === 'TIC_main_peak')
+    if (ticPeak) {
+      return `TIC主峰保留时间 CV=${formatMetric(ticPeak.rt_cv, 4)}%，峰面积 CV=${formatMetric(ticPeak.area_cv, 4)}%`
+    }
+    return `TIC主峰保留时间 CV=N/A，峰面积 CV=N/A`
   }
   return '-'
 }
