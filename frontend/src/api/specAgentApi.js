@@ -479,6 +479,33 @@ export async function focusRamanCamera(payload, options = {}) {
   return unwrapResponse(response)
 }
 
+/**
+ * 执行 LCMS 数据目录转化。
+ *
+ * Args:
+ *   formData: 包含 zip 文件的表单数据。
+ *
+ * Returns:
+ *   LCMS 转化结果对象。
+ */
+export async function runLcmsConvert(formData, options = {}) {
+  const response = await apiClient.post('/tools/lcms-convert/run', formData, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 构建 LCMS 转化结果下载地址。
+ *
+ * Args:
+ *   jobId: 转化任务 ID。
+ *
+ * Returns:
+ *   可直接下载的绝对 URL。
+ */
+export function buildLcmsConvertDownloadUrl(jobId) {
+  return buildAbsoluteApiUrl(`/tools/lcms-convert/download/${encodeURIComponent(jobId)}`)
+}
+
 export async function getTaskStatus(taskId, options = {}) {
   const response = await apiClient.get(`/tasks/${taskId}`, buildRequestConfig(options))
   return unwrapResponse(response)

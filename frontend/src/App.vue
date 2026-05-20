@@ -235,6 +235,7 @@ onBeforeUnmount(() => {
           </template>
           <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
           <el-menu-item index="/tools/raman-capture">拉曼批量采集</el-menu-item>
+          <el-menu-item index="/tools/lcms-convert">LCMS 数据转化</el-menu-item>
           <el-menu-item index="/tools/acceptance">批量验收测试</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="/experiments">

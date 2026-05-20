@@ -14,6 +14,7 @@ import TaskSubmitIrRamanView from '../views/TaskSubmitIrRamanView.vue'
 import TaskSubmitLcmsView from '../views/TaskSubmitLcmsView.vue'
 import TaskSubmitNmrView from '../views/TaskSubmitNmrView.vue'
 import ToolAcceptanceView from '../views/ToolAcceptanceView.vue'
+import ToolLcmsConvertView from '../views/ToolLcmsConvertView.vue'
 import ToolNmrServerView from '../views/ToolNmrServerView.vue'
 import ToolRamanCaptureView from '../views/ToolRamanCaptureView.vue'
 
@@ -34,6 +35,7 @@ const routes = [
   { path: '/experiments/samples', component: ExperimentSampleManageView },
   { path: '/tools/nmrserver', component: ToolNmrServerView },
   { path: '/tools/raman-capture', component: ToolRamanCaptureView },
+  { path: '/tools/lcms-convert', component: ToolLcmsConvertView },
   { path: '/tools/acceptance', component: ToolAcceptanceView },
   { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { public: true } },
 ]
