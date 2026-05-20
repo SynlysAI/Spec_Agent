@@ -9,13 +9,13 @@ samples:
       - E:/spectrum_files/acceptance/gpc
     patterns:
       - "*.arw"
-  ir:
-    execution_mode: local
-    dirs:
-      - E:/spectrum_files/acceptance/ir
-    patterns:
-      - "*.txt"
-      - "*.csv"
+#  ir:
+#    execution_mode: local
+#    dirs:
+#      - E:/spectrum_files/acceptance/ir
+#    patterns:
+#      - "*.txt"
+#      - "*.csv"
 
     # 远程汇总执行示例
     # 说明：

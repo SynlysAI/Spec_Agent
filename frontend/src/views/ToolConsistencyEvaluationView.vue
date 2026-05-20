@@ -231,7 +231,7 @@ function buildGroupMetricSummary(group) {
     return `重均分子量（Mw）CV=${formatMetric(metrics.mw_cv, 4)}%，数均分子量（Mn）CV=${formatMetric(metrics.mn_cv, 4)}%`
   }
   if (currentGroupTableMode.value === 'nmr') {
-    return `溶剂峰化学位移 CV=${formatMetric(metrics.mean_pos_cv, 4)}%`
+    return `特征峰化学位移 CV=${formatMetric(metrics.mean_pos_cv, 4)}%`
   }
   if (currentGroupTableMode.value === 'raman') {
     return `特征峰峰位偏移 CV=${formatMetric(metrics.mean_pos_cv, 4)}%，峰强度 CV=${formatMetric(metrics.mean_int_cv, 4)}%`
@@ -399,7 +399,7 @@ onBeforeUnmount(() => {
             数均分子量（Mn）CV：{{ formatMetric(deviceItem.summary_metrics?.mn_cv_avg, 4, '%') }}
           </div>
           <div v-if="deviceItem.device_type === 'nmr'">
-            溶剂峰化学位移 CV：{{ formatMetric(deviceItem.summary_metrics?.mean_pos_cv_avg, 4, '%') }}
+            特征峰化学位移 CV：{{ formatMetric(deviceItem.summary_metrics?.mean_pos_cv_avg, 4, '%') }}
           </div>
           <div v-if="deviceItem.device_type === 'raman'">
             特征峰峰位偏移 CV：{{ formatMetric(deviceItem.summary_metrics?.mean_pos_cv_avg, 4, '%') }}
