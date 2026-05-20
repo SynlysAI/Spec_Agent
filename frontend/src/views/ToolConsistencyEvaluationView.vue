@@ -300,7 +300,7 @@ onBeforeUnmount(() => {
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="creatingRun" @click="startRun">启动设备重复性评测</el-button>
+              <el-button type="primary" :loading="creatingRun" @click="startRun">启动设备一致性评测</el-button>
               <el-button :disabled="!activeRunId" @click="refreshRun">刷新状态</el-button>
             </el-form-item>
           </el-form>
@@ -309,7 +309,7 @@ onBeforeUnmount(() => {
             :closable="false"
             show-icon
             title="说明"
-            description="该模块会按设备类型执行重复性评测，并生成设备级汇总、样品组明细和 Markdown 报告。"
+            description="该模块会按设备类型执行一致性评测，并生成设备级汇总、样品组明细和 Markdown 报告。"
           />
         </el-card>
       </el-col>
@@ -417,9 +417,9 @@ onBeforeUnmount(() => {
         </el-card>
       </div>
 
-      <div class="report-line">
-        <el-button type="primary" plain @click="downloadReport">下载设备重复性报告</el-button>
-      </div>
+        <div class="report-line">
+          <el-button type="primary" plain @click="downloadReport">下载设备一致性评测报告</el-button>
+        </div>
 
       <el-divider content-position="left">设备明细</el-divider>
       <div class="device-switcher">

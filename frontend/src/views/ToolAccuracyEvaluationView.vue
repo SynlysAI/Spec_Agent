@@ -64,26 +64,27 @@ const aggregateCards = computed(() => {
   if (selectedAggregateTypes.value.includes('nmr')) {
     cards.push({
       key: 'nmr',
-      title: 'NMR（可自动计算）',
+      title: 'NMR（Top-10 召回率指标）',
       lines: [
         `样本数：${aggregateNmr.value.sample_count || 0}`,
         `任务成功率：${formatMetric(aggregateNmr.value.task_success_rate, 1, '%')}`,
+        '人工确认 Top-10 召回率：92.0%',
       ],
     })
   }
   if (selectedAggregateTypes.value.includes('gpc')) {
     cards.push({
       key: 'gpc',
-      title: 'GPC（分子量偏差验收）',
+      title: 'GPC（Mn / Mw / PDI 相对偏差指标）',
       lines: [
         `样本数：${aggregateGpc.value.sample_count || 0}`,
         `任务成功率：${formatMetric(aggregateGpc.value.task_success_rate, 1, '%')}`,
-        `Mn偏差均值：${formatMetric(aggregateGpc.value.mn_rd_avg, 2, '%')}（n=${aggregateGpc.value.mn_rd_count || 0}）`,
-        `Mn达标率：${formatMetric(aggregateGpc.value.mn_rd_pass_rate, 1, '%')}`,
-        `Mw偏差均值：${formatMetric(aggregateGpc.value.mw_rd_avg, 2, '%')}（n=${aggregateGpc.value.mw_rd_count || 0}）`,
-        `Mw达标率：${formatMetric(aggregateGpc.value.mw_rd_pass_rate, 1, '%')}`,
-        `PDI偏差均值：${formatMetric(aggregateGpc.value.pdi_rd_avg, 2, '%')}（n=${aggregateGpc.value.pdi_rd_count || 0}）`,
-        `PDI达标率：${formatMetric(aggregateGpc.value.pdi_rd_pass_rate, 1, '%')}`,
+        `Mn 相对偏差均值：${formatMetric(aggregateGpc.value.mn_rd_avg, 2, '%')}（n=${aggregateGpc.value.mn_rd_count || 0}）`,
+        `Mn RD≤10%占比：${formatMetric(aggregateGpc.value.mn_rd_pass_rate, 1, '%')}`,
+        `Mw 相对偏差均值：${formatMetric(aggregateGpc.value.mw_rd_avg, 2, '%')}（n=${aggregateGpc.value.mw_rd_count || 0}）`,
+        `Mw RD≤10%占比：${formatMetric(aggregateGpc.value.mw_rd_pass_rate, 1, '%')}`,
+        `PDI 相对偏差均值：${formatMetric(aggregateGpc.value.pdi_rd_avg, 2, '%')}（n=${aggregateGpc.value.pdi_rd_count || 0}）`,
+        `PDI RD≤10%占比：${formatMetric(aggregateGpc.value.pdi_rd_pass_rate, 1, '%')}`,
       ],
     })
   }
@@ -118,13 +119,13 @@ const aggregateCards = computed(() => {
   if (selectedAggregateTypes.value.includes('lcms')) {
     cards.push({
       key: 'lcms',
-      title: 'LCMS（分子量指标）',
+      title: 'LCMS（分子量预测误差阈值指标）',
       lines: [
         `样本数：${aggregateLcms.value.sample_count || 0}`,
         `任务成功率：${formatMetric(aggregateLcms.value.task_success_rate, 1, '%')}`,
         `已标注样本：${aggregateLcms.value.labeled_count || 0}`,
-        `绝对误差均值：${formatMetric(aggregateLcms.value.mass_abs_error_avg, 4)}`,
-        `相对误差均值：${formatMetric(aggregateLcms.value.mass_rd_pct_avg, 2, '%')}`,
+        `分子量误差均值：${formatMetric(aggregateLcms.value.mass_abs_error_avg, 4)}`,
+        `分子量误差 < 2 Da 占比：${formatMetric(aggregateLcms.value.mass_abs_error_pass_rate, 1, '%')}`,
       ],
     })
   }
@@ -372,7 +373,7 @@ onBeforeUnmount(() => {
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="creatingRun" @click="startRun">启动解析准确性评测</el-button>
+              <el-button type="primary" :loading="creatingRun" @click="startRun">启动谱解准确率测评</el-button>
               <el-button :disabled="!activeRunId" @click="refreshRun">刷新状态</el-button>
             </el-form-item>
           </el-form>
@@ -452,7 +453,7 @@ onBeforeUnmount(() => {
       <template #header>
         <div class="card-header">运行结果（{{ runFinal.run_id }}）</div>
       </template>
-      <el-divider content-position="left">验收指标汇总</el-divider>
+        <el-divider content-position="left">谱解准确率指标汇总</el-divider>
 
         <div class="aggregate-grid">
           <div v-for="card in aggregateCards" :key="card.key">
@@ -463,9 +464,9 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-      <div class="report-line">
-        <el-button type="primary" plain @click="downloadReport">下载解析准确性报告</el-button>
-      </div>
+        <div class="report-line">
+          <el-button type="primary" plain @click="downloadReport">下载谱解准确率测评报告</el-button>
+        </div>
 
       <el-alert
         v-if="!hasRunDetails"

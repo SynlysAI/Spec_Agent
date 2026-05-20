@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import ToolAccuracyEvaluationView from './ToolAccuracyEvaluationView.vue'
 import ToolConsistencyEvaluationView from './ToolConsistencyEvaluationView.vue'
 
-const activeTab = ref('accuracy')
+const activeTab = ref('consistency')
 </script>
 
 <template>
@@ -14,11 +14,11 @@ const activeTab = ref('accuracy')
     </div>
     <div class="panel-body">
       <el-tabs v-model="activeTab" type="border-card">
-        <el-tab-pane label="解析准确性评测" name="accuracy">
-          <ToolAccuracyEvaluationView />
-        </el-tab-pane>
-        <el-tab-pane label="设备重复性评测" name="consistency">
+        <el-tab-pane label="设备一致性评测" name="consistency">
           <ToolConsistencyEvaluationView />
+        </el-tab-pane>
+        <el-tab-pane label="谱解准确率测评" name="accuracy">
+          <ToolAccuracyEvaluationView />
         </el-tab-pane>
       </el-tabs>
     </div>

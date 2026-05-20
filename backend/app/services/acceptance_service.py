@@ -685,6 +685,7 @@ class AcceptanceService:
             "nmr_baseline_rmse": 0.2,
             "nmr_solvent_ppm_error": 0.05,
             "gpc_rd": 10.0,
+            "lcms_mass_abs_error": 2.0,
         }
 
         def _slice(stype: str) -> list[AcceptanceRunItem]:
@@ -821,6 +822,10 @@ class AcceptanceService:
                 "labeled_count": lcms_labeled_count,
                 "mass_abs_error_count": len(lcms_mass_abs_error),
                 "mass_abs_error_avg": AcceptanceService._avg(lcms_mass_abs_error),
+                "mass_abs_error_pass_rate": AcceptanceService._pass_rate(
+                    lcms_mass_abs_error,
+                    thresholds["lcms_mass_abs_error"],
+                ),
                 "mass_rd_pct_count": len(lcms_mass_rd_pct),
                 "mass_rd_pct_avg": AcceptanceService._avg(lcms_mass_rd_pct),
             },
