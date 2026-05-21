@@ -559,17 +559,23 @@ class AcceptanceService:
                 },
             }
         if spectrum_type == "nmr":
+            from app.modules.nmr.workflow import default_peak_detection_params
+
+            nucleus = self._detect_nmr_nucleus(sample=sample)
+            peak_params = default_peak_detection_params(nucleus=nucleus)
             return {
                 "task_type": TYPE_TO_TASK_KIND[spectrum_type],
                 "input": {"input_type": "folder_path", "input_path": sample.sample_path, "file_id": None},
                 "params": {
-                    "nucleus": "1H",
-                    "threshold": 0.01,
-                    "min_distance": 0.3,
-                    "min_prominence": 0.01,
-                    "width_multiplier": 1.0,
-                    "baseline_degree": 3,
-                    "smooth_window": 5,
+                    "nucleus": nucleus,
+                    "threshold": peak_params["threshold"],
+                    "min_distance": peak_params["min_distance"],
+                    "min_prominence": peak_params["min_prominence"],
+                    "width_multiplier": peak_params["width_multiplier"],
+                    "baseline_degree": peak_params["baseline_degree"],
+                    "smooth_window": peak_params["smooth_window"],
+                    "enable_multiplet": peak_params["enable_multiplet"],
+                    "max_coupling_hz": peak_params["max_coupling_hz"],
                     "detection_range_mode": "full",
                     "detection_range_min": None,
                     "detection_range_max": None,
@@ -600,6 +606,67 @@ class AcceptanceService:
                 "device": "auto",
             },
         }
+
+    @staticmethod
+    def _normalize_nmr_nucleus(nucleus: Any) -> str | None:
+        """将 NMR 测试核标准化为任务参数支持的核类型。
+
+        Args:
+            nucleus: 原始核类型文本。
+
+        Returns:
+            标准化后的核类型；无法识别时返回 ``None``。
+        """
+        nucleus_text = str(nucleus or "").strip().upper().replace("<", "").replace(">", "")
+        if nucleus_text in {"13C", "C"}:
+            return "13C"
+        if nucleus_text in {"1H", "H"}:
+            return "1H"
+        return None
+
+    @staticmethod
+    def _parse_nmr_nucleus_from_sample_name(sample_name: str) -> str | None:
+        """从样本名称中兜底解析 NMR 测试核。
+
+        Args:
+            sample_name: 样本名称。
+
+        Returns:
+            核类型；未命中时返回 ``None``。
+        """
+        normalized_name = str(sample_name or "").strip().upper()
+        if re.search(r"(?:^|[-_])(13C|C)(?:$|[-_])", normalized_name):
+            return "13C"
+        if re.search(r"(?:^|[-_])(1H|H)(?:$|[-_])", normalized_name):
+            return "1H"
+        return None
+
+    def _detect_nmr_nucleus(self, sample: AcceptanceSample) -> str:
+        """识别 NMR 样本的测试核。
+
+        Args:
+            sample: NMR 验收样本。
+
+        Returns:
+            标准化后的核类型，返回 ``"1H"`` 或 ``"13C"``。
+        """
+        try:
+            from app.modules.nmr.service import load_nmr_basic_info
+
+            _, _, metadata = load_nmr_basic_info(sample.sample_path)
+            nucleus = self._normalize_nmr_nucleus((metadata or {}).get("nucleus"))
+            if nucleus:
+                return nucleus
+        except Exception as exc:
+            logger.warning("读取 NMR 样本元数据失败，sample_path=%s, error=%s", sample.sample_path, exc)
+
+        nucleus = self._parse_nmr_nucleus_from_sample_name(sample.sample_name)
+        if nucleus:
+            logger.warning("NMR 样本 %s 未读取到有效测试核，已按样本名识别为 %s", sample.sample_name, nucleus)
+            return nucleus
+
+        logger.warning("NMR 样本 %s 测试核识别失败，回退为 1H 默认配置", sample.sample_name)
+        return "1H"
 
     @staticmethod
     def _get_execution_mode(type_config: dict[str, Any]) -> str:
