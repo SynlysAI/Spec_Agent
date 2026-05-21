@@ -25,6 +25,15 @@ const detailVisible = ref(false)
 const activeSample = ref(null)
 
 const selectedTypes = ref([])
+const selectedDetailType = ref('')
+
+const SPECTRUM_TYPE_LABEL_MAP = {
+  nmr: 'NMR 核磁',
+  gpc: 'GPC 凝胶色谱',
+  ir: 'IR 红外',
+  raman: 'Raman 拉曼',
+  lcms: 'LCMS 质谱',
+}
 
 const visibleConfigItems = computed(() => {
   const items = configData.value?.items || []
@@ -142,6 +151,25 @@ const activeArtifacts = computed(() => {
 })
 const activeMetrics = computed(() => activeSample.value?.metrics || {})
 const hasRunDetails = computed(() => Array.isArray(runFinal.value?.results) && runFinal.value.results.length > 0)
+const resultTypeOptions = computed(() => {
+  const resultTypes = Array.from(
+    new Set((runFinal.value?.results || []).map((item) => item.spectrum_type).filter(Boolean)),
+  )
+  const preferredTypes = selectedAggregateTypes.value.filter((type) => resultTypes.includes(type))
+  const extraTypes = resultTypes.filter((type) => !preferredTypes.includes(type))
+
+  return [...preferredTypes, ...extraTypes].map((type) => ({
+    value: type,
+    label: SPECTRUM_TYPE_LABEL_MAP[type] || String(type).toUpperCase(),
+    count: (runFinal.value?.results || []).filter((item) => item.spectrum_type === type).length,
+  }))
+})
+const resultGroups = computed(() => {
+  return resultTypeOptions.value.map((item) => ({
+    ...item,
+    items: (runFinal.value?.results || []).filter((result) => result.spectrum_type === item.value),
+  }))
+})
 
 function formatMetric(value, digits = 2, suffix = '') {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -209,6 +237,21 @@ function closeSampleDetail() {
   detailVisible.value = false
 }
 
+function selectDetailType(type) {
+  selectedDetailType.value = type
+}
+
+function syncSelectedDetailType() {
+  if (resultTypeOptions.value.length === 0) {
+    selectedDetailType.value = ''
+    return
+  }
+  const hasCurrentType = resultTypeOptions.value.some((item) => item.value === selectedDetailType.value)
+  if (!hasCurrentType) {
+    selectedDetailType.value = resultTypeOptions.value[0].value
+  }
+}
+
 async function openHistoryRun(runId) {
   if (!runId) {
     return
@@ -216,6 +259,7 @@ async function openHistoryRun(runId) {
   activeRunId.value = runId
   runFinal.value = null
   activeSample.value = null
+  selectedDetailType.value = ''
   await refreshRun()
 }
 
@@ -257,6 +301,7 @@ async function startRun() {
     activeRunId.value = data.run_id
     runFinal.value = null
     activeSample.value = null
+    selectedDetailType.value = ''
     runSummary.value = {
       run_id: data.run_id,
       status: data.status || 'QUEUED',
@@ -288,6 +333,7 @@ async function refreshRun() {
     if (!['QUEUED', 'RUNNING'].includes(data.status)) {
       stopPolling()
       runFinal.value = data
+      syncSelectedDetailType()
       await loadHistory()
     }
   } catch (error) {
@@ -464,12 +510,22 @@ onBeforeUnmount(() => {
         <el-divider content-position="left">谱解准确率指标汇总</el-divider>
 
         <div class="aggregate-grid">
-          <div v-for="card in aggregateCards" :key="card.key">
-            <el-card shadow="never" class="aggregate-card">
-              <template #header><span>{{ card.title }}</span></template>
-              <div v-for="line in card.lines" :key="line">{{ line }}</div>
-            </el-card>
-          </div>
+          <el-card v-for="card in aggregateCards" :key="card.key" shadow="never" class="aggregate-card">
+            <template #header>
+              <div class="card-header">
+                <span>{{ card.title }}</span>
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="!resultTypeOptions.some((item) => item.value === card.key)"
+                  @click="selectDetailType(card.key)"
+                >
+                  查看明细
+                </el-button>
+              </div>
+            </template>
+            <div v-for="line in card.lines" :key="line">{{ line }}</div>
+          </el-card>
         </div>
 
         <div class="report-line">
@@ -486,19 +542,35 @@ onBeforeUnmount(() => {
         class="fallback-alert"
       />
 
-      <el-table v-else :data="runFinal.results || []" size="small" border max-height="420">
-        <el-table-column prop="spectrum_type" label="类型" width="90" />
-        <el-table-column prop="sample_name" label="样本" min-width="220" />
-        <el-table-column prop="status" label="状态" width="100" />
-        <el-table-column prop="duration_seconds" label="耗时(s)" width="110" />
-        <el-table-column prop="sample_execution_id" label="样本执行ID" min-width="160" />
-        <el-table-column prop="error_message" label="错误信息" min-width="220" />
-        <el-table-column label="操作" width="110" fixed="right">
-          <template #default="scope">
-            <el-button link type="primary" @click="openSampleDetail(scope.row)">详情</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template v-else>
+        <el-divider content-position="left">样本明细</el-divider>
+
+        <div class="device-switcher">
+          <el-radio-group v-model="selectedDetailType" size="small">
+            <el-radio-button v-for="group in resultGroups" :key="group.value" :value="group.value">
+              {{ group.label }}
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <el-table
+          :data="resultGroups.find((group) => group.value === selectedDetailType)?.items || []"
+          size="small"
+          border
+          max-height="420"
+        >
+          <el-table-column prop="sample_name" label="样本" min-width="180" />
+          <el-table-column prop="status" label="状态" width="100" />
+          <el-table-column prop="duration_seconds" label="耗时(s)" width="140" />
+          <el-table-column prop="sample_execution_id" label="样本执行ID" min-width="160" />
+          <el-table-column prop="error_message" label="错误信息" min-width="220" />
+          <el-table-column label="操作" width="110" fixed="right">
+            <template #default="scope">
+              <el-button link type="primary" @click="openSampleDetail(scope.row)">详情</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
     </el-card>
   </div>
 
@@ -594,12 +666,13 @@ onBeforeUnmount(() => {
 
 .aggregate-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
 
 .aggregate-card {
+  height: 100%;
   font-size: 13px;
   line-height: 1.8;
 }
@@ -611,6 +684,10 @@ onBeforeUnmount(() => {
 
 .fallback-alert {
   margin-bottom: 12px;
+}
+
+.device-switcher {
+  margin-bottom: 8px;
 }
 
 .detail-section {
@@ -640,7 +717,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1600px) {
   .aggregate-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
