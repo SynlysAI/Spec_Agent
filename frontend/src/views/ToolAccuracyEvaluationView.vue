@@ -150,9 +150,17 @@ function formatMetric(value, digits = 2, suffix = '') {
   return `${Number(value).toFixed(digits)}${suffix}`
 }
 
+const metricLabelMap = {
+  predicted_mass: '预测分子量',
+  target_mass: '实际标注分子量',
+  mass_abs_error: '分子量绝对误差',
+  mass_rd_pct: '分子量相对误差(%)',
+  labeled_count: '已标注样本数',
+}
+
 function toMetricEntries(metrics) {
   return Object.entries(metrics || {}).map(([key, value]) => ({
-    key,
+    key: metricLabelMap[key] || key,
     value: Array.isArray(value) ? value.join(', ') : String(value),
   }))
 }
@@ -251,7 +259,7 @@ async function startRun() {
     activeSample.value = null
     runSummary.value = {
       run_id: data.run_id,
-      status: data.status || 'RUNNING',
+      status: data.status || 'QUEUED',
       summary: { total: 0, success: 0, failed: 0, progress: 0 },
       report_path: null,
     }
@@ -277,7 +285,7 @@ async function refreshRun() {
       summary: data.summary,
       report_path: data.report_path || null,
     }
-    if (data.status !== 'RUNNING') {
+    if (!['QUEUED', 'RUNNING'].includes(data.status)) {
       stopPolling()
       runFinal.value = data
       await loadHistory()

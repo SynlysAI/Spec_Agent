@@ -4,9 +4,11 @@ from typing import Optional, List, Dict, Callable
 
 import numpy as np
 import pandas as pd
+from config import setup_logging, setup_matplotlib_font
+
+setup_matplotlib_font()
 from matplotlib import pyplot as plt
 from scipy.ndimage import minimum_filter1d
-from config import setup_logging
 
 # 配置日志记录
 setup_logging(logger_name="GPCDataPlotter")

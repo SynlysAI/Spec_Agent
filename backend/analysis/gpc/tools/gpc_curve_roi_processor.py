@@ -2,15 +2,14 @@ import logging
 import os
 from typing import Dict, Any, List, Tuple, Optional
 
+from config import setup_logging, setup_matplotlib_font, GLOBAL_CONFIG
+
+setup_matplotlib_font()
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import signal
 
-from config import setup_logging, setup_matplotlib_font, GLOBAL_CONFIG
-
-
-setup_matplotlib_font()
 from analysis.gpc.tools.gpc_calibration_curve import GPCCalibrationCurve
 
 # 配置日志记录

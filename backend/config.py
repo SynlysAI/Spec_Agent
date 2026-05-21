@@ -37,9 +37,11 @@ def _is_worker_runtime() -> bool:
 
 
 def setup_matplotlib_font() -> None:
-    """统一配置 Matplotlib 中文字体。"""
+    """统一配置 Matplotlib 中文字体与无头后端。"""
     import matplotlib
 
+    if _is_worker_runtime():
+        matplotlib.use("Agg")
     if platform.system() == "Windows":
         matplotlib.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "SimSun"]
     else:

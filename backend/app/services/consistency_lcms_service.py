@@ -10,8 +10,12 @@ from typing import Optional
 import numpy as np
 import yaml
 
+from app.core.logging import get_logger
 from app.schemas.consistency import ConsistencyDeviceRunItem, ConsistencyGroupResultItem
 from app.services.consistency_common import DEVICE_LABELS, average, build_artifact, calc_cv, format_number
+
+
+logger = get_logger("spec_agent.services.consistency.lcms")
 
 
 def _try_import_mzml_reader():
@@ -129,10 +133,17 @@ def detect_peak(times: np.ndarray, intensities: np.ndarray, rt_start: float, rt_
 def run_lcms_consistency(data_path: str, output_dir: Path, config_path: str) -> ConsistencyDeviceRunItem:
     """执行 LCMS 设备重复性评测。"""
     output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(
+        "LCMS 一致性评测开始: data_path=%s, output_dir=%s, config_path=%s",
+        data_path,
+        output_dir,
+        config_path,
+    )
     if not os.path.isdir(data_path):
         report_text = f"# LCMS 一致性测试报告\n\n数据目录不存在：`{data_path}`\n"
         report_path = output_dir / "lcms_consistency_report.md"
         report_path.write_text(report_text, encoding="utf-8")
+        logger.warning("LCMS 一致性评测失败，数据目录不存在: data_path=%s", data_path)
         return ConsistencyDeviceRunItem(
             device_type="lcms",
             device_label=DEVICE_LABELS["lcms"],
@@ -182,7 +193,9 @@ def run_lcms_consistency(data_path: str, output_dir: Path, config_path: str) -> 
         "|---|---|---|---:|---:|---:|---:|",
     ]
 
-    for sample_name in groups:
+    logger.info("LCMS 一致性评测样品组统计完成: total_groups=%s", len(groups))
+    for index, sample_name in enumerate(groups, start=1):
+        logger.info("LCMS 一致性评测处理样品组: group=%s, progress=%s/%s", sample_name, index, len(groups))
         sample_files = sorted(
             file_name
             for file_name in files
@@ -299,6 +312,12 @@ def run_lcms_consistency(data_path: str, output_dir: Path, config_path: str) -> 
                     f"{format_number(peak_row['rt_cv'], 4)} | {format_number(peak_row['area_cv'], 4)} | "
                     f"{format_number(peak_row['height_cv'], 4)} |"
                 )
+            logger.info(
+                "LCMS 样品组执行完成: group=%s, peak_rows=%s, errors=%s",
+                sample_name,
+                len(sample_peak_rows),
+                len(errors),
+            )
         else:
             failed_groups += 1
             remark = "未检测到峰" if not errors else f"未检测到峰；{'; '.join(errors)}"
@@ -312,6 +331,7 @@ def run_lcms_consistency(data_path: str, output_dir: Path, config_path: str) -> 
                 )
             )
             lines.append(f"| {sample_name} | {remark} | | | | | |")
+            logger.warning("LCMS 样品组执行失败: group=%s, reason=%s", sample_name, remark)
 
     if rt_cv_values or area_cv_values:
         lines.append(
@@ -341,6 +361,13 @@ def run_lcms_consistency(data_path: str, output_dir: Path, config_path: str) -> 
     report_path.write_text(report_text, encoding="utf-8")
 
     status = "SUCCESS" if group_results and failed_groups < len(group_results) else "FAILED"
+    logger.info(
+        "LCMS 一致性评测完成: status=%s, total_groups=%s, failed_groups=%s, report_path=%s",
+        status,
+        len(group_results),
+        failed_groups,
+        report_path,
+    )
     return ConsistencyDeviceRunItem(
         device_type="lcms",
         device_label=DEVICE_LABELS["lcms"],

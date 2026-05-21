@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 from scipy.signal import find_peaks
 
+from app.core.logging import get_logger
 from app.schemas.consistency import ConsistencyDeviceRunItem, ConsistencyGroupResultItem
 from app.services.consistency_common import DEVICE_LABELS, average, build_artifact, format_number
 
@@ -16,6 +17,9 @@ IDS = [0, 1, 2]
 PEAK_PROMINENCE = 0.1
 PEAK_TOLERANCE = 10
 HEADER_LINES = 3
+
+
+logger = get_logger("spec_agent.services.consistency.raman")
 
 
 def load_raman_data(filepath: str) -> tuple[np.ndarray, np.ndarray]:
@@ -131,10 +135,12 @@ def calc_peak_cv(all_peaks: list[list[tuple[float, float]]], matched_groups: lis
 def run_raman_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRunItem:
     """执行 Raman 设备重复性评测。"""
     output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("Raman 一致性评测开始: data_path=%s, output_dir=%s", data_path, output_dir)
     if not os.path.isdir(data_path):
         report_text = f"# Raman 一致性测试报告\n\n数据目录不存在：`{data_path}`\n"
         report_path = output_dir / "raman_consistency_report.md"
         report_path.write_text(report_text, encoding="utf-8")
+        logger.warning("Raman 一致性评测失败，数据目录不存在: data_path=%s", data_path)
         return ConsistencyDeviceRunItem(
             device_type="raman",
             device_label=DEVICE_LABELS["raman"],
@@ -169,7 +175,9 @@ def run_raman_consistency(data_path: str, output_dir: Path) -> ConsistencyDevice
         "|---|---:|---:|---:|---:|---:|",
     ]
 
-    for sample_name in groups:
+    logger.info("Raman 一致性评测样品组统计完成: total_groups=%s", len(groups))
+    for index, sample_name in enumerate(groups, start=1):
+        logger.info("Raman 一致性评测处理样品组: group=%s, progress=%s/%s", sample_name, index, len(groups))
         all_peaks: list[list[tuple[float, float]]] = []
         for sample_index in IDS:
             filepath = os.path.join(data_path, f"{sample_name}_{sample_index}.dat")
@@ -190,6 +198,7 @@ def run_raman_consistency(data_path: str, output_dir: Path) -> ConsistencyDevice
                 )
             )
             lines.append(f"| {sample_name} | 数据不足 | | | | |")
+            logger.warning("Raman 样品组执行失败: group=%s, reason=数据不足", sample_name)
             continue
 
         matched = match_peaks_across_spectra(all_peaks)
@@ -205,6 +214,7 @@ def run_raman_consistency(data_path: str, output_dir: Path) -> ConsistencyDevice
                 )
             )
             lines.append(f"| {sample_name} | 未检测到峰 | | | | |")
+            logger.warning("Raman 样品组执行失败: group=%s, reason=未检测到峰", sample_name)
             continue
 
         cv_result = calc_peak_cv(all_peaks, matched)
@@ -241,6 +251,12 @@ def run_raman_consistency(data_path: str, output_dir: Path) -> ConsistencyDevice
             f"| {sample_name} | {cv_result['num_peaks']} | {format_number(mean_pos, 4)} | "
             f"{format_number(mean_int, 4)} | {format_number(max_pos, 4)} | {format_number(max_int, 4)} |"
         )
+        logger.info(
+            "Raman 样品组执行完成: group=%s, peaks=%s, replicates=%s",
+            sample_name,
+            cv_result["num_peaks"],
+            len(all_peaks),
+        )
 
     if mean_pos_values or mean_int_values:
         lines.append(
@@ -267,6 +283,13 @@ def run_raman_consistency(data_path: str, output_dir: Path) -> ConsistencyDevice
     report_path.write_text(report_text, encoding="utf-8")
 
     status = "SUCCESS" if group_results and failed_groups < len(group_results) else "FAILED"
+    logger.info(
+        "Raman 一致性评测完成: status=%s, total_groups=%s, failed_groups=%s, report_path=%s",
+        status,
+        len(group_results),
+        failed_groups,
+        report_path,
+    )
     return ConsistencyDeviceRunItem(
         device_type="raman",
         device_label=DEVICE_LABELS["raman"],

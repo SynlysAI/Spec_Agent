@@ -75,16 +75,16 @@ def execute_analysis_task(task_id: str) -> None:
 
 @celery_app.task(name="app.worker.tasks.execute_acceptance_run_task")
 def execute_acceptance_run_task(run_id: str) -> None:
-    """执行批量验收批次。
+    """执行谱解批量验收批次。
 
     Args:
         run_id: 批量验收运行 ID。
     """
     from app.services.acceptance_service import acceptance_service
 
-    logger.info("开始执行批量验收批次，run_id: %s", run_id)
+    logger.info("开始执行谱解批量验收批次，run_id: %s", run_id)
     acceptance_service.run_batch(run_id=run_id)
-    logger.info("批量验收批次执行完成，run_id: %s", run_id)
+    logger.info("谱解批量验收批次执行完成，run_id: %s", run_id)
 
 
 @celery_app.task(name="app.worker.tasks.execute_consistency_run_task")

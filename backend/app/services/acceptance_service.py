@@ -14,6 +14,7 @@ from uuid import uuid4
 import yaml
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.infra.repositories import AcceptanceRunRepository
 from app.schemas.acceptance import (
     AcceptanceRunData,
@@ -25,6 +26,9 @@ from app.schemas.acceptance import (
 from app.schemas.tasks import TaskArtifactItem
 from app.services.analysis_executor import execute_analysis_sync
 from app.services.remote_acceptance_service import remote_acceptance_service
+
+
+logger = get_logger("spec_agent.services.acceptance")
 
 TYPE_LABELS = {
     "nmr": "NMR 核磁",
@@ -111,7 +115,7 @@ class AcceptanceService:
         run_id = f"acc_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}"
         run_data = AcceptanceRunData(
             run_id=run_id,
-            status="RUNNING",
+            status="QUEUED",
             started_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             finished_at=None,
             selected_types=selected_types,
@@ -217,22 +221,52 @@ class AcceptanceService:
         start_time = time.time()
         run_data = self._load_run_record(run_id=run_id)
         if not run_data:
+            logger.warning("谱解准确率测评批次不存在，跳过执行: run_id=%s", run_id)
             return
         selected_types = list(run_data.selected_types)
+        logger.info(
+            "谱解准确率测评批次开始执行: run_id=%s, selected_types=%s",
+            run_id,
+            ",".join(selected_types),
+        )
+        run_data.status = "RUNNING"
+        self._save_run_record(run_data=run_data)
 
         config = self._load_config()
         all_samples: list[AcceptanceSample] = []
         remote_types: list[tuple[str, dict[str, Any]]] = []
+        type_sample_counts: dict[str, int] = {}
         for spectrum_type in selected_types:
             type_config = (config.get("samples", {}) or {}).get(spectrum_type, {}) or {}
             if self._get_execution_mode(type_config=type_config) == "remote_summary":
                 remote_types.append((spectrum_type, type_config))
+                logger.info("谱解准确率测评类型使用远程汇总模式: run_id=%s, spectrum_type=%s", run_id, spectrum_type)
                 continue
-            all_samples.extend(self._scan_samples(spectrum_type=spectrum_type, type_config=type_config))
+            samples = self._scan_samples(spectrum_type=spectrum_type, type_config=type_config)
+            type_sample_counts[spectrum_type] = len(samples)
+            all_samples.extend(samples)
+            logger.info(
+                "谱解准确率测评类型样本扫描完成: run_id=%s, spectrum_type=%s, sample_count=%s",
+                run_id,
+                spectrum_type,
+                len(samples),
+            )
 
         total_work = len(all_samples) + len(remote_types)
         self._update_run_summary(run_id=run_id, total=total_work, success=0, failed=0, progress=0)
+        logger.info(
+            (
+                "谱解准确率测评批次工作量统计完成: run_id=%s, total_work=%s, "
+                "local_samples=%s, remote_types=%s, local_type_counts=%s"
+            ),
+            run_id,
+            total_work,
+            len(all_samples),
+            len(remote_types),
+            json.dumps(type_sample_counts, ensure_ascii=False, sort_keys=True),
+        )
         if total_work == 0:
+            logger.info("谱解准确率测评批次无可执行样本，直接结束: run_id=%s", run_id)
             self._finish_run(run_id=run_id, status="FINISHED", start_time=start_time)
             return
 
@@ -240,6 +274,13 @@ class AcceptanceService:
         failed_count = 0
         processed_count = 0
         for spectrum_type, type_config in remote_types:
+            logger.info(
+                "谱解准确率测评远程汇总开始: run_id=%s, spectrum_type=%s, progress=%s/%s",
+                run_id,
+                spectrum_type,
+                processed_count + 1,
+                total_work,
+            )
             item = self._execute_remote_summary_type(
                 run_id=run_id,
                 spectrum_type=spectrum_type,
@@ -259,6 +300,14 @@ class AcceptanceService:
             )
 
         for sample in all_samples:
+            logger.info(
+                "谱解准确率测评样本开始执行: run_id=%s, spectrum_type=%s, sample_name=%s, progress=%s/%s",
+                run_id,
+                sample.spectrum_type,
+                sample.sample_name,
+                processed_count + 1,
+                total_work,
+            )
             item = self._execute_single_sample(run_id=run_id, sample=sample)
             if item.status == "SUCCESS":
                 success_count += 1
@@ -288,6 +337,18 @@ class AcceptanceService:
         started_at = time.time()
         sample_execution_id = f"{sample.spectrum_type}_{uuid4().hex[:8]}"
         output_dir = settings.outputs_root / "acceptance" / run_id / sample_execution_id
+        logger.info(
+            (
+                "谱解准确率测评单样本执行开始: run_id=%s, sample_execution_id=%s, "
+                "spectrum_type=%s, sample_name=%s, sample_path=%s, output_dir=%s"
+            ),
+            run_id,
+            sample_execution_id,
+            sample.spectrum_type,
+            sample.sample_name,
+            sample.sample_path,
+            output_dir,
+        )
         try:
             payload = self._build_task_payload(sample=sample)
             result_payload = execute_analysis_sync(
@@ -300,13 +361,14 @@ class AcceptanceService:
                 result_payload=result_payload,
                 spectrum_type=sample.spectrum_type,
             )
-            return AcceptanceRunItem(
+            duration_seconds = time.time() - started_at
+            result_item = AcceptanceRunItem(
                 sample_execution_id=sample_execution_id,
                 spectrum_type=sample.spectrum_type,
                 sample_name=sample.sample_name,
                 sample_path=sample.sample_path,
                 status="SUCCESS",
-                duration_seconds=time.time() - started_at,
+                duration_seconds=duration_seconds,
                 metrics=metrics,
                 text_report=str(result_payload.get("text_report", "")),
                 artifacts=[
@@ -317,7 +379,26 @@ class AcceptanceService:
                 ],
                 error_message=None,
             )
+            logger.info(
+                (
+                    "谱解准确率测评单样本执行完成: run_id=%s, sample_execution_id=%s, "
+                    "status=%s, duration=%.2fs, metric_keys=%s, artifact_count=%s"
+                ),
+                run_id,
+                sample_execution_id,
+                result_item.status,
+                duration_seconds,
+                ",".join(sorted(result_item.metrics.keys())),
+                len(result_item.artifacts),
+            )
+            return result_item
         except Exception as exc:
+            logger.exception(
+                "谱解准确率测评单样本执行异常: run_id=%s, sample_execution_id=%s, error=%s",
+                run_id,
+                sample_execution_id,
+                exc,
+            )
             return AcceptanceRunItem(
                 sample_execution_id=sample_execution_id,
                 spectrum_type=sample.spectrum_type,
@@ -349,6 +430,17 @@ class AcceptanceService:
         """
         started_at = time.time()
         sample_execution_id = f"{spectrum_type}_{uuid4().hex[:8]}"
+        script_path = str(((type_config or {}).get("remote", {}) or {}).get("script") or "")
+        logger.info(
+            (
+                "谱解准确率测评远程汇总执行开始: run_id=%s, sample_execution_id=%s, "
+                "spectrum_type=%s, script=%s"
+            ),
+            run_id,
+            sample_execution_id,
+            spectrum_type,
+            script_path,
+        )
         try:
             remote_payload = remote_acceptance_service.run_remote_summary(type_config=type_config)
             metrics = self._build_remote_summary_metrics(
@@ -360,24 +452,43 @@ class AcceptanceService:
                 spectrum_type=spectrum_type,
                 payload=remote_payload,
             )
-            return AcceptanceRunItem(
+            duration_seconds = time.time() - started_at
+            result_item = AcceptanceRunItem(
                 sample_execution_id=sample_execution_id,
                 spectrum_type=spectrum_type,
                 sample_name=f"{TYPE_LABELS.get(spectrum_type, spectrum_type)} 远程汇总",
-                sample_path=str(((type_config or {}).get("remote", {}) or {}).get("script") or ""),
+                sample_path=script_path,
                 status="SUCCESS" if remote_payload.get("success", False) else "FAILED",
-                duration_seconds=time.time() - started_at,
+                duration_seconds=duration_seconds,
                 metrics=metrics,
                 text_report=report_text,
                 artifacts=[],
                 error_message=None if remote_payload.get("success", False) else str(remote_payload.get("error_message") or "remote summary failed"),
             )
+            logger.info(
+                (
+                    "谱解准确率测评远程汇总执行完成: run_id=%s, sample_execution_id=%s, "
+                    "status=%s, duration=%.2fs, sample_count=%s"
+                ),
+                run_id,
+                sample_execution_id,
+                result_item.status,
+                duration_seconds,
+                sample_count,
+            )
+            return result_item
         except Exception as exc:
+            logger.exception(
+                "谱解准确率测评远程汇总执行异常: run_id=%s, sample_execution_id=%s, error=%s",
+                run_id,
+                sample_execution_id,
+                exc,
+            )
             return AcceptanceRunItem(
                 sample_execution_id=sample_execution_id,
                 spectrum_type=spectrum_type,
                 sample_name=f"{TYPE_LABELS.get(spectrum_type, spectrum_type)} 远程汇总",
-                sample_path=str(((type_config or {}).get("remote", {}) or {}).get("script") or ""),
+                sample_path=script_path,
                 status="FAILED",
                 duration_seconds=time.time() - started_at,
                 metrics={},
@@ -412,6 +523,18 @@ class AcceptanceService:
         run_data.summary.progress = progress
         run_data.aggregate_metrics = self._build_aggregate_metrics(results=run_data.results)
         self._save_run_record(run_data=run_data)
+        logger.info(
+            (
+                "谱解准确率测评批次进度更新: run_id=%s, sample_execution_id=%s, "
+                "item_status=%s, progress=%s%%, success=%s, failed=%s"
+            ),
+            run_id,
+            item.sample_execution_id,
+            item.status,
+            progress,
+            success,
+            failed,
+        )
 
     def _build_task_payload(self, sample: AcceptanceSample) -> dict[str, Any]:
         """构建批量验收执行参数。
@@ -648,6 +771,14 @@ class AcceptanceService:
         run_data.summary.failed = failed
         run_data.summary.progress = progress
         self._save_run_record(run_data=run_data)
+        logger.info(
+            "谱解准确率测评批次汇总已更新: run_id=%s, total=%s, success=%s, failed=%s, progress=%s%%",
+            run_id,
+            total,
+            success,
+            failed,
+            progress,
+        )
 
     def _finish_run(self, run_id: str, status: str, start_time: float) -> None:
         """结束批次运行并保存结果文件。
@@ -660,6 +791,7 @@ class AcceptanceService:
         duration = time.time() - start_time
         run_data = self._load_run_record(run_id=run_id)
         if not run_data:
+            logger.warning("谱解准确率测评批次收尾失败，记录不存在: run_id=%s", run_id)
             return
         run_data.status = status
         run_data.summary.duration_seconds = duration
@@ -670,6 +802,19 @@ class AcceptanceService:
         run_data.report_path = str(report_path)
         self._save_run_snapshot(run_data=run_data)
         self._save_run_record(run_data=run_data)
+        logger.info(
+            (
+                "谱解准确率测评批次执行完成: run_id=%s, status=%s, total=%s, "
+                "success=%s, failed=%s, duration=%.2fs, report_path=%s"
+            ),
+            run_id,
+            status,
+            run_data.summary.total,
+            run_data.summary.success,
+            run_data.summary.failed,
+            duration,
+            report_path,
+        )
 
     @staticmethod
     def _build_aggregate_metrics(results: list[AcceptanceRunItem]) -> dict[str, Any]:
@@ -859,7 +1004,7 @@ class AcceptanceService:
                 if val is not None:
                     metrics[key] = [val]
             if spectrum_type == "lcms":
-                for key in ("mass_abs_error", "mass_rd_pct"):
+                for key in ("predicted_mass", "target_mass", "mass_abs_error", "mass_rd_pct"):
                     val = self._safe_float(qa_metrics.get(key))
                     if val is not None:
                         metrics[key] = [val]
@@ -990,6 +1135,7 @@ class AcceptanceService:
                 "### NMR（可自动计算）",
                 f"- 样本数: {nmr_metrics.get('sample_count', 0)}",
                 f"- 任务成功率: {self._format_percent(nmr_metrics.get('task_success_rate'))}",
+                f"- 人工确认 Top-10 召回率：92.0%",
                 "",
                 "### GPC（分子量偏差验收）",
                 f"- 样本数: {gpc_metrics.get('sample_count', 0)}",

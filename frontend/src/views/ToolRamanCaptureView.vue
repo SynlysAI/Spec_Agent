@@ -17,6 +17,7 @@ const form = reactive({
   integer: 1,
   power_type: 3,
   grating_index: 2,
+  require_focus: false,
 })
 
 const focusForm = reactive({
@@ -123,6 +124,30 @@ function downloadSpectrumText(row) {
 }
 
 /**
+ * 执行自动对焦请求。
+ *
+ * Returns:
+ *   Promise<string>
+ */
+async function executeFocus() {
+  focusLoading.value = true
+  focusResult.value = ''
+  try {
+    const data = await focusRamanCamera(
+      { rt: focusForm.rt, rb: focusForm.rb, s: focusForm.s },
+      { timeout: 65000 },
+    )
+    focusResult.value = data.msg
+    return data.msg
+  } catch (error) {
+    focusResult.value = ''
+    throw error
+  } finally {
+    focusLoading.value = false
+  }
+}
+
+/**
  * 提交拉曼批量采集请求。
  *
  * Returns:
@@ -144,6 +169,11 @@ async function submitCapture() {
   loading.value = true
   resultData.value = null
   try {
+    if (form.require_focus) {
+      const focusMessage = await executeFocus()
+      ElMessage.success(focusMessage)
+    }
+
     const data = await runRamanCapture(
       {
         wavenumber_list: wavenumberList,
@@ -172,20 +202,11 @@ async function submitCapture() {
  *   Promise<void>
  */
 async function submitFocus() {
-  focusLoading.value = true
-  focusResult.value = ''
   try {
-    const data = await focusRamanCamera(
-      { rt: focusForm.rt, rb: focusForm.rb, s: focusForm.s },
-      { timeout: 65000 },
-    )
-    focusResult.value = data.msg
-    ElMessage.success(data.msg)
+    const focusMessage = await executeFocus()
+    ElMessage.success(focusMessage)
   } catch (error) {
-    focusResult.value = ''
     ElMessage.error(getApiErrorMessage(error))
-  } finally {
-    focusLoading.value = false
   }
 }
 </script>
@@ -285,6 +306,9 @@ async function submitFocus() {
                   :rows="3"
                   placeholder="逗号分隔，例如：1,3,5"
                 />
+              </el-form-item>
+              <el-form-item>
+                <el-checkbox v-model="form.require_focus">采集前自动对焦</el-checkbox>
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" :loading="loading" @click="submitCapture">开始批量采集</el-button>

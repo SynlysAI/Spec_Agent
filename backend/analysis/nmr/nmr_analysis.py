@@ -1,6 +1,9 @@
 import os
 import warnings
 
+from config import setup_matplotlib_font
+
+setup_matplotlib_font()
 import matplotlib.pyplot as plt
 import nmrglue as ng
 import numpy as np
@@ -9,10 +12,8 @@ from scipy.optimize import curve_fit
 
 from analysis.nmr.peak_detection import calculate_baseline
 from app.core.logging import get_logger
-from config import setup_matplotlib_font
 
 logger = get_logger("spec_agent.analysis.nmr")
-setup_matplotlib_font()
 
 # 过滤无关警告
 warnings.filterwarnings("ignore", category=UserWarning, module="nmrglue.fileio.bruker")

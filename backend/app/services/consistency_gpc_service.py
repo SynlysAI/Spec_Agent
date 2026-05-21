@@ -10,8 +10,12 @@ from typing import Any
 
 import numpy as np
 
+from app.core.logging import get_logger
 from app.schemas.consistency import ConsistencyDeviceRunItem, ConsistencyGroupResultItem
 from app.services.consistency_common import DEVICE_LABELS, average, build_artifact, calc_cv, format_number, safe_float
+
+
+logger = get_logger("spec_agent.services.consistency.gpc")
 
 
 def _get_sample_code(sample_dir: str) -> str | None:
@@ -20,7 +24,7 @@ def _get_sample_code(sample_dir: str) -> str | None:
     if not json_files:
         return None
     json_path = os.path.join(sample_dir, json_files[0])
-    with open(json_path, "r", encoding="utf-8") as file:
+    with open(json_path, "r", encoding="utf-8-sig") as file:
         data = json.load(file)
     code = str(data.get("code", "")).strip()
     return code.rsplit("_", 1)[0] if "_" in code else code
@@ -66,10 +70,12 @@ def run_gpc_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
         设备级结果对象。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("GPC 一致性评测开始: data_path=%s, output_dir=%s", data_path, output_dir)
     if not os.path.isdir(data_path):
         report_text = f"# GPC 一致性测试报告\n\n数据目录不存在：`{data_path}`\n"
         report_path = output_dir / "gpc_consistency_report.md"
         report_path.write_text(report_text, encoding="utf-8")
+        logger.warning("GPC 一致性评测失败，数据目录不存在: data_path=%s", data_path)
         return ConsistencyDeviceRunItem(
             device_type="gpc",
             device_label=DEVICE_LABELS["gpc"],
@@ -111,7 +117,10 @@ def run_gpc_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
         "|---|---:|---:|---:|---:|---:|---|",
     ]
 
-    for group_name in sorted(groups.keys()):
+    sorted_group_names = sorted(groups.keys())
+    logger.info("GPC 一致性评测样品组统计完成: total_groups=%s", len(sorted_group_names))
+    for index, group_name in enumerate(sorted_group_names, start=1):
+        logger.info("GPC 一致性评测处理样品组: group=%s, progress=%s/%s", group_name, index, len(sorted_group_names))
         directory_list = groups[group_name]
         mw_list: list[float] = []
         mn_list: list[float] = []
@@ -145,6 +154,7 @@ def run_gpc_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
                 )
             )
             lines.append(f"| {group_name} | | | | | | {remark} |")
+            logger.warning("GPC 样品组执行失败: group=%s, reason=%s", group_name, remark)
             continue
 
         mw_mean = float(np.mean(mw_list))
@@ -175,6 +185,13 @@ def run_gpc_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
             f"| {group_name} | {len(mw_list)} | {mw_mean:.2f} | {format_number(mw_cv, 4)} | "
             f"{mn_mean:.2f} | {format_number(mn_cv, 4)} | {remark} |"
         )
+        logger.info(
+            "GPC 样品组执行完成: group=%s, replicates=%s, mw_cv=%s, mn_cv=%s",
+            group_name,
+            len(mw_list),
+            format_number(mw_cv, 4),
+            format_number(mn_cv, 4),
+        )
 
     if mw_cv_values or mn_cv_values:
         lines.append(
@@ -187,6 +204,13 @@ def run_gpc_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
     report_path.write_text(report_text, encoding="utf-8")
 
     status = "SUCCESS" if group_results and failed_groups < len(group_results) else "FAILED"
+    logger.info(
+        "GPC 一致性评测完成: status=%s, total_groups=%s, failed_groups=%s, report_path=%s",
+        status,
+        len(group_results),
+        failed_groups,
+        report_path,
+    )
     return ConsistencyDeviceRunItem(
         device_type="gpc",
         device_label=DEVICE_LABELS["gpc"],

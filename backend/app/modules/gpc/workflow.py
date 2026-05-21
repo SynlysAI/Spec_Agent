@@ -359,12 +359,16 @@ class GPCPathWorkflow:
         for data in analysis_results:
             try:
                 curve_file = data.get("curve_file", "")
-                # 尝试从同一目录下查找对应的PDF文件
                 base_name = os.path.splitext(os.path.basename(curve_file))[0]
                 if shared_pdf_data is not None:
                     pdf_data = shared_pdf_data
                 else:
-                    pdf_data = self.validator.process_gpc_data(base_name)
+                    # 优先在 .arw 同目录下查找同名 PDF
+                    same_dir_pdf = os.path.join(os.path.dirname(curve_file), f"{base_name}.pdf")
+                    if os.path.isfile(same_dir_pdf):
+                        pdf_data = self.validator.extract_molecular_weight_info(same_dir_pdf)
+                    else:
+                        pdf_data = self.validator.process_gpc_data(base_name)
                 
                 # 将PDF提取的数据添加到结果中
                 data["pdf_data"] = pdf_data

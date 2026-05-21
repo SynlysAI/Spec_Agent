@@ -507,15 +507,28 @@ class LcmsTaskExecutor(BaseTaskExecutor):
             normalized_mass: float | str = float(predicted_mass)
         except (TypeError, ValueError):
             normalized_mass = str(predicted_mass)
-        text_report = f"LCMS 分析完成。\n\n预测分子量: {normalized_mass}"
+        qa_metrics = build_lcms_qa_metrics(input_file=input_file, predicted_mass=normalized_mass)
+        text_report_lines = [
+            "LCMS 分析完成。",
+            "",
+            f"预测分子量: {normalized_mass}",
+        ]
+        if qa_metrics.get("labeled"):
+            text_report_lines.append(f"实际标注分子量: {qa_metrics.get('target_mass')}")
+        text_report = "\n".join(text_report_lines)
         report_path = output_dir / "lcms_report.md"
+        report_lines = [
+            "# LCMS 分析报告",
+            "",
+            f"- 输入文件: {input_file.name}",
+            f"- 预测分子量: {normalized_mass}",
+        ]
+        if qa_metrics.get("labeled"):
+            report_lines.append(f"- 实际标注分子量: {qa_metrics.get('target_mass')}")
         report_path.write_text(
-            "# LCMS 分析报告\n\n"
-            f"- 输入文件: {input_file.name}\n"
-            f"- 预测分子量: {normalized_mass}\n",
+            "\n".join(report_lines) + "\n",
             encoding="utf-8",
         )
-        qa_metrics = build_lcms_qa_metrics(input_file=input_file, predicted_mass=normalized_mass)
         return {
             "structured_data": sanitize_lcms_structured_data({"predicted_mass": normalized_mass, "raw_output": infer_result}),
             "text_report": text_report,

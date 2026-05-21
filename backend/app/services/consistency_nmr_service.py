@@ -9,6 +9,7 @@ import numpy as np
 
 from analysis.nmr.nmr_analysis import get_nmr_sample_data
 from analysis.nmr.peak_detection import detect_peaks
+from app.core.logging import get_logger
 from app.schemas.consistency import ConsistencyDeviceRunItem, ConsistencyGroupResultItem
 from app.services.consistency_common import DEVICE_LABELS, average, build_artifact, format_number
 
@@ -16,6 +17,9 @@ from app.services.consistency_common import DEVICE_LABELS, average, build_artifa
 INDICES = [0, 1, 2]
 PEAK_TOLERANCE = 0.05
 TMS_PPM_THRESHOLD = 0.5
+
+
+logger = get_logger("spec_agent.services.consistency.nmr")
 
 
 def match_peaks_across_spectra(all_peaks: list[list[tuple]]) -> list[list[int]]:
@@ -92,10 +96,12 @@ def calc_peak_cv(all_peaks: list[list[tuple]], matched_groups: list[list[int]]) 
 def run_nmr_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRunItem:
     """执行 NMR 设备重复性评测。"""
     output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("NMR 一致性评测开始: data_path=%s, output_dir=%s", data_path, output_dir)
     if not os.path.isdir(data_path):
         report_text = f"# NMR 一致性测试报告\n\n数据目录不存在：`{data_path}`\n"
         report_path = output_dir / "nmr_consistency_report.md"
         report_path.write_text(report_text, encoding="utf-8")
+        logger.warning("NMR 一致性评测失败，数据目录不存在: data_path=%s", data_path)
         return ConsistencyDeviceRunItem(
             device_type="nmr",
             device_label=DEVICE_LABELS["nmr"],
@@ -133,7 +139,9 @@ def run_nmr_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
         "|---|---:|---:|---:|---:|---:|",
     ]
 
-    for sample_name in sample_dirs:
+    logger.info("NMR 一致性评测样品组统计完成: total_groups=%s", len(sample_dirs))
+    for index, sample_name in enumerate(sample_dirs, start=1):
+        logger.info("NMR 一致性评测处理样品组: group=%s, progress=%s/%s", sample_name, index, len(sample_dirs))
         sample_path = os.path.join(data_path, sample_name)
         all_peaks: list[list[tuple]] = []
         errors: list[str] = []
@@ -159,6 +167,7 @@ def run_nmr_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
                 )
             )
             lines.append(f"| {sample_name} | {remark} | | | | |")
+            logger.warning("NMR 样品组执行失败: group=%s, reason=%s", sample_name, remark)
             continue
 
         matched = match_peaks_across_spectra(all_peaks)
@@ -175,6 +184,7 @@ def run_nmr_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
                 )
             )
             lines.append(f"| {sample_name} | {remark} | | | | |")
+            logger.warning("NMR 样品组执行失败: group=%s, reason=%s", sample_name, remark)
             continue
 
         cv_result = calc_peak_cv(all_peaks, matched)
@@ -212,6 +222,12 @@ def run_nmr_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
             f"| {sample_name} | {cv_result['num_peaks']} | {format_number(mean_pos, 4)} | "
             f"{format_number(mean_int, 4)} | {format_number(max_pos, 4)} | {format_number(max_int, 4)} |"
         )
+        logger.info(
+            "NMR 样品组执行完成: group=%s, peaks=%s, replicates=%s",
+            sample_name,
+            cv_result["num_peaks"],
+            len(all_peaks),
+        )
 
     if mean_pos_values or mean_int_values:
         lines.append(
@@ -240,6 +256,13 @@ def run_nmr_consistency(data_path: str, output_dir: Path) -> ConsistencyDeviceRu
     report_path.write_text(report_text, encoding="utf-8")
 
     status = "SUCCESS" if group_results and failed_groups < len(group_results) else "FAILED"
+    logger.info(
+        "NMR 一致性评测完成: status=%s, total_groups=%s, failed_groups=%s, report_path=%s",
+        status,
+        len(group_results),
+        failed_groups,
+        report_path,
+    )
     return ConsistencyDeviceRunItem(
         device_type="nmr",
         device_label=DEVICE_LABELS["nmr"],

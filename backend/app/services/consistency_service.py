@@ -12,6 +12,7 @@ from uuid import uuid4
 import yaml
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.infra.repositories import ConsistencyRunRepository
 from app.schemas.consistency import (
     ConsistencyDeviceConfig,
@@ -21,6 +22,9 @@ from app.schemas.consistency import (
     ConsistencyRunSummary,
 )
 from app.services.consistency_common import DEVICE_LABELS, format_number
+
+
+logger = get_logger("spec_agent.services.consistency")
 
 class ConsistencyService:
     """提供设备重复性评测配置读取、批次执行与结果查询能力。"""
@@ -127,12 +131,20 @@ class ConsistencyService:
         start_time = time.time()
         run_data = self._load_run_record(run_id)
         if not run_data:
+            logger.warning("一致性评测批次不存在，跳过执行: run_id=%s", run_id)
             return
         selected_devices = list(run_data.selected_devices)
         total = len(selected_devices)
         run_data.summary.total = total
         self._save_run_record(run_data)
+        logger.info(
+            "一致性评测批次开始执行: run_id=%s, total_devices=%s, selected_devices=%s",
+            run_id,
+            total,
+            ",".join(selected_devices),
+        )
         if total == 0:
+            logger.info("一致性评测批次无可执行设备，直接结束: run_id=%s", run_id)
             self._finish_run(run_id, start_time)
             return
 
@@ -144,28 +156,38 @@ class ConsistencyService:
         for device_type in selected_devices:
             device_config = devices_config.get(device_type, {}) or {}
             data_path = str(device_config.get("data_path") or "").strip()
+            output_dir = self._device_output_dir(run_id, device_type)
             device_start_time = time.time()
+            logger.info(
+                "一致性评测设备开始执行: run_id=%s, device=%s, progress=%s/%s, data_path=%s, output_dir=%s",
+                run_id,
+                device_type,
+                processed + 1,
+                total,
+                data_path,
+                output_dir,
+            )
             try:
                 if device_type == "nmr":
                     from app.services.consistency_nmr_service import run_nmr_consistency
 
                     result_item = run_nmr_consistency(
                         data_path=data_path,
-                        output_dir=self._device_output_dir(run_id, device_type),
+                        output_dir=output_dir,
                     )
                 elif device_type == "gpc":
                     from app.services.consistency_gpc_service import run_gpc_consistency
 
                     result_item = run_gpc_consistency(
                         data_path=data_path,
-                        output_dir=self._device_output_dir(run_id, device_type),
+                        output_dir=output_dir,
                     )
                 elif device_type == "raman":
                     from app.services.consistency_raman_service import run_raman_consistency
 
                     result_item = run_raman_consistency(
                         data_path=data_path,
-                        output_dir=self._device_output_dir(run_id, device_type),
+                        output_dir=output_dir,
                     )
                 elif device_type == "lcms":
                     from app.services.consistency_lcms_service import run_lcms_consistency
@@ -173,7 +195,7 @@ class ConsistencyService:
                     lcms_config_path = str(device_config.get("config_path") or "").strip()
                     result_item = run_lcms_consistency(
                         data_path=data_path,
-                        output_dir=self._device_output_dir(run_id, device_type),
+                        output_dir=output_dir,
                         config_path=lcms_config_path,
                     )
                 else:
@@ -189,6 +211,12 @@ class ConsistencyService:
                         error_message=f"不支持的设备类型: {device_type}",
                     )
             except Exception as exc:
+                logger.exception(
+                    "一致性评测设备执行异常: run_id=%s, device=%s, error=%s",
+                    run_id,
+                    device_type,
+                    exc,
+                )
                 result_item = ConsistencyDeviceRunItem(
                     device_type=device_type,
                     device_label=DEVICE_LABELS.get(device_type, device_type),
@@ -215,6 +243,21 @@ class ConsistencyService:
             run_data.summary.failed = failed_count
             run_data.summary.progress = int(processed / total * 100)
             self._save_run_record(run_data)
+            logger.info(
+                (
+                    "一致性评测设备执行完成: run_id=%s, device=%s, status=%s, "
+                    "duration=%.2fs, progress=%s/%s(%s%%), success=%s, failed=%s"
+                ),
+                run_id,
+                device_type,
+                result_item.status,
+                result_item.duration_seconds,
+                processed,
+                total,
+                run_data.summary.progress,
+                success_count,
+                failed_count,
+            )
 
         self._finish_run(run_id, start_time)
 
@@ -222,6 +265,7 @@ class ConsistencyService:
         """收尾批次并保存报告。"""
         run_data = self._load_run_record(run_id)
         if not run_data:
+            logger.warning("一致性评测批次收尾失败，记录不存在: run_id=%s", run_id)
             return
         run_data.status = "FINISHED"
         run_data.finished_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -231,6 +275,17 @@ class ConsistencyService:
         run_data.report_path = str(report_path)
         self._save_run_record(run_data)
         self._save_run_snapshot(run_data)
+        logger.info(
+            (
+                "一致性评测批次执行完成: run_id=%s, success=%s, failed=%s, "
+                "duration=%.2fs, report_path=%s"
+            ),
+            run_id,
+            run_data.summary.success,
+            run_data.summary.failed,
+            run_data.summary.duration_seconds,
+            report_path,
+        )
 
     def _load_config(self) -> dict[str, Any]:
         """加载一致性评测配置。"""
@@ -267,7 +322,7 @@ class ConsistencyService:
                 if not json_files:
                     continue
                 try:
-                    payload = json.loads(json_files[0].read_text(encoding="utf-8"))
+                    payload = json.loads(json_files[0].read_text(encoding="utf-8-sig"))
                 except Exception:
                     continue
                 code = str(payload.get("code") or "").strip()
