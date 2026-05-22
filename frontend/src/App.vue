@@ -193,64 +193,66 @@ onBeforeUnmount(() => {
           <div class="brand-subtitle">谱图智能分析平台</div>
         </div>
       </div>
-      <el-menu
-        :default-active="activeMenu"
-        class="sidebar-menu"
-        :collapse="sidebarCollapsed"
-        :collapse-transition="false"
-        background-color="transparent"
-        text-color="#d7def0"
-        active-text-color="#ffffff"
-        @select="handleMenuSelect"
-      >
-        <el-menu-item index="/dashboard">
-          <el-icon><Monitor /></el-icon>
-          <span>工作台</span>
-        </el-menu-item>
+      <div class="sidebar-nav">
+        <el-menu
+          :default-active="activeMenu"
+          class="sidebar-menu"
+          :collapse="sidebarCollapsed"
+          :collapse-transition="false"
+          background-color="transparent"
+          text-color="#d7def0"
+          active-text-color="#ffffff"
+          @select="handleMenuSelect"
+        >
+          <el-menu-item index="/dashboard">
+            <el-icon><Monitor /></el-icon>
+            <span>工作台</span>
+          </el-menu-item>
 
-        <el-sub-menu index="/tasks/submit">
-          <template #title>
-            <el-icon><DataAnalysis /></el-icon>
-            <span>任务提交</span>
-          </template>
-          <el-menu-item index="/tasks/submit/gpc">GPC 提交</el-menu-item>
-          <el-menu-item index="/tasks/submit/nmr">NMR 提交</el-menu-item>
-          <el-menu-item index="/tasks/submit/ir">IR 提交</el-menu-item>
-          <el-menu-item index="/tasks/submit/raman">Raman 提交</el-menu-item>
-          <el-menu-item index="/tasks/submit/lcms">LCMS 提交</el-menu-item>
-        </el-sub-menu>
+          <el-sub-menu index="/tasks/submit">
+            <template #title>
+              <el-icon><DataAnalysis /></el-icon>
+              <span>任务提交</span>
+            </template>
+            <el-menu-item index="/tasks/submit/gpc">GPC 提交</el-menu-item>
+            <el-menu-item index="/tasks/submit/nmr">NMR 提交</el-menu-item>
+            <el-menu-item index="/tasks/submit/ir">IR 提交</el-menu-item>
+            <el-menu-item index="/tasks/submit/raman">Raman 提交</el-menu-item>
+            <el-menu-item index="/tasks/submit/lcms">LCMS 提交</el-menu-item>
+          </el-sub-menu>
 
-        <el-menu-item index="/tasks/center">
-          <el-icon><Histogram /></el-icon>
-          <span>任务中心</span>
-        </el-menu-item>
-        <el-menu-item index="/dialogue">
-          <el-icon><ChatLineRound /></el-icon>
-          <span>问答对话</span>
-        </el-menu-item>
-        <el-sub-menu index="/tools">
-          <template #title>
-            <el-icon><SetUp /></el-icon>
-            <span>工具服务</span>
-          </template>
-          <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
-          <el-menu-item index="/tools/raman-capture">拉曼批量采集</el-menu-item>
-          <el-menu-item index="/tools/lcms-convert">LCMS 数据转化</el-menu-item>
-          <el-menu-item index="/tools/acceptance">评测中心</el-menu-item>
-        </el-sub-menu>
-        <el-sub-menu index="/experiments">
-          <template #title>
-            <el-icon><FolderOpened /></el-icon>
-            <span>实验管理</span>
-          </template>
-          <el-menu-item index="/experiments/collect">数据采集</el-menu-item>
-          <el-menu-item index="/experiments/samples">样本管理</el-menu-item>
-        </el-sub-menu>
-        <el-menu-item index="/docs">
-          <el-icon><Document /></el-icon>
-          <span>接口文档</span>
-        </el-menu-item>
-      </el-menu>
+          <el-menu-item index="/tasks/center">
+            <el-icon><Histogram /></el-icon>
+            <span>任务中心</span>
+          </el-menu-item>
+          <el-menu-item index="/dialogue">
+            <el-icon><ChatLineRound /></el-icon>
+            <span>问答对话</span>
+          </el-menu-item>
+          <el-sub-menu index="/tools">
+            <template #title>
+              <el-icon><SetUp /></el-icon>
+              <span>工具服务</span>
+            </template>
+            <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
+            <el-menu-item index="/tools/raman-capture">拉曼批量采集</el-menu-item>
+            <el-menu-item index="/tools/lcms-convert">LCMS 数据转化</el-menu-item>
+            <el-menu-item index="/tools/acceptance">评测中心</el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu index="/experiments">
+            <template #title>
+              <el-icon><FolderOpened /></el-icon>
+              <span>实验管理</span>
+            </template>
+            <el-menu-item index="/experiments/collect">数据采集</el-menu-item>
+            <el-menu-item index="/experiments/samples">样本管理</el-menu-item>
+          </el-sub-menu>
+          <el-menu-item index="/docs">
+            <el-icon><Document /></el-icon>
+            <span>接口文档</span>
+          </el-menu-item>
+        </el-menu>
+      </div>
       <div class="sidebar-version" :class="{ collapsed: sidebarCollapsed }">
         <span class="sidebar-version-label">版本</span>
         <span class="sidebar-version-value">{{ APP_VERSION }}</span>
