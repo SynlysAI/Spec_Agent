@@ -109,3 +109,4 @@ python scripts/run_regression.py
 - 根级 `backend/agents`、`backend/services` 已缩减为历史遗留与少量兼容保留文件，不再承载主运行实现。
 - 若需启用本地登录保护，可在 `backend/.env` 中设置 `AUTH_ENABLED=true` 并配置 `AUTH_USERNAME`、`AUTH_PASSWORD`。
 - `GPC/NMR/IR/Raman` 任务能力已迁入本仓，运行时不再依赖源项目目录。
+- LCMS的Waters软件导出.raw谱图格式文件夹转换，需安装ProteoWizard：http://proteowizard.sourceforge.net
