@@ -64,9 +64,49 @@ def get_metadata(raw_data):
             metadata[label] = data[key]
     return metadata 
 
+def smiles_to_graph(smiles, node_vec_len=100, max_atoms=89):
+    # Get list of atoms in molecule
+    mol = Chem.AddHs(
+        Chem.MolFromSmiles(smiles))
+    atoms = mol.GetAtoms()
+
+    node_mat = np.zeros((max_atoms, node_vec_len))
+    # Iterate over atoms and add to node matrix
+    for atom in atoms:
+        # Get atom index and atomic number
+        atom_index = atom.GetIdx()
+        atom_no = atom.GetAtomicNum()
+
+        # Assign to node matrix
+        node_mat[atom_index, atom_no] = 1
+
+    # Get adjacency matrix using RDKit
+    adj_mat = rdmolops.GetAdjacencyMatrix(mol)
+    # Get distance matrix using RDKit
+    dist_mat = rdDistGeom.GetMoleculeBoundsMatrix(mol)
+    dist_mat[dist_mat == 0.] = 1
+
+    # Get modified adjacency matrix with inverse bond lengths
+    adj_mat = adj_mat * (1 / dist_mat)
+
+    # Pad the adjacency matrix with 0s
+    dim_add = max_atoms - adj_mat.shape[0]
+    adj_mat = np.pad(
+        adj_mat, pad_width=((0, dim_add), (0, dim_add)), mode="constant"
+    )
+
+    # Add an identity matrix to adjacency matrix
+    # This will make an atom its own neighbor
+    adj_mat = adj_mat + np.eye(max_atoms)
+
+    # Save both matrices
+    node_mat = node_mat
+    adj_mat = adj_mat
+    return {'node_mat': node_mat, 'adj_mat': adj_mat}
+
 
 @torch.no_grad()
-def main(spectrum, x0, x1, device, spectype='raman', mode='greedy_decode', k=3, transmittance=False):
+def main(spectrum, x0, x1, device, smiles=None, spectype='raman', mode='greedy_decode', k=3, transmittance=False):
     '''
     **Arguments**
     ``spectrum``: 1024-d array / list
@@ -134,8 +174,27 @@ def main(spectrum, x0, x1, device, spectype='raman', mode='greedy_decode', k=3, 
         output = model(spectrum.float())
         output = output.greater_equal(0.5).squeeze()
         output = [fg_list[i] for i in range(len(output)) if output[i]]
-    else:
-        output = []
+    
+    if mode == 'generate_ir':
+        assert smiles is not None, "SMILES string is required for IR spectrum generation."
+        db = torch.load('database/ir_db_sim.pkl', weights_only=0)
+        result = db[db['structure']==
+                    Chem.MolToSmiles(
+                        Chem.MolFromSmiles(smiles), canonical=True)]
+        del db
+        if len(result) > 0:
+            spectrum = result['spectrum'].values[0]
+            note = 'from database'
+        else:
+            checkpoint = 'checkpoints/mol2ir.pth'
+            from models.Graphormer import Graphormer
+            model = Graphormer()
+            model = load_net_state(model, torch.load(checkpoint, map_location=device, weights_only=True)['model_state']).to(device)   
+            mol_graph = smiles_to_graph(smiles)
+            mol_graph = {k: torch.tensor(v, dtype=torch.float32).unsqueeze(0).to(device) for k, v in mol_graph.items()}
+            spectrum = model(**mol_graph).cpu().detach().numpy()
+            note = 'generated'
+        output = {'structure': [smiles], 'spectrum':[spectrum], 'score': [note]}
     return output
 
 
