@@ -1,53 +1,180 @@
-
 services:
-  # 核心数据库：始终自动启动
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
+  nginx:
+    image: docker_nginx:latest
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    container_name: spec-agent-nginx
+    depends_on:
+      backend:
+        condition: service_started
     ports:
-      - "27018:27017"
+      - "${SPEC_AGENT_HTTP_PORT:-8080}:80"
+    restart: unless-stopped
+    networks:
+      - spec-agent
+
+  backend:
+    image: docker_backend:latest
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    container_name: spec-agent-backend
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      APP_ENV: docker
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-admin123456}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_TOKEN_EXPIRE_HOURS: ${AUTH_TOKEN_EXPIRE_HOURS:-12}
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: 27017
+      MONGODB_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGODB_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-spec_agent}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-password123}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      CELERY_TASK_QUEUE: ${CELERY_TASK_QUEUE:-spec_agent}
+      NMR_SERVER_BASE_URL: ${NMR_SERVER_BASE_URL:-http://127.0.0.1:8080}
+      LCMS_INFER_URL: ${LCMS_INFER_URL:-http://127.0.0.1:9999/infer}
+      RAMAN_CAPTURE_INSTRUMENT_IP: ${RAMAN_CAPTURE_INSTRUMENT_IP:-127.0.0.1}
+      RAMAN_CAPTURE_CALLBACK_URL: ${RAMAN_CAPTURE_CALLBACK_URL:-http://127.0.0.1:8099/raman/jy/callback}
+      RAMAN_CAPTURE_SUBMIT_PORT: ${RAMAN_CAPTURE_SUBMIT_PORT:-7001}
+      RAMAN_CAPTURE_RESULT_PORT: ${RAMAN_CAPTURE_RESULT_PORT:-7002}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.agicto.cn/v1}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
+      SPEC_AGENT_RUNTIME_ROOT: /app/.runtime
+      SPEC_AGENT_UPLOAD_ROOT: /app/.runtime/uploads
+      SPEC_AGENT_OUTPUT_ROOT: /app/.runtime/outputs
+      SPEC_AGENT_LOG_ROOT: /app/backend/logs
+      SPECTRUM_FILES_ROOT: ${SPECTRUM_FILES_ROOT:-/data/spectrum_files}
+    volumes:
+      - ../.runtime:/app/.runtime
+      - ../backend/logs:/app/backend/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://127.0.0.1:8000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - spec-agent
+
+  worker:
+    image: docker_worker:latest
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    container_name: spec-agent-worker
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -lc
+      - python -m celery -A app.worker.celery_app:celery_app worker --loglevel=info -Q ${CELERY_TASK_QUEUE:-spec_agent}
+    environment:
+      APP_ENV: docker
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-admin123456}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_TOKEN_EXPIRE_HOURS: ${AUTH_TOKEN_EXPIRE_HOURS:-12}
+      MONGODB_HOST: mongodb
+      MONGODB_PORT: 27017
+      MONGODB_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGODB_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-spec_agent}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-password123}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      CELERY_TASK_QUEUE: ${CELERY_TASK_QUEUE:-spec_agent}
+      NMR_SERVER_BASE_URL: ${NMR_SERVER_BASE_URL:-http://127.0.0.1:8080}
+      LCMS_INFER_URL: ${LCMS_INFER_URL:-http://127.0.0.1:9999/infer}
+      RAMAN_CAPTURE_INSTRUMENT_IP: ${RAMAN_CAPTURE_INSTRUMENT_IP:-127.0.0.1}
+      RAMAN_CAPTURE_CALLBACK_URL: ${RAMAN_CAPTURE_CALLBACK_URL:-http://127.0.0.1:8099/raman/jy/callback}
+      RAMAN_CAPTURE_SUBMIT_PORT: ${RAMAN_CAPTURE_SUBMIT_PORT:-7001}
+      RAMAN_CAPTURE_RESULT_PORT: ${RAMAN_CAPTURE_RESULT_PORT:-7002}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.agicto.cn/v1}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
+      LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
+      SPEC_AGENT_RUNTIME_ROOT: /app/.runtime
+      SPEC_AGENT_UPLOAD_ROOT: /app/.runtime/uploads
+      SPEC_AGENT_OUTPUT_ROOT: /app/.runtime/outputs
+      SPEC_AGENT_LOG_ROOT: /app/backend/logs
+      SPECTRUM_FILES_ROOT: ${SPECTRUM_FILES_ROOT:-/data/spectrum_files}
+    volumes:
+      - ../.runtime:/app/.runtime
+      - ../backend/logs:/app/backend/logs
+    restart: unless-stopped
+    networks:
+      - spec-agent
+
+  mongodb:
+    image: mongo:7
+    container_name: spec-agent-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --username $${MONGO_INITDB_ROOT_USERNAME} --password $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1 >/dev/null",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - spec-agent
 
-  # 消息队列：始终自动启动
   rabbitmq:
-    image: rabbitmq:management
-    container_name: rabbitmq
-    restart: always
+    image: rabbitmq:3.13-management
+    container_name: spec-agent-rabbitmq
+    restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: password123
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-password123}
     volumes:
       - rabbit_data:/var/lib/rabbitmq
-
-  # 辅助管理界面：默认不启动 (添加了 profiles 参数)
-  mongo-express:
-    image: mongo-express:latest
-    container_name: mongo-express
-    # 设置为 no，防止 Docker Desktop 在某些情况下自动唤醒它
-    restart: "no" 
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
-      ME_CONFIG_MONGODB_ADMINPASSWORD: password123
-      # 注意：这里使用 mongodb（服务名）进行通信
-      ME_CONFIG_MONGODB_URL: mongodb://admin:password123@mongodb:27017/
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: pass
-    ports:
-      - "8081:8081"
-    depends_on:
-      - mongodb
-    # 【关键点】配置了 profile 之后，执行 up 命令默认会忽略此服务
-    profiles:
-      - debug 
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - spec-agent
 
 volumes:
   mongo_data:
   rabbit_data:
+
+networks:
+  spec-agent:

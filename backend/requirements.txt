@@ -26,3 +26,4 @@ rdkit==2025.3.5
 concurrent_log_handler==0.9.28
 pyteomics==4.7.5
 lxml==6.1.1
+pytest>=9.0.3

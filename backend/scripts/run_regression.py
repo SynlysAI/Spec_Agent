@@ -25,53 +25,56 @@ def _build_cases() -> list[RegressionCase]:
     Returns:
         包含 GPC 与 NMR 用例的列表。
     """
-    gpc_path = os.getenv(
-        "REG_GPC_PATH",
-        r"E:\spectrum_files\gpc\spectrum\GPC_03_20240924-1_Cal001_Copoly_THF_mix\GPC_03_20240924-1_Cal001_Copoly_THF_mix.arw",
-    )
-    nmr_path = os.getenv(
-        "REG_NMR_PATH",
-        r"E:\spectrum_files\nmr\2026-03-17\WLS-0312-H",
-    )
-    return [
-        RegressionCase(
-            kind="gpc",
-            payload={
-                "input": {"input_type": "file_path", "input_path": gpc_path, "file_id": None},
-                "params": {
-                    "detect_mode": "auto",
-                    "manual_interval": None,
-                    "three_color_arw_paths": None,
-                    "calibration_file_path": None,
-                    "comparison_report_pdf_path": None,
+    cases: list[RegressionCase] = []
+    gpc_path = os.getenv("REG_GPC_PATH", "").strip()
+    nmr_path = os.getenv("REG_NMR_PATH", "").strip()
+
+    if gpc_path:
+        cases.append(
+            RegressionCase(
+                kind="gpc",
+                payload={
+                    "input": {"input_type": "file_path", "input_path": gpc_path, "file_id": None},
+                    "params": {
+                        "detect_mode": "auto",
+                        "manual_interval": None,
+                        "three_color_arw_paths": None,
+                        "calibration_file_path": None,
+                        "comparison_report_pdf_path": None,
+                    },
+                    "options": {"priority": 5, "callback_url": None},
                 },
-                "options": {"priority": 5, "callback_url": None},
-            },
-        ),
-        RegressionCase(
-            kind="nmr",
-            payload={
-                "input": {"input_type": "folder_path", "input_path": nmr_path, "file_id": None},
-                "params": {
-                    "nucleus": "1H",
-                    "threshold": 0.01,
-                    "min_distance": 0.3,
-                    "min_prominence": 0.01,
-                    "width_multiplier": 1.0,
-                    "baseline_degree": 3,
-                    "smooth_window": 5,
-                    "detection_range_mode": "full",
-                    "detection_range_min": None,
-                    "detection_range_max": None,
-                    "ppm_offset": 0.0,
-                    "integration_method": "voigt",
-                    "internal_standard_policy": "auto",
-                    "internal_standard_prefer": ["solvent", "tms"],
+            )
+        )
+
+    if nmr_path:
+        cases.append(
+            RegressionCase(
+                kind="nmr",
+                payload={
+                    "input": {"input_type": "folder_path", "input_path": nmr_path, "file_id": None},
+                    "params": {
+                        "nucleus": "1H",
+                        "threshold": 0.01,
+                        "min_distance": 0.3,
+                        "min_prominence": 0.01,
+                        "width_multiplier": 1.0,
+                        "baseline_degree": 3,
+                        "smooth_window": 5,
+                        "detection_range_mode": "full",
+                        "detection_range_min": None,
+                        "detection_range_max": None,
+                        "ppm_offset": 0.0,
+                        "integration_method": "voigt",
+                        "internal_standard_policy": "auto",
+                        "internal_standard_prefer": ["solvent", "tms"],
+                    },
+                    "options": {"priority": 5, "callback_url": None},
                 },
-                "options": {"priority": 5, "callback_url": None},
-            },
-        ),
-    ]
+            )
+        )
+
+    return cases
 
 
 def _poll_task(base_url: str, task_id: str, timeout_seconds: int) -> dict[str, Any]:
@@ -109,8 +112,13 @@ def run_regression() -> int:
         print("health check failed:", health.status_code, health.text)
         return 1
 
+    cases = _build_cases()
+    if not cases:
+        print("no regression cases configured, set REG_GPC_PATH and/or REG_NMR_PATH to run regression cases")
+        return 0
+
     all_passed = True
-    for case in _build_cases():
+    for case in cases:
         create = requests.post(
             f"{base_url}/tasks/{case.kind}",
             json=case.payload,

@@ -173,24 +173,3 @@ def beam_search(model,
     prediction = [get_smiles(s) for s in pred_seq[0]]
     return {'structure':prediction, 'score':scores.squeeze().tolist()}
 
-if __name__ == "__main__":
-    spec = pd.read_pickle('/home/fangyikai/yanti/spec2mol_1/datasets/ir2mol/test.pkl')['spectrum'].values[0]#torch.randn(1024) ### input spectrum: 长度1024，波数范围400-4000
-    checkpoint = 'spec2mol_1/checkpoints/checkpoint.pth'
-    device = torch.device('cpu')
-    vocab_size = 181
-    model, src_length = make_model(vocab_size, N=4, d_model=512)
-    model = load_net_state(model, torch.load(checkpoint, map_location=device, weights_only=True)['model_state']).to(device)
-    temperature = 1
-    beam_size = 3  # 返回的候选结构数
-
-    top_k_result = np.zeros(beam_size)
-    prediction = beam_search(model, 
-                    spec,
-                    beam_size=beam_size,
-                    device=device,
-                    max_len=30,
-                    length_penalty=0,
-                    temperature=temperature,
-                    stochastic=0)
-    print(f'Top {beam_size} predictions: {prediction}')
-

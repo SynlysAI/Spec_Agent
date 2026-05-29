@@ -5,10 +5,13 @@ uploads/
 outputs/
 temp_remote/
 backend/.env
+backend/logs/
+backend/scripts/__pycache__/
 backend/resources/raman/
 .agents/
 .claude/
 .vscode/
 .playwright/
 .superpowers/
-docs/
+.codegraph/
+docker/.env
