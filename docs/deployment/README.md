@@ -6,7 +6,6 @@
 
 适用场景：
 
-- 华为 Linux 服务器正式发布
 - 统一通过容器编排管理前端、后端、Worker 和中间件
 - 仅对外暴露 `Nginx` 入口
 
@@ -17,12 +16,6 @@ cp docker/.env.example docker/.env
 docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
 # 旧版环境可使用：
 # docker-compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
-```
-
-当前华为服务器无 root 权限时，推荐直接使用：
-
-```bash
-bash docker/up.sh
 ```
 
 ### 2. Windows / Linux 原生部署
@@ -58,9 +51,20 @@ PM2 支持两种模式：
 - `frontend/.env.example`：前端开发环境变量模板
 - `docker/.env.example`：Docker Compose 环境变量模板
 
-## 已知限制
+## 注意事项
 
-- 当前生产服务器为 `ARM64`，已验证前端、后端、Worker 镜像可构建
 - `LCMS` 相关外部工具、`NMRServer`、拉曼仪器采集等外围依赖需按环境单独配置
 - `MongoDB`、`RabbitMQ` 在正式 Docker 模式下默认不暴露宿主机端口；原生应用接入时请使用 `docker-compose.native.yml`
-- 当前无 root 权限服务器需使用 rootless Docker 的 `vfs` 存储驱动，避免默认 `overlayfs` 出现 `operation not permitted`
+
+### 特定环境说明
+
+以下内容仅适用于部分服务器环境，不属于通用部署要求：
+
+- 无 root 权限服务器：
+  - 可使用 rootless Docker
+  - 若默认 `overlayfs` 出现 `operation not permitted`，可改用 `vfs` 存储驱动
+  - 可直接使用 `bash docker/up.sh`
+
+- `ARM64` 服务器：
+  - 需额外确认基础镜像与 Python 科学计算依赖的兼容性
+  - 当前项目已在一台 `ARM64` 服务器上验证通过前端、后端、Worker 镜像构建
