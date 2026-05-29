@@ -1,0 +1,53 @@
+
+services:
+  # 核心数据库：始终自动启动
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # 消息队列：始终自动启动
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbit_data:/var/lib/rabbitmq
+
+  # 辅助管理界面：默认不启动 (添加了 profiles 参数)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    # 设置为 no，防止 Docker Desktop 在某些情况下自动唤醒它
+    restart: "no" 
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password123
+      # 注意：这里使用 mongodb（服务名）进行通信
+      ME_CONFIG_MONGODB_URL: mongodb://admin:password123@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: pass
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb
+    # 【关键点】配置了 profile 之后，执行 up 命令默认会忽略此服务
+    profiles:
+      - debug 
+
+volumes:
+  mongo_data:
+  rabbit_data:
