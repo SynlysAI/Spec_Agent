@@ -17,4 +17,4 @@ if [ ! -f "${SCRIPT_DIR}/.env" ]; then
 fi
 
 cd "${PROJECT_ROOT}"
-docker-compose --env-file docker/.env -f docker/docker-compose.yml up -d
+docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d

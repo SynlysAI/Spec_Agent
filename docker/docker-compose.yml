@@ -20,11 +20,6 @@ services:
       context: ..
       dockerfile: docker/backend.Dockerfile
     container_name: spec-agent-backend
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     environment:
       APP_ENV: docker
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
@@ -32,15 +27,15 @@ services:
       AUTH_PASSWORD: ${AUTH_PASSWORD:-admin123456}
       AUTH_SECRET: ${AUTH_SECRET:-}
       AUTH_TOKEN_EXPIRE_HOURS: ${AUTH_TOKEN_EXPIRE_HOURS:-12}
-      MONGODB_HOST: mongodb
-      MONGODB_PORT: 27017
-      MONGODB_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
-      MONGODB_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
+      MONGODB_HOST: ${MONGODB_HOST:-127.0.0.1}
+      MONGODB_PORT: ${MONGODB_PORT:-27017}
+      MONGODB_USERNAME: ${MONGODB_USERNAME:-admin}
+      MONGODB_PASSWORD: ${MONGODB_PASSWORD:-password123}
       MONGODB_DATABASE: ${MONGODB_DATABASE:-spec_agent}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-admin}
-      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-password123}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-127.0.0.1}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-password123}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
       CELERY_TASK_QUEUE: ${CELERY_TASK_QUEUE:-spec_agent}
       NMR_SERVER_BASE_URL: ${NMR_SERVER_BASE_URL:-http://127.0.0.1:8080}
@@ -80,11 +75,6 @@ services:
       context: ..
       dockerfile: docker/backend.Dockerfile
     container_name: spec-agent-worker
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     command:
       - /bin/sh
       - -lc
@@ -96,15 +86,15 @@ services:
       AUTH_PASSWORD: ${AUTH_PASSWORD:-admin123456}
       AUTH_SECRET: ${AUTH_SECRET:-}
       AUTH_TOKEN_EXPIRE_HOURS: ${AUTH_TOKEN_EXPIRE_HOURS:-12}
-      MONGODB_HOST: mongodb
-      MONGODB_PORT: 27017
-      MONGODB_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
-      MONGODB_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
+      MONGODB_HOST: ${MONGODB_HOST:-127.0.0.1}
+      MONGODB_PORT: ${MONGODB_PORT:-27017}
+      MONGODB_USERNAME: ${MONGODB_USERNAME:-admin}
+      MONGODB_PASSWORD: ${MONGODB_PASSWORD:-password123}
       MONGODB_DATABASE: ${MONGODB_DATABASE:-spec_agent}
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-admin}
-      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-password123}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-127.0.0.1}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-password123}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
       CELERY_TASK_QUEUE: ${CELERY_TASK_QUEUE:-spec_agent}
       NMR_SERVER_BASE_URL: ${NMR_SERVER_BASE_URL:-http://127.0.0.1:8080}
@@ -131,50 +121,6 @@ services:
     restart: unless-stopped
     networks:
       - spec-agent
-
-  mongodb:
-    image: mongo:7
-    container_name: spec-agent-mongodb
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
-    volumes:
-      - mongo_data:/data/db
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mongosh --quiet --username $${MONGO_INITDB_ROOT_USERNAME} --password $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1 >/dev/null",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-    networks:
-      - spec-agent
-
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    container_name: spec-agent-rabbitmq
-    restart: unless-stopped
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-password123}
-    volumes:
-      - rabbit_data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-    networks:
-      - spec-agent
-
-volumes:
-  mongo_data:
-  rabbit_data:
 
 networks:
   spec-agent:

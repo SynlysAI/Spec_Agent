@@ -51,8 +51,31 @@ Vue 前端 → Axios (Token 鉴权) → FastAPI /api/v1
 
 ```bash
 cp docker/.env.example docker/.env
-docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
+docker compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d --build
 # 旧版环境可使用：
+# docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d --build
+```
+
+若使用外部 `MongoDB` 与 `RabbitMQ`，请先修改 `docker/.env` 中的：
+
+```bash
+MONGODB_HOST
+MONGODB_PORT
+MONGODB_USERNAME
+MONGODB_PASSWORD
+MONGODB_DATABASE
+RABBITMQ_HOST
+RABBITMQ_PORT
+RABBITMQ_USERNAME
+RABBITMQ_PASSWORD
+RABBITMQ_VHOST
+```
+
+然后只启动应用编排：
+
+```bash
+docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
+# 或
 # docker-compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
 ```
 
@@ -66,15 +89,23 @@ bash docker/up.sh
 
 ### Windows / Linux 原生部署
 
-若需要保留原生部署方式，建议仍使用 Docker 提供 `MongoDB` 与 `RabbitMQ`，并通过 native override 暴露为本机回环端口：
+若需要保留原生部署方式，可直接连接外部 `MongoDB` 与 `RabbitMQ`；也可以仅启动容器版基础设施：
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.native.yml up -d mongodb rabbitmq
+docker compose --env-file docker/.env -f docker/docker-compose.infra.yml up -d mongodb rabbitmq
 # 旧版环境可使用：
-# docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.native.yml up -d mongodb rabbitmq
+# docker-compose --env-file docker/.env -f docker/docker-compose.infra.yml up -d mongodb rabbitmq
 ```
 
 随后通过命令行或 `PM2` 启动服务。
+
+若使用外部 `MongoDB` 与 `RabbitMQ`，则只需：
+
+```bash
+docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
+# 或
+# docker-compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
+```
 
 PM2 支持两种模式：
 

@@ -23,21 +23,21 @@ cp .env.example .env
 若采用 `Windows/Linux` 原生方式启动应用，建议仍通过 Docker 提供 `MongoDB` 与 `RabbitMQ`：
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.native.yml up -d mongodb rabbitmq
+docker compose --env-file docker/.env -f docker/docker-compose.infra.yml up -d mongodb rabbitmq
 # 旧版环境可使用：
-# docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.native.yml up -d mongodb rabbitmq
+# docker-compose --env-file docker/.env -f docker/docker-compose.infra.yml up -d mongodb rabbitmq
 ```
 
-原生部署时，`backend/.env` 中的 `MONGODB_HOST`、`RABBITMQ_HOST` 默认可保持为 `127.0.0.1`。
+原生部署时，`backend/.env` 中的 `MONGODB_HOST`、`RABBITMQ_HOST` 可指向本机容器服务，也可直接配置为外部服务地址。
 
 ### Docker 正式部署
 
 正式环境推荐使用完整 Docker 部署：
 
 ```bash
-docker compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
+docker compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d --build
 # 旧版环境可使用：
-# docker-compose --env-file docker/.env -f docker/docker-compose.yml up -d --build
+# docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d --build
 ```
 
 默认对外仅开放 `Nginx` 端口，`MongoDB` 与 `RabbitMQ` 默认仅容器内访问。

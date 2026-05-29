@@ -9,4 +9,4 @@ export XDG_RUNTIME_DIR="${HOME}/.docker/run"
 export DOCKER_HOST="unix://${XDG_RUNTIME_DIR}/docker.sock"
 
 cd "${PROJECT_ROOT}"
-docker-compose --env-file docker/.env -f docker/docker-compose.yml down
+docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml down
