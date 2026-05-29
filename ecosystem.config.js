@@ -16,12 +16,13 @@ const FRONTEND_CWD = path.join(PROJECT_ROOT, "frontend");
 
 const UVICORN_BIN = process.env.SPEC_AGENT_UVICORN_BIN || "uvicorn";
 const PYTHON_BIN = process.env.SPEC_AGENT_PYTHON_BIN || "python";
-const NPM_BIN = process.env.SPEC_AGENT_NPM_BIN || (process.platform === "win32" ? "npm.cmd" : "npm");
+
+const IS_WIN32 = process.platform === "win32";
 
 const BACKEND_PORT = process.env.SPEC_AGENT_BACKEND_PORT || "8000";
 const FRONTEND_PORT = process.env.SPEC_AGENT_FRONTEND_PORT || "4173";
 const CELERY_QUEUE = process.env.CELERY_TASK_QUEUE || "spec_agent";
-const CELERY_POOL = process.env.SPEC_AGENT_CELERY_POOL || (process.platform === "win32" ? "solo" : "prefork");
+const CELERY_POOL = process.env.SPEC_AGENT_CELERY_POOL || (IS_WIN32 ? "solo" : "prefork");
 
 module.exports = {
   apps: [
@@ -48,9 +49,8 @@ module.exports = {
     {
       name: "spec-agent-frontend",
       cwd: FRONTEND_CWD,
-      script: NPM_BIN,
-      args: `run preview -- --host 0.0.0.0 --port ${FRONTEND_PORT}`,
-      interpreter: "none",
+      script: "./node_modules/vite/bin/vite.js",
+      args: `preview --host 0.0.0.0 --port ${FRONTEND_PORT}`,
       watch: false,
       autorestart: true,
       max_memory_restart: "1G"

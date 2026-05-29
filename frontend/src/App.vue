@@ -37,11 +37,14 @@ function resolveDocsUrl() {
   if (typeof window === 'undefined') {
     return '/docs'
   }
-  const protocol = window.location.protocol || 'http:'
-  const hostname = window.location.hostname || '127.0.0.1'
-  if (window.location.port === '5173') {
+  const port = window.location.port
+  // Dev (5173) / Preview (4173): 前端开发服务器没有 /docs 代理，直连后端
+  if (port === '5173' || port === '4173') {
+    const protocol = window.location.protocol || 'http:'
+    const hostname = window.location.hostname || '127.0.0.1'
     return `${protocol}//${hostname}:8000/docs`
   }
+  // 生产环境（80/443 等）: 假设 nginx 已反向代理 /docs 到后端
   return `${window.location.origin}/docs`
 }
 
