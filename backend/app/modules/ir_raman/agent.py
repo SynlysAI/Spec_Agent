@@ -16,6 +16,7 @@ import numpy as np
 import torch
 import yaml
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.modules.ir_raman.schemas import SpectrumAgentResult
 
@@ -180,7 +181,7 @@ def _resolve_label_candidates(spectrum_file: Union[str, Path], spectype: str) ->
         p.parent / f"{stem}.label.yml",
     ]
     # 默认集中标签目录（可选）
-    default_root = Path("E:/spectrum_files/acceptance/labels")
+    default_root = settings.spectrum_files_root / "acceptance" / "labels"
     candidates.extend(
         [
             default_root / spectype / f"{stem}.label.json",

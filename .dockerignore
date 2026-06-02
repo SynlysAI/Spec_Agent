@@ -16,5 +16,6 @@ frontend/dist
 backend/__pycache__
 backend/.env
 backend/logs
+backend/resources/raman
 **/__pycache__
 **/*.pyc

@@ -88,11 +88,9 @@ function buildInput() {
  *   Promise<void>
  */
 async function submitTask() {
-  if (!uploadedFileId.value) {
-    if (!selectedUploadFile.value) {
-      ElMessage.warning('请先选择 GPC 文件')
-      return
-    }
+  if (!uploadedFileId.value && !selectedUploadFile.value) {
+    ElMessage.warning('请先选择 GPC 文件')
+    return
   }
   if (selectedUploadFile.value) {
     try {
@@ -127,28 +125,14 @@ async function submitTask() {
 
   submitting.value = true
   try {
-    // 上传可选文件
-    let threeColorFileIds = null
-    if (hasAnyCurve) {
-      threeColorFileIds = []
-      for (const color of curveColors) {
-        const fid = await uploadSingleFile(curveFiles[color].file, 'gpc')
-        curveFiles[color].fileId = fid
-        threeColorFileIds.push(fid)
-      }
-    }
-
-    let calibrationFileId = null
-    if (calibrationFile.file) {
-      calibrationFileId = await uploadSingleFile(calibrationFile.file, 'gpc')
-      calibrationFile.fileId = calibrationFileId
-    }
-
-    let comparisonPdfFileId = null
-    if (comparisonPdf.file) {
-      comparisonPdfFileId = await uploadSingleFile(comparisonPdf.file, 'gpc')
-      comparisonPdf.fileId = comparisonPdfFileId
-    }
+    // 并行上传所有可选文件
+    const [threeColorFileIds, calibrationFileId, comparisonPdfFileId] = await Promise.all([
+      hasAnyCurve
+        ? Promise.all(curveColors.map((c) => uploadSingleFile(curveFiles[c].file, 'gpc')))
+        : Promise.resolve(null),
+      calibrationFile.file ? uploadSingleFile(calibrationFile.file, 'gpc') : Promise.resolve(null),
+      comparisonPdf.file ? uploadSingleFile(comparisonPdf.file, 'gpc') : Promise.resolve(null),
+    ])
 
     const payload = {
       input: buildInput(),

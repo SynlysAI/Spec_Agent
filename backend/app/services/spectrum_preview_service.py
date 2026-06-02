@@ -12,6 +12,7 @@ import pandas as pd
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.infra.mongo import get_files_collection
+from app.services.task_executors import _safe_extractall
 from app.modules.nmr.service import get_nmr_sample_data
 
 logger = get_logger("spec_agent.services.spectrum_preview")
@@ -199,7 +200,7 @@ class SpectrumPreviewService:
                 extract_dir = Path(temp_dir) / "extract"
                 extract_dir.mkdir(parents=True, exist_ok=True)
                 with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                    zip_ref.extractall(extract_dir)
+                    _safe_extractall(zip_ref, extract_dir)
                 children = [item for item in extract_dir.iterdir() if item.is_dir()]
                 nmr_path = str(children[0] if len(children) == 1 else extract_dir)
                 x_values, y_values = self._preview_nmr_folder(nmr_path)
@@ -264,7 +265,7 @@ class SpectrumPreviewService:
                     extract_dir = Path(temp_dir) / "extract"
                     extract_dir.mkdir(parents=True, exist_ok=True)
                     with zipfile.ZipFile(source_path, "r") as zip_ref:
-                        zip_ref.extractall(extract_dir)
+                        _safe_extractall(zip_ref, extract_dir)
                     children = [item for item in extract_dir.iterdir() if item.is_dir()]
                     nmr_path = str(children[0] if len(children) == 1 else extract_dir)
                     x_values, y_values = self._preview_nmr_folder(nmr_path)

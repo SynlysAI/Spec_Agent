@@ -19,6 +19,16 @@ from app.services.lcms_service import lcms_service
 logger = get_logger("spec_agent.services.task_executors")
 
 
+def _safe_extractall(zip_ref: zipfile.ZipFile, target_dir: Path) -> None:
+    """安全解压 zip，防止 Zip Slip 路径穿越。"""
+    resolved_target = target_dir.resolve()
+    for member in zip_ref.infolist():
+        member_path = (resolved_target / member.filename).resolve()
+        if resolved_target not in member_path.parents and member_path != resolved_target:
+            raise ValueError(f"zip 文件包含非法路径: {member.filename}")
+    zip_ref.extractall(target_dir)
+
+
 def _to_basic(value: Any) -> Any:
     """将复杂对象转换为可序列化基础类型。"""
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -107,18 +117,8 @@ def resolve_input_path(input_data: dict[str, Any]) -> str:
 
 
 def resolve_file_id_to_path(file_id: str) -> str:
-    """将 file_id 解析为存储路径。
-
-    函数名称: resolve_file_id_to_path
-    参数说明:
-    - file_id: 上传文件 ID。
-    """
-    file_record = FileRepository.find_by_file_id(file_id)
-    if not file_record:
-        logger.warning("file_id 不存在: %s", file_id)
-        raise ValueError(f"file_id 不存在: {file_id}")
-    storage_path = str(file_record.storage_path).replace("\\", "/")
-    return str(settings.project_root / storage_path)
+    """将 file_id 解析为存储路径。"""
+    return resolve_input_path({"input_type": "file_id", "file_id": file_id})
 
 
 def sanitize_gpc_structured_data(structured_data: dict[str, Any]) -> dict[str, Any]:
@@ -316,7 +316,7 @@ class GpcTaskExecutor(BaseTaskExecutor):
         # 解析可选文件 file_id 为路径
         three_color_file_ids = params.get("three_color_arw_file_ids")
         three_color_paths = None
-        if three_color_file_ids and len(three_color_file_ids) == 3:
+        if three_color_file_ids:
             three_color_paths = tuple(resolve_file_id_to_path(fid) for fid in three_color_file_ids)
 
         calibration_file_path = None
@@ -361,7 +361,7 @@ class NmrTaskExecutor(BaseTaskExecutor):
             extract_root = output_dir / "inputs" / "nmr_zip_extract"
             extract_root.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(source_path, "r") as zip_ref:
-                zip_ref.extractall(extract_root)
+                _safe_extractall(zip_ref, extract_root)
             children = [item for item in extract_root.iterdir() if item.is_dir()]
             if len(children) == 1:
                 return str(children[0])

@@ -86,7 +86,6 @@ async function loadDashboard() {
       listTasks({ page: 1, page_size: 1, status: 'RUNNING' }),
       listTasks({ page: 1, page_size: 1, status: 'SUCCESS' }),
       listTasks({ page: 1, page_size: 1, status: 'FAILED' }),
-      listTasks({ page: 1, page_size: 1, status: 'FAILED' }),
       listTasks({ page: 1, page_size: 1, task_type: 'gpc_analysis' }),
       listTasks({ page: 1, page_size: 1, task_type: 'nmr_analysis' }),
       listTasks({ page: 1, page_size: 1, task_type: 'ir_analysis' }),
@@ -112,7 +111,6 @@ async function loadDashboard() {
       running,
       success,
       failed,
-      latestFailed,
       gpc,
       nmr,
       ir,
@@ -138,7 +136,7 @@ async function loadDashboard() {
     ]
 
     const latestRun = latestCollect.items?.[0] || null
-    const latestFailedTask = latestFailed.items?.[0] || null
+    const latestFailedTask = failed.items?.[0] || null
     const dynamics = [
       {
         title: '最近失败任务',

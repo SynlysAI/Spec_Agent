@@ -58,6 +58,7 @@ services:
       SPECTRUM_FILES_ROOT: ${SPECTRUM_FILES_ROOT:-/data/spectrum_files}
     volumes:
       - ../.runtime:/app/.runtime
+      - ../backend/resources/raman:/app/backend/resources/raman:ro
     healthcheck:
       test: ["CMD-SHELL", "curl --fail http://127.0.0.1:8000/api/v1/health || exit 1"]
       interval: 30s
@@ -116,6 +117,7 @@ services:
       SPECTRUM_FILES_ROOT: ${SPECTRUM_FILES_ROOT:-/data/spectrum_files}
     volumes:
       - ../.runtime:/app/.runtime
+      - ../backend/resources/raman:/app/backend/resources/raman:ro
     restart: unless-stopped
     networks:
       - spec-agent

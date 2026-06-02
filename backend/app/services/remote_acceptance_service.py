@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import time
 from typing import Any
 
@@ -82,8 +83,11 @@ class RemoteAcceptanceService:
         env_prefix = " ".join(env_pairs)
         command_parts = []
         if workdir:
-            command_parts.append(f"cd {workdir}")
-        script_command = script if script.startswith("bash ") else f"bash {script}"
+            command_parts.append(f"cd {shlex.quote(workdir)}")
+        if script.startswith("bash "):
+            script_command = f"bash {shlex.quote(script[5:])}"
+        else:
+            script_command = f"bash {shlex.quote(script)}"
         if env_prefix:
             command_parts.append(f"{env_prefix} {script_command}")
         else:

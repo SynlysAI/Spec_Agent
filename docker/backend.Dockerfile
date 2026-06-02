@@ -14,6 +14,10 @@ RUN apt-get update \
         libglib2.0-0 \
         libgl1 \
         libgomp1 \
+        libxrender1 \
+        libxext6 \
+        libsm6 \
+        libxrandr2 \
         fonts-wqy-microhei \
     && rm -rf /var/lib/apt/lists/*
 
