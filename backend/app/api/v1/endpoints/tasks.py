@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import get_current_user
 from app.core.logging import get_logger
 from app.schemas.common import ApiResponse
 from app.schemas.tasks import (
@@ -48,18 +49,25 @@ def list_tasks(
 
 
 @router.post("/gpc", response_model=ApiResponse[CreateTaskData])
-def create_gpc_task(payload: CreateGpcTaskRequest) -> ApiResponse[CreateTaskData]:
+def create_gpc_task(
+    payload: CreateGpcTaskRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[CreateTaskData]:
     """创建 GPC 分析任务。
 
-    函数名称: create_gpc_task
-    参数说明:
-    - payload: GPC 任务请求模型。
+    Args:
+        payload: GPC 任务请求模型。
+        current_user: 当前登录用户上下文。
+
+    Returns:
+        任务创建响应。
     """
     try:
         entity = task_service.create_task(
             task_type="gpc_analysis",
             input_data=payload.input.model_dump(),
             params=payload.params.model_dump(),
+            created_by=current_user["user_id"] if current_user else None,
         )
     except ValueError as exc:
         logger.warning("创建 GPC 任务参数校验失败: %s", exc)
@@ -70,18 +78,25 @@ def create_gpc_task(payload: CreateGpcTaskRequest) -> ApiResponse[CreateTaskData
 
 
 @router.post("/nmr", response_model=ApiResponse[CreateTaskData])
-def create_nmr_task(payload: CreateNmrTaskRequest) -> ApiResponse[CreateTaskData]:
+def create_nmr_task(
+    payload: CreateNmrTaskRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[CreateTaskData]:
     """创建 NMR 分析任务（单阶段）。
 
-    函数名称: create_nmr_task
-    参数说明:
-    - payload: NMR 任务请求模型。
+    Args:
+        payload: NMR 任务请求模型。
+        current_user: 当前登录用户上下文。
+
+    Returns:
+        任务创建响应。
     """
     try:
         entity = task_service.create_task(
             task_type="nmr_analysis",
             input_data=payload.input.model_dump(),
             params=payload.params.model_dump(),
+            created_by=current_user["user_id"] if current_user else None,
         )
     except ValueError as exc:
         logger.warning("创建 NMR 任务参数校验失败: %s", exc)
@@ -92,12 +107,18 @@ def create_nmr_task(payload: CreateNmrTaskRequest) -> ApiResponse[CreateTaskData
 
 
 @router.post("/ir", response_model=ApiResponse[CreateTaskData])
-def create_ir_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTaskData]:
+def create_ir_task(
+    payload: CreateIrRamanTaskRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[CreateTaskData]:
     """创建 IR 分析任务。
 
-    函数名称: create_ir_task
-    参数说明:
-    - payload: IR 任务请求模型。
+    Args:
+        payload: IR 任务请求模型。
+        current_user: 当前登录用户上下文。
+
+    Returns:
+        任务创建响应。
     """
     try:
         params = payload.params.model_dump()
@@ -106,6 +127,7 @@ def create_ir_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTaskD
             task_type="ir_analysis",
             input_data=payload.input.model_dump(),
             params=params,
+            created_by=current_user["user_id"] if current_user else None,
         )
     except ValueError as exc:
         logger.warning("创建 IR 任务参数校验失败: %s", exc)
@@ -116,12 +138,18 @@ def create_ir_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTaskD
 
 
 @router.post("/raman", response_model=ApiResponse[CreateTaskData])
-def create_raman_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTaskData]:
+def create_raman_task(
+    payload: CreateIrRamanTaskRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[CreateTaskData]:
     """创建 Raman 分析任务。
 
-    函数名称: create_raman_task
-    参数说明:
-    - payload: Raman 任务请求模型。
+    Args:
+        payload: Raman 任务请求模型。
+        current_user: 当前登录用户上下文。
+
+    Returns:
+        任务创建响应。
     """
     try:
         params = payload.params.model_dump()
@@ -130,6 +158,7 @@ def create_raman_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTa
             task_type="raman_analysis",
             input_data=payload.input.model_dump(),
             params=params,
+            created_by=current_user["user_id"] if current_user else None,
         )
     except ValueError as exc:
         logger.warning("创建 Raman 任务参数校验失败: %s", exc)
@@ -140,11 +169,15 @@ def create_raman_task(payload: CreateIrRamanTaskRequest) -> ApiResponse[CreateTa
 
 
 @router.post("/lcms", response_model=ApiResponse[CreateTaskData])
-def create_lcms_task(payload: CreateLcmsTaskRequest) -> ApiResponse[CreateTaskData]:
+def create_lcms_task(
+    payload: CreateLcmsTaskRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[CreateTaskData]:
     """创建 LCMS 分析任务。
 
     Args:
         payload: LCMS 任务请求模型。
+        current_user: 当前登录用户上下文。
 
     Returns:
         任务创建响应。
@@ -154,6 +187,7 @@ def create_lcms_task(payload: CreateLcmsTaskRequest) -> ApiResponse[CreateTaskDa
             task_type="lcms_analysis",
             input_data=payload.input.model_dump(),
             params=payload.params.model_dump(),
+            created_by=current_user["user_id"] if current_user else None,
         )
     except ValueError as exc:
         logger.warning("创建 LCMS 任务参数校验失败: %s", exc)

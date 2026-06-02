@@ -19,12 +19,18 @@ class FileService:
     """文件服务类。"""
 
     @staticmethod
-    def save_upload_file(upload_file: UploadFile) -> UploadFileData:
-        """
-        保存上传文件并返回元数据。
+    def save_upload_file(
+        upload_file: UploadFile,
+        created_by: str | None = None,
+    ) -> UploadFileData:
+        """保存上传文件并返回元数据。
 
-        参数说明:
-        - upload_file: FastAPI 上传文件对象。
+        Args:
+            upload_file: FastAPI 上传文件对象。
+            created_by: 文件创建人用户 ID。
+
+        Returns:
+            上传文件元数据。
         """
         now = datetime.now()
         sub_dir = Path(str(now.year), f"{now.month:02d}", f"{now.day:02d}")
@@ -53,6 +59,7 @@ class FileService:
         FileRepository.save(
             FileRecord(
                 **payload.model_dump(),
+                created_by=created_by,
                 created_at=datetime.now(),
             )
         )

@@ -28,6 +28,7 @@ class TaskRecord(BaseModel):
     params: dict[str, Any]
     result_ref: str | None = None
     error: TaskErrorInfo | None = None
+    created_by: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -53,4 +54,5 @@ class FileRecord(BaseModel):
     file_ext: str
     storage_path: str
     sha256: str
+    created_by: str | None = None
     created_at: datetime | None = None

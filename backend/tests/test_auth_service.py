@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import unittest
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from datetime import datetime
 from datetime import timedelta
 from unittest.mock import MagicMock
@@ -10,6 +13,7 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 from app.api.v1.endpoints.auth import router as auth_router
@@ -23,6 +27,8 @@ from app.infra.repositories import UserRepository
 from app.schemas.identity_runtime import InviteCodeRecord, UserRecord
 from app.services.auth_service import AuthService
 from app.services.auth_service import ensure_identity_indexes
+from app.services.file_service import FileService
+from app.services.task_service import TaskService
 
 
 class TestIdentityRuntimeModels(unittest.TestCase):
@@ -451,6 +457,57 @@ class TestAuthService(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "账号或密码错误"):
             AuthService.login("alice", "WrongPassword!")
+
+
+class TestTaskAndFileOwnership(unittest.TestCase):
+    """验证任务与文件归属字段写入。"""
+
+    @patch("app.services.file_service.FileRepository.save")
+    def test_file_service_save_upload_file_writes_created_by(
+        self,
+        save_file: MagicMock,
+    ) -> None:
+        """保存上传文件时应写入 created_by 字段。"""
+        with TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            upload_root = project_root / "uploads"
+            upload_file = UploadFile(filename="sample.txt", file=BytesIO(b"demo-content"))
+
+            with patch("app.services.file_service.settings.project_root", project_root), patch(
+                "app.services.file_service.settings.upload_root", upload_root
+            ):
+                FileService.save_upload_file(upload_file=upload_file, created_by="u_user_001")
+
+        save_file.assert_called_once()
+        file_record = save_file.call_args.args[0]
+        self.assertEqual(file_record.created_by, "u_user_001")
+
+    @patch("app.services.task_service.execute_analysis_task.apply_async")
+    @patch("app.services.task_service.TaskRepository.update")
+    @patch("app.services.task_service.TaskRepository.create")
+    @patch("app.services.task_service.TaskService._validate_input_source")
+    def test_task_service_create_task_writes_created_by(
+        self,
+        validate_input_source: MagicMock,
+        create_task_record: MagicMock,
+        update_task_record: MagicMock,
+        apply_async: MagicMock,
+    ) -> None:
+        """创建任务时应写入 created_by 字段。"""
+        result = TaskService.create_task(
+            task_type="gpc_analysis",
+            input_data={"input_type": "file_id", "file_id": "f_001"},
+            params={"top_k": 3},
+            created_by="u_user_001",
+        )
+
+        validate_input_source.assert_called_once()
+        create_task_record.assert_called_once()
+        apply_async.assert_called_once()
+        update_task_record.assert_called_once()
+        task_record = create_task_record.call_args.args[0]
+        self.assertEqual(task_record.created_by, "u_user_001")
+        self.assertEqual(result["status"], "QUEUED")
 
 
 class TestAuthContext(unittest.TestCase):

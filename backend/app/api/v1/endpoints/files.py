@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.schemas.common import ApiResponse
@@ -15,16 +16,26 @@ logger = get_logger("spec_agent.api.files")
 
 
 @router.post("/upload", response_model=ApiResponse[UploadFileData])
-def upload_file(file: UploadFile = File(...), biz_type: str | None = Form(default=None)) -> ApiResponse[UploadFileData]:
+def upload_file(
+    file: UploadFile = File(...),
+    biz_type: str | None = Form(default=None),
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[UploadFileData]:
     """上传文件接口。
 
-    函数名称: upload_file
-    参数说明:
-    - file: 上传文件对象。
-    - biz_type: 业务类型（gpc/nmr/ir/raman/lcms），可选。
+    Args:
+        file: 上传文件对象。
+        biz_type: 业务类型（gpc/nmr/ir/raman/lcms），可选。
+        current_user: 当前登录用户上下文。
+
+    Returns:
+        上传文件响应。
     """
     _validate_upload(file=file, biz_type=biz_type)
-    saved = FileService.save_upload_file(upload_file=file)
+    saved = FileService.save_upload_file(
+        upload_file=file,
+        created_by=current_user["user_id"] if current_user else None,
+    )
     return ApiResponse(code=0, message="ok", data=saved)
 
 

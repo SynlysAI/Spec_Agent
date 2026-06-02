@@ -31,14 +31,22 @@ class TaskService:
     """任务服务（MongoDB + Celery 实现）。"""
 
     @staticmethod
-    def create_task(task_type: TaskKind, input_data: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    def create_task(
+        task_type: TaskKind,
+        input_data: dict[str, Any],
+        params: dict[str, Any],
+        created_by: str | None = None,
+    ) -> dict[str, Any]:
         """创建任务并派发到 Celery。
 
-        函数名称: create_task
-        参数说明:
-        - task_type: 任务类型。
-        - input_data: 输入参数。
-        - params: 任务参数。
+        Args:
+            task_type: 任务类型。
+            input_data: 输入参数。
+            params: 任务参数。
+            created_by: 任务创建人用户 ID。
+
+        Returns:
+            任务创建结果。
         """
         TaskService._validate_input_source(input_data=input_data)
 
@@ -63,6 +71,7 @@ class TaskService:
             params=params,
             result_ref=None,
             error=None,
+            created_by=created_by,
             created_at=now,
             updated_at=now,
         )
