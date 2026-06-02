@@ -186,6 +186,13 @@ analysis/            # 算法分析层（独立于 app）
 | `AUTH_SECRET` | JWT 签名密钥（未配置时自动生成） | 空 |
 | `AUTH_TOKEN_EXPIRE_HOURS` | Token 有效期（小时） | `12` |
 
+当 `AUTH_ENABLED=true` 时：
+
+- 用户需先通过管理员创建的邀请码访问 `/auth/register` 完成注册。
+- 登录成功后通过 `Authorization: Bearer <token>` 访问受保护接口。
+- `/auth/me` 可用于前端启动时恢复当前登录用户、角色与状态。
+- `/admin/*` 接口仅允许管理员角色访问。
+
 ### 前端
 
 | 变量名 | 说明 |
@@ -216,7 +223,21 @@ analysis/            # 算法分析层（独立于 app）
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | POST | `/auth/login` | 登录获取 Token |
+| POST | `/auth/register` | 使用邀请码注册普通用户 |
+| GET | `/auth/me` | 获取当前登录用户信息 |
 | GET | `/auth/status` | 获取登录开关与当前会话状态 |
+
+### admin — 管理员接口
+
+说明：以下接口均要求已登录且角色为 `admin`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/admin/users` | 查询全部用户列表 |
+| PATCH | `/admin/users/{user_id}/status` | 更新用户状态（active/disabled） |
+| GET | `/admin/invite-codes` | 查询邀请码列表 |
+| POST | `/admin/invite-codes` | 创建邀请码 |
+| PATCH | `/admin/invite-codes/{invite_id}/disable` | 禁用邀请码 |
 
 ### files — 文件管理
 

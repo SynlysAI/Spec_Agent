@@ -417,6 +417,75 @@ export async function getCurrentUser(options = {}) {
   return unwrapResponse(response)
 }
 
+/**
+ * 查询管理员用户列表。
+ *
+ * Returns:
+ *   管理员用户列表数据。
+ */
+export async function listAdminUsers(options = {}) {
+  const response = await apiClient.get('/admin/users', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 更新指定用户状态。
+ *
+ * Args:
+ *   userId: 目标用户 ID。
+ *   payload: 状态更新参数。
+ *
+ * Returns:
+ *   更新后的用户状态数据。
+ */
+export async function updateAdminUserStatus(userId, payload, options = {}) {
+  const response = await apiClient.patch(`/admin/users/${userId}/status`, payload, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 查询管理员邀请码列表。
+ *
+ * Returns:
+ *   邀请码列表数据。
+ */
+export async function listInviteCodes(options = {}) {
+  const response = await apiClient.get('/admin/invite-codes', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 创建邀请码。
+ *
+ * Args:
+ *   payload: 邀请码创建参数。
+ *
+ * Returns:
+ *   新建邀请码数据。
+ */
+export async function createInviteCode(payload, options = {}) {
+  const response = await apiClient.post('/admin/invite-codes', payload, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 禁用指定邀请码。
+ *
+ * Args:
+ *   inviteId: 目标邀请码 ID。
+ *
+ * Returns:
+ *   更新后的邀请码状态数据。
+ */
+export async function disableInviteCode(inviteId, options = {}) {
+  const response = await apiClient.patch(
+    `/admin/invite-codes/${inviteId}/disable`,
+    null,
+    buildRequestConfig(options),
+  )
+  return unwrapResponse(response)
+}
+
 export async function listTasks(params, options = {}) {
   const response = await apiClient.get('/tasks', buildRequestConfig({ params, ...options }))
   return unwrapResponse(response)

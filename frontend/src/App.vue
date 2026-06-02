@@ -8,11 +8,13 @@ import {
   FolderOpened,
   Histogram,
   ChatLineRound,
+  Key,
   Monitor,
   SetUp,
   Fold,
   Expand,
   SwitchButton,
+  User,
 } from '@element-plus/icons-vue'
 
 import { getAuthStatus, getApiErrorMessage, getCurrentUser } from './api/specAgentApi'
@@ -82,6 +84,9 @@ const activeMenu = computed(() => {
     return current
   }
   if (current.startsWith('/experiments/')) {
+    return current
+  }
+  if (current.startsWith('/admin/')) {
     return current
   }
   return current
@@ -332,6 +337,20 @@ onBeforeUnmount(() => {
             </template>
             <el-menu-item index="/experiments/collect">数据采集</el-menu-item>
             <el-menu-item index="/experiments/samples">样本管理</el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu v-if="canAccessAdminFeatures" index="/admin">
+            <template #title>
+              <el-icon><SetUp /></el-icon>
+              <span>系统管理</span>
+            </template>
+            <el-menu-item index="/admin/users">
+              <el-icon><User /></el-icon>
+              <span>用户管理</span>
+            </el-menu-item>
+            <el-menu-item index="/admin/invite-codes">
+              <el-icon><Key /></el-icon>
+              <span>邀请码管理</span>
+            </el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/docs">
             <el-icon><Document /></el-icon>

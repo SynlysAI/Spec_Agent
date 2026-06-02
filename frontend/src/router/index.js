@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { authState } from '../auth/authState'
+import AdminInviteCodeManageView from '../views/AdminInviteCodeManageView.vue'
+import AdminUserManageView from '../views/AdminUserManageView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import DialogueView from '../views/DialogueView.vue'
 import ExperimentCollectView from '../views/ExperimentCollectView.vue'
@@ -37,6 +39,8 @@ const routes = [
   { path: '/dialogue', component: DialogueView },
   { path: '/experiments/collect', component: ExperimentCollectView, meta: { requiresRole: 'admin' } },
   { path: '/experiments/samples', component: ExperimentSampleManageView, meta: { requiresRole: 'admin' } },
+  { path: '/admin/users', component: AdminUserManageView, meta: { requiresRole: 'admin' } },
+  { path: '/admin/invite-codes', component: AdminInviteCodeManageView, meta: { requiresRole: 'admin' } },
   { path: '/tools/nmrserver', component: ToolNmrServerView },
   { path: '/tools/raman-capture', component: ToolRamanCaptureView },
   { path: '/tools/lcms-convert', component: ToolLcmsConvertView },
