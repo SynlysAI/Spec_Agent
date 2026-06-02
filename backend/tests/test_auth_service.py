@@ -16,6 +16,7 @@ from app.api.v1.endpoints.auth import router as auth_router
 from app.core.auth import build_access_token
 from app.core.auth import get_current_user
 from app.core.auth import get_current_user_optional
+from app.core.auth import parse_access_token
 from app.core.auth import require_admin
 from app.infra.repositories import InviteCodeRepository
 from app.infra.repositories import UserRepository
@@ -165,6 +166,15 @@ class TestIdentityRepositories(unittest.TestCase):
 class TestAuthService(unittest.TestCase):
     """验证认证服务的注册与登录流程。"""
 
+    def test_hash_password_and_verify_password(self) -> None:
+        """密码哈希与校验方法应返回正确结果。"""
+        password_hash = AuthService.hash_password("Password123!")
+
+        self.assertTrue(password_hash)
+        self.assertNotEqual(password_hash, "Password123!")
+        self.assertTrue(AuthService.verify_password("Password123!", password_hash))
+        self.assertFalse(AuthService.verify_password("WrongPassword!", password_hash))
+
     @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
     @patch("app.services.auth_service.UserRepository.find_by_username")
     @patch("app.services.auth_service.UserRepository.save")
@@ -223,6 +233,23 @@ class TestAuthService(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "邀请码已过期"):
+            AuthService.register("ABC12345", "alice", "Password123!")
+
+    @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
+    @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    def test_register_with_missing_invite_raises_error(
+        self,
+        find_user: MagicMock,
+        consume_invite: MagicMock,
+        find_invite: MagicMock,
+    ) -> None:
+        """邀请码不存在时注册应失败。"""
+        find_user.return_value = None
+        consume_invite.return_value = None
+        find_invite.return_value = None
+
+        with self.assertRaisesRegex(ValueError, "邀请码不存在"):
             AuthService.register("ABC12345", "alice", "Password123!")
 
     @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
@@ -330,6 +357,27 @@ class TestAuthService(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "当前账号已被禁用"):
             AuthService.login("alice", "Password123!")
 
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    def test_login_with_wrong_password_raises_error(
+        self,
+        find_by_username: MagicMock,
+    ) -> None:
+        """账号或密码错误时登录应失败。"""
+        find_by_username.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash=AuthService.hash_password("Password123!"),
+            role="user",
+            status="active",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+
+        with self.assertRaisesRegex(ValueError, "账号或密码错误"):
+            AuthService.login("alice", "WrongPassword!")
+
 
 class TestAuthContext(unittest.TestCase):
     """验证认证上下文解析与权限控制。"""
@@ -430,6 +478,17 @@ class TestAuthContext(unittest.TestCase):
 
         self.assertEqual(context.exception.status_code, 403)
 
+    def test_build_access_token_and_parse_access_token(self) -> None:
+        """访问令牌构建后应可被正确解析。"""
+        token, expires_at = build_access_token("u_user_001", "alice", "user")
+
+        self.assertTrue(token)
+        self.assertGreater(expires_at, int(datetime.now().timestamp()))
+        payload = parse_access_token(token)
+        self.assertEqual(payload["sub"], "u_user_001")
+        self.assertEqual(payload["username"], "alice")
+        self.assertEqual(payload["role"], "user")
+
 
 class TestAuthEndpoints(unittest.TestCase):
     """验证认证接口行为。"""
@@ -474,6 +533,50 @@ class TestAuthEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["data"]["status"], "disabled")
+
+    @patch("app.api.v1.endpoints.auth.settings.auth_enabled", True)
+    @patch("app.api.v1.endpoints.auth.auth_service.register")
+    def test_register_endpoint_returns_current_user_data(
+        self,
+        register_user: MagicMock,
+    ) -> None:
+        """注册接口应返回当前用户数据。"""
+        now = datetime.now()
+        register_user.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash="hashed",
+            role="user",
+            status="active",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+        client = self._create_client()
+
+        response = client.post(
+            "/auth/register",
+            json={
+                "invite_code": "ABC12345",
+                "username": "alice",
+                "password": "Password123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["code"], 0)
+        self.assertTrue(payload["data"]["authenticated"])
+        self.assertEqual(payload["data"]["user_id"], "u_user_001")
+        self.assertEqual(payload["data"]["username"], "alice")
+        self.assertEqual(payload["data"]["role"], "user")
+        self.assertEqual(payload["data"]["status"], "active")
+        register_user.assert_called_once_with(
+            invite_code="ABC12345",
+            username="alice",
+            password="Password123!",
+        )
 
 
 if __name__ == "__main__":
