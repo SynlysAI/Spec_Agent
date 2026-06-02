@@ -14,7 +14,10 @@ export const authState = reactive({
   initialized: false,
   authEnabled: false,
   authenticated: hasValidInitialSession,
+  userId: hasValidInitialSession ? initialSession.userId || '' : '',
   username: hasValidInitialSession ? initialSession.username || '' : '',
+  role: hasValidInitialSession ? initialSession.role || '' : '',
+  status: hasValidInitialSession ? initialSession.status || '' : '',
   tokenType: hasValidInitialSession ? initialSession.tokenType || 'Bearer' : 'Bearer',
   accessToken: hasValidInitialSession ? initialSession.accessToken || '' : '',
   expiresAt: hasValidInitialSession ? initialSession.expiresAt || 0 : 0,
@@ -42,12 +45,18 @@ export function setAuthEnabled(enabled) {
  */
 export function setAuthSession(session) {
   authState.authenticated = true
+  authState.userId = session.userId || ''
   authState.username = session.username || ''
+  authState.role = session.role || ''
+  authState.status = session.status || ''
   authState.tokenType = session.tokenType || 'Bearer'
   authState.accessToken = session.accessToken || ''
   authState.expiresAt = session.expiresAt || 0
   setStoredAuthSession({
+    userId: authState.userId,
     username: authState.username,
+    role: authState.role,
+    status: authState.status,
     tokenType: authState.tokenType,
     accessToken: authState.accessToken,
     expiresAt: authState.expiresAt,
@@ -59,7 +68,10 @@ export function setAuthSession(session) {
  */
 export function clearAuthSession() {
   authState.authenticated = false
+  authState.userId = ''
   authState.username = ''
+  authState.role = ''
+  authState.status = ''
   authState.tokenType = 'Bearer'
   authState.accessToken = ''
   authState.expiresAt = 0

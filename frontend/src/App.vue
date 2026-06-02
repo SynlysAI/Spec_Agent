@@ -15,17 +15,37 @@ import {
   SwitchButton,
 } from '@element-plus/icons-vue'
 
-import { getAuthStatus, getApiErrorMessage } from './api/specAgentApi'
+import { getAuthStatus, getApiErrorMessage, getCurrentUser } from './api/specAgentApi'
 import { authState, clearAuthSession, setAuthEnabled, setAuthSession } from './auth/authState'
 
 const route = useRoute()
 const router = useRouter()
 const sidebarCollapsed = ref(false)
 const currentDate = ref(formatCurrentDate())
-const isLoginPage = computed(() => route.path === '/login')
+const isAuthPage = computed(() => route.path === '/login' || route.path === '/register')
 const authBootstrapping = ref(true)
 const AUTH_EXPIRED_EVENT_NAME = 'spec-agent-auth-expired'
 const APP_VERSION = '1.2.9'
+const canAccessAdminFeatures = computed(() => !authState.authEnabled || authState.role === 'admin')
+const currentUserDisplayName = computed(() => {
+  if (!authState.authEnabled) {
+    return '实验室管理员'
+  }
+  return authState.username || '当前用户'
+})
+const currentUserRoleLabel = computed(() => {
+  if (!authState.authEnabled) {
+    return ''
+  }
+  if (authState.role === 'admin') {
+    return '管理员'
+  }
+  if (authState.role === 'user') {
+    return '普通用户'
+  }
+  return ''
+})
+const currentUserAvatarText = computed(() => currentUserDisplayName.value.slice(0, 1) || 'S')
 
 /**
  * 解析接口文档地址。
@@ -95,6 +115,19 @@ function handleLogout() {
 }
 
 /**
+ * 判断鉴权请求是否因登录态失效而失败。
+ *
+ * Args:
+ *   error: API 异常对象。
+ *
+ * Returns:
+ *   是否为 401/403 鉴权失败。
+ */
+function isAuthenticationError(error) {
+  return error?.status === 401 || error?.status === 403
+}
+
+/**
  * 生成当前日期字符串（YYYY-MM-DD）。
  *
  * Returns:
@@ -109,6 +142,72 @@ function formatCurrentDate() {
 }
 
 /**
+ * 将当前页面跳转到登录页。
+ */
+function redirectToLogin() {
+  if (route.meta.public === true) {
+    return
+  }
+  router.replace({
+    path: '/login',
+    query: { redirect: route.fullPath },
+  })
+}
+
+/**
+ * 使用当前缓存令牌与服务端用户信息重建会话。
+ *
+ * Args:
+ *   currentUser: `/auth/me` 返回的用户信息。
+ */
+function syncCurrentUserSession(currentUser) {
+  setAuthSession({
+    userId: currentUser.user_id,
+    username: currentUser.username || authState.username,
+    role: currentUser.role || authState.role,
+    status: currentUser.status || authState.status,
+    tokenType: authState.tokenType,
+    accessToken: authState.accessToken,
+    expiresAt: authState.expiresAt,
+  })
+}
+
+/**
+ * 处理 `/auth/me` 初始化失败后的兜底逻辑。
+ *
+ * Args:
+ *   error: `/auth/me` 请求失败异常。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function recoverAuthBootstrap(error) {
+  try {
+    const statusData = await getAuthStatus()
+    setAuthEnabled(statusData.auth_enabled)
+    if (!statusData.auth_enabled) {
+      if (route.meta.public === true) {
+        router.replace('/dashboard')
+      }
+      return
+    }
+    if (statusData.authenticated && authState.authenticated) {
+      return
+    }
+    clearAuthSession()
+    redirectToLogin()
+    if (!isAuthenticationError(error)) {
+      ElMessage.error(`鉴权状态初始化失败：${getApiErrorMessage(error)}`)
+    }
+  } catch (statusError) {
+    clearAuthSession()
+    setAuthEnabled(true)
+    ElMessage.error(`鉴权状态初始化失败：${getApiErrorMessage(statusError)}`)
+    redirectToLogin()
+  }
+}
+
+/**
  * 初始化服务端登录开关与当前会话状态。
  *
  * Returns:
@@ -116,40 +215,22 @@ function formatCurrentDate() {
  */
 async function initializeAuthState() {
   try {
-    const data = await getAuthStatus()
+    const data = await getCurrentUser()
     setAuthEnabled(data.auth_enabled)
     if (!data.auth_enabled) {
-      if (route.path === '/login') {
+      if (route.meta.public === true) {
         router.replace('/dashboard')
       }
       return
     }
     if (data.authenticated) {
-      setAuthSession({
-        username: data.username || authState.username,
-        tokenType: authState.tokenType,
-        accessToken: authState.accessToken,
-        expiresAt: authState.expiresAt,
-      })
+      syncCurrentUserSession(data)
       return
     }
     clearAuthSession()
-    if (route.path !== '/login') {
-      router.replace({
-        path: '/login',
-        query: { redirect: route.fullPath },
-      })
-    }
+    redirectToLogin()
   } catch (error) {
-    clearAuthSession()
-    setAuthEnabled(true)
-    ElMessage.error(`鉴权状态初始化失败：${getApiErrorMessage(error)}`)
-    if (route.path !== '/login') {
-      router.replace({
-        path: '/login',
-        query: { redirect: route.fullPath },
-      })
-    }
+    await recoverAuthBootstrap(error)
   } finally {
     authBootstrapping.value = false
   }
@@ -160,7 +241,7 @@ async function initializeAuthState() {
  */
 function handleAuthExpired() {
   clearAuthSession()
-  if (!authState.authEnabled || route.path === '/login') {
+  if (!authState.authEnabled || route.meta.public === true) {
     return
   }
   router.replace({
@@ -186,7 +267,7 @@ onBeforeUnmount(() => {
       <div class="app-loading-text">正在初始化访问控制...</div>
     </div>
   </div>
-  <router-view v-else-if="isLoginPage" />
+  <router-view v-else-if="isAuthPage" />
   <el-container v-else class="app-shell">
     <el-aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }" :width="sidebarCollapsed ? '66px' : '220px'">
       <div class="brand">
@@ -240,9 +321,9 @@ onBeforeUnmount(() => {
             <el-menu-item index="/tools/nmrserver">核磁预测服务</el-menu-item>
             <el-menu-item index="/tools/raman-capture">拉曼批量采集</el-menu-item>
             <el-menu-item index="/tools/lcms-convert">LCMS 数据转化</el-menu-item>
-            <el-menu-item index="/tools/acceptance">评测中心</el-menu-item>
+            <el-menu-item v-if="canAccessAdminFeatures" index="/tools/acceptance">评测中心</el-menu-item>
           </el-sub-menu>
-          <el-sub-menu index="/experiments">
+          <el-sub-menu v-if="canAccessAdminFeatures" index="/experiments">
             <template #title>
               <el-icon><FolderOpened /></el-icon>
               <span>实验管理</span>
@@ -273,8 +354,9 @@ onBeforeUnmount(() => {
         <div class="header-right">
           <span class="header-date">{{ currentDate }}</span>
           <el-tag v-if="authState.authEnabled" type="success" effect="plain">已启用登录保护</el-tag>
-          <el-avatar size="small">管</el-avatar>
-          <span>{{ authState.authEnabled ? authState.username || '实验室管理员' : '实验室管理员' }}</span>
+          <el-tag v-if="currentUserRoleLabel" effect="plain">{{ currentUserRoleLabel }}</el-tag>
+          <el-avatar size="small">{{ currentUserAvatarText }}</el-avatar>
+          <span>{{ currentUserDisplayName }}</span>
           <el-button v-if="authState.authEnabled" text class="logout-btn" @click="handleLogout">
             <el-icon><SwitchButton /></el-icon>
             退出登录

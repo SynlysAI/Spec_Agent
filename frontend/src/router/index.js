@@ -7,6 +7,7 @@ import ExperimentCollectView from '../views/ExperimentCollectView.vue'
 import ExperimentSampleManageView from '../views/ExperimentSampleManageView.vue'
 import LoginView from '../views/LoginView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
+import RegisterView from '../views/RegisterView.vue'
 import TaskCenterView from '../views/TaskCenterView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
 import TaskSubmitGpcView from '../views/TaskSubmitGpcView.vue'
@@ -21,6 +22,7 @@ import ToolRamanCaptureView from '../views/ToolRamanCaptureView.vue'
 const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/login', component: LoginView, meta: { public: true } },
+  { path: '/register', component: RegisterView, meta: { public: true } },
   { path: '/dashboard', component: DashboardView },
   { path: '/tasks/submit', redirect: '/tasks/submit/gpc' },
   { path: '/tasks/submit/gpc', component: TaskSubmitGpcView },
@@ -31,12 +33,12 @@ const routes = [
   { path: '/tasks/center', component: TaskCenterView },
   { path: '/tasks/detail/:taskId', component: TaskDetailView, props: true },
   { path: '/dialogue', component: DialogueView },
-  { path: '/experiments/collect', component: ExperimentCollectView },
-  { path: '/experiments/samples', component: ExperimentSampleManageView },
+  { path: '/experiments/collect', component: ExperimentCollectView, meta: { requiresRole: 'admin' } },
+  { path: '/experiments/samples', component: ExperimentSampleManageView, meta: { requiresRole: 'admin' } },
   { path: '/tools/nmrserver', component: ToolNmrServerView },
   { path: '/tools/raman-capture', component: ToolRamanCaptureView },
   { path: '/tools/lcms-convert', component: ToolLcmsConvertView },
-  { path: '/tools/acceptance', component: ToolEvaluationCenterView },
+  { path: '/tools/acceptance', component: ToolEvaluationCenterView, meta: { requiresRole: 'admin' } },
   { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { public: true } },
 ]
 
@@ -47,7 +49,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (!authState.authEnabled) {
-    if (to.path === '/login') {
+    if (to.meta.public === true) {
       return '/dashboard'
     }
     return true
@@ -70,6 +72,11 @@ router.beforeEach((to) => {
       query: { redirect: to.fullPath },
     }
   }
+
+  if (to.meta.requiresRole && authState.role !== to.meta.requiresRole) {
+    return '/dashboard'
+  }
+
   return true
 })
 

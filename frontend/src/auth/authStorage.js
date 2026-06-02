@@ -1,6 +1,34 @@
 const AUTH_STORAGE_KEY = 'spec_agent_auth_session'
 
 /**
+ * 校验会话对象结构是否完整。
+ *
+ * Args:
+ *   session: 待校验的会话对象。
+ *
+ * Returns:
+ *   会话结构是否合法。
+ */
+function isAuthSessionShapeValid(session) {
+  const expiresAt = Number(session?.expiresAt)
+  return Boolean(
+    session &&
+      typeof session.userId === 'string' &&
+      session.userId.trim() &&
+      typeof session.username === 'string' &&
+      session.username.trim() &&
+      ['admin', 'user'].includes(session.role) &&
+      ['active', 'disabled'].includes(session.status) &&
+      typeof session.tokenType === 'string' &&
+      session.tokenType.trim() &&
+      typeof session.accessToken === 'string' &&
+      session.accessToken.trim() &&
+      Number.isFinite(expiresAt) &&
+      expiresAt > 0,
+  )
+}
+
+/**
  * 读取本地会话信息。
  *
  * Returns:
@@ -16,11 +44,14 @@ export function getStoredAuthSession() {
   }
   try {
     const session = JSON.parse(raw)
-    if (!session?.accessToken || !session?.tokenType) {
+    if (!isAuthSessionShapeValid(session)) {
+      window.sessionStorage.removeItem(AUTH_STORAGE_KEY)
       return null
     }
+    session.expiresAt = Number(session.expiresAt)
     return session
   } catch {
+    window.sessionStorage.removeItem(AUTH_STORAGE_KEY)
     return null
   }
 }
@@ -58,7 +89,7 @@ export function clearStoredAuthSession() {
  *   是否有效。
  */
 export function isAuthSessionValid(session) {
-  if (!session?.accessToken || !session?.expiresAt) {
+  if (!isAuthSessionShapeValid(session)) {
     return false
   }
   return Number(session.expiresAt) * 1000 > Date.now()

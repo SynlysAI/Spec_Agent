@@ -392,6 +392,31 @@ export async function loginWithPassword(payload, options = {}) {
   return unwrapResponse(response)
 }
 
+/**
+ * 使用邀请码执行注册。
+ *
+ * Args:
+ *   payload: 注册参数。
+ *
+ * Returns:
+ *   当前注册用户信息。
+ */
+export async function registerWithInviteCode(payload, options = {}) {
+  const response = await apiClient.post('/auth/register', payload, buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
+ * 获取当前登录用户信息。
+ *
+ * Returns:
+ *   当前用户态信息。
+ */
+export async function getCurrentUser(options = {}) {
+  const response = await apiClient.get('/auth/me', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
 export async function listTasks(params, options = {}) {
   const response = await apiClient.get('/tasks', buildRequestConfig({ params, ...options }))
   return unwrapResponse(response)
