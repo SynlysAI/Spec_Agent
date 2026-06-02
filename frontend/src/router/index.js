@@ -42,7 +42,7 @@ const routes = [
   { path: '/admin/users', component: AdminUserManageView, meta: { requiresRole: 'admin' } },
   { path: '/admin/invite-codes', component: AdminInviteCodeManageView, meta: { requiresRole: 'admin' } },
   { path: '/tools/nmrserver', component: ToolNmrServerView },
-  { path: '/tools/raman-capture', component: ToolRamanCaptureView },
+  { path: '/tools/raman-capture', component: ToolRamanCaptureView, meta: { requiresRole: 'admin' } },
   { path: '/tools/lcms-convert', component: ToolLcmsConvertView },
   { path: '/tools/acceptance', component: ToolEvaluationCenterView, meta: { requiresRole: 'admin' } },
   { path: '/:pathMatch(.*)*', component: NotFoundView, meta: { public: true } },

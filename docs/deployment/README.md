@@ -16,6 +16,8 @@ cp docker/.env.example docker/.env
 docker compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d --build
 # 旧版环境可使用：
 # docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d --build
+# 指定重新构建前后端
+# docker-compose --env-file docker/.env -f docker/docker-compose.yml -f docker/docker-compose.infra.yml up -d --build nginx backend
 ```
 
 若使用外部 `MongoDB` 与 `RabbitMQ`，请修改 `docker/.env` 中以下变量：

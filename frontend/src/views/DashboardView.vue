@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { authState } from '../auth/authState'
 import {
   getApiErrorMessage,
   getLabCollectRuns,
@@ -25,6 +26,7 @@ const taskSummary = ref({
 })
 const taskTypeItems = ref([])
 const systemDynamics = ref([])
+const canAccessAdminFeatures = computed(() => !authState.authEnabled || authState.role === 'admin')
 
 const molecularCards = computed(() => [
   { title: '去重 SMILES', value: molecularStats.value?.unique_smiles_count ?? 0, featured: true },
@@ -78,30 +80,12 @@ function formatDisplayTime(value) {
 async function loadDashboard() {
   loading.value = true
   try {
-    const [
-      sampleData,
-      molecularData,
-      all,
-      queued,
-      running,
-      success,
-      failed,
-      latestCollect,
-      latestFailed,
-      gpc,
-      nmr,
-      ir,
-      raman,
-      lcms,
-    ] = await Promise.all([
-      getSpectrumSampleSummary(),
-      getMolecularStatistics(),
+    const baseResults = await Promise.all([
       listTasks({ page: 1, page_size: 1 }),
       listTasks({ page: 1, page_size: 1, status: 'QUEUED' }),
       listTasks({ page: 1, page_size: 1, status: 'RUNNING' }),
       listTasks({ page: 1, page_size: 1, status: 'SUCCESS' }),
       listTasks({ page: 1, page_size: 1, status: 'FAILED' }),
-      getLabCollectRuns(1),
       listTasks({ page: 1, page_size: 1, status: 'FAILED' }),
       listTasks({ page: 1, page_size: 1, task_type: 'gpc_analysis' }),
       listTasks({ page: 1, page_size: 1, task_type: 'nmr_analysis' }),
@@ -109,6 +93,32 @@ async function loadDashboard() {
       listTasks({ page: 1, page_size: 1, task_type: 'raman_analysis' }),
       listTasks({ page: 1, page_size: 1, task_type: 'lcms_analysis' }),
     ])
+
+    let sampleData = null
+    let molecularData = null
+    let latestCollect = { items: [] }
+
+    if (canAccessAdminFeatures.value) {
+      ;[sampleData, molecularData, latestCollect] = await Promise.all([
+        getSpectrumSampleSummary(),
+        getMolecularStatistics(),
+        getLabCollectRuns(1),
+      ])
+    }
+
+    const [
+      all,
+      queued,
+      running,
+      success,
+      failed,
+      latestFailed,
+      gpc,
+      nmr,
+      ir,
+      raman,
+      lcms,
+    ] = baseResults
 
     sampleSummary.value = sampleData
     molecularStats.value = molecularData
@@ -129,23 +139,26 @@ async function loadDashboard() {
 
     const latestRun = latestCollect.items?.[0] || null
     const latestFailedTask = latestFailed.items?.[0] || null
-    systemDynamics.value = [
-      {
-        title: '最近采集批次',
-        value: latestRun ? `${latestRun.run_id} · ${latestRun.status}` : '暂无采集记录',
-        hint: latestRun ? `${latestRun.date_from} ~ ${latestRun.date_to}` : '等待首次采集',
-      },
+    const dynamics = [
       {
         title: '最近失败任务',
         value: latestFailedTask ? `${latestFailedTask.task_id} · ${latestFailedTask.task_type}` : '当前无失败任务',
         hint: latestFailedTask ? `状态：${latestFailedTask.status}` : '任务运行正常',
       },
-      {
+    ]
+    if (canAccessAdminFeatures.value) {
+      dynamics.unshift({
+        title: '最近采集批次',
+        value: latestRun ? `${latestRun.run_id} · ${latestRun.status}` : '暂无采集记录',
+        hint: latestRun ? `${latestRun.date_from} ~ ${latestRun.date_to}` : '等待首次采集',
+      })
+      dynamics.push({
         title: '最近数据更新时间',
         value: formatDisplayTime(sampleData?.latest_updated_at || latestRun?.updated_at || null),
         hint: sampleData?.latest_updated_at ? '来自样本主档更新时间' : '暂无样本更新时间',
-      },
-    ]
+      })
+    }
+    systemDynamics.value = dynamics
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
   } finally {
@@ -187,7 +200,7 @@ onMounted(loadDashboard)
 <template>
   <div class="page-grid dashboard-grid">
     <div class="dashboard-main">
-      <section class="panel">
+      <section v-if="canAccessAdminFeatures" class="panel">
         <div class="panel-header">
           <h3 class="panel-title">样本资产概览</h3>
           <el-button type="primary" plain :loading="loading" @click="loadDashboard">刷新</el-button>
@@ -202,7 +215,7 @@ onMounted(loadDashboard)
         </div>
       </section>
 
-      <section class="panel">
+      <section v-if="canAccessAdminFeatures" class="panel">
         <div class="panel-header">
           <h3 class="panel-title">分子资产概览</h3>
           <el-button type="primary" plain :loading="molecularRefreshing" @click="updateMolecularStatistics">
@@ -298,8 +311,8 @@ onMounted(loadDashboard)
             <el-button plain @click="goTo('/tasks/submit/ir')">IR 提交</el-button>
             <el-button plain @click="goTo('/tasks/submit/raman')">Raman 提交</el-button>
             <el-button plain @click="goTo('/tasks/submit/lcms')">LCMS 提交</el-button>
-            <el-button plain @click="goTo('/experiments/collect')">数据采集</el-button>
-            <el-button plain @click="goTo('/experiments/samples')">样本管理</el-button>
+            <el-button v-if="canAccessAdminFeatures" plain @click="goTo('/experiments/collect')">数据采集</el-button>
+            <el-button v-if="canAccessAdminFeatures" plain @click="goTo('/experiments/samples')">样本管理</el-button>
             <el-button plain @click="goTo('/tasks/center')">任务中心</el-button>
           </div>
         </div>
