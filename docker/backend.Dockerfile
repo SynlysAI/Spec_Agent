@@ -14,6 +14,7 @@ RUN apt-get update \
         libglib2.0-0 \
         libgl1 \
         libgomp1 \
+        fonts-wqy-microhei \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /tmp/requirements.txt

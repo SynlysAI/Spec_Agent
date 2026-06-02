@@ -23,17 +23,17 @@ class Settings:
     def __init__(self) -> None:
         self.project_root: Path = Path(__file__).resolve().parents[3]
         self.backend_root: Path = self.project_root / "backend"
-        self.runtime_root: Path = Path(
+        self.runtime_root: Path = self._resolve_project_path(
             os.getenv("SPEC_AGENT_RUNTIME_ROOT", str(self.project_root / ".runtime"))
         )
-        self.upload_root: Path = Path(
+        self.upload_root: Path = self._resolve_project_path(
             os.getenv("SPEC_AGENT_UPLOAD_ROOT", str(self.runtime_root / "uploads"))
         )
-        self.outputs_root: Path = Path(
+        self.outputs_root: Path = self._resolve_project_path(
             os.getenv("SPEC_AGENT_OUTPUT_ROOT", str(self.runtime_root / "outputs"))
         )
-        self.logs_root: Path = Path(
-            os.getenv("SPEC_AGENT_LOG_ROOT", str(self.backend_root / "logs"))
+        self.logs_root: Path = self._resolve_project_path(
+            os.getenv("SPEC_AGENT_LOG_ROOT", str(self.runtime_root / "logs"))
         )
         self.resources_root: Path = self.backend_root / "resources"
         self.max_upload_size_mb: int = 100
@@ -128,6 +128,20 @@ class Settings:
         self.upload_root.mkdir(parents=True, exist_ok=True)
         self.outputs_root.mkdir(parents=True, exist_ok=True)
         self.logs_root.mkdir(parents=True, exist_ok=True)
+
+    def _resolve_project_path(self, raw_path: str) -> Path:
+        """按项目根目录解析路径配置。
+
+        Args:
+            raw_path: 环境变量中的原始路径值。
+
+        Returns:
+            解析后的绝对路径对象。
+        """
+        target_path = Path(str(raw_path)).expanduser()
+        if target_path.is_absolute():
+            return target_path
+        return (self.project_root / target_path).resolve()
 
     @property
     def mongodb_uri(self) -> str:

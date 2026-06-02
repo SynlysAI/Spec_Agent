@@ -54,11 +54,10 @@ services:
       SPEC_AGENT_RUNTIME_ROOT: /app/.runtime
       SPEC_AGENT_UPLOAD_ROOT: /app/.runtime/uploads
       SPEC_AGENT_OUTPUT_ROOT: /app/.runtime/outputs
-      SPEC_AGENT_LOG_ROOT: /app/backend/logs
+      SPEC_AGENT_LOG_ROOT: /app/.runtime/logs
       SPECTRUM_FILES_ROOT: ${SPECTRUM_FILES_ROOT:-/data/spectrum_files}
     volumes:
       - ../.runtime:/app/.runtime
-      - ../backend/logs:/app/backend/logs
     healthcheck:
       test: ["CMD-SHELL", "curl --fail http://127.0.0.1:8000/api/v1/health || exit 1"]
       interval: 30s
@@ -113,11 +112,10 @@ services:
       SPEC_AGENT_RUNTIME_ROOT: /app/.runtime
       SPEC_AGENT_UPLOAD_ROOT: /app/.runtime/uploads
       SPEC_AGENT_OUTPUT_ROOT: /app/.runtime/outputs
-      SPEC_AGENT_LOG_ROOT: /app/backend/logs
+      SPEC_AGENT_LOG_ROOT: /app/.runtime/logs
       SPECTRUM_FILES_ROOT: ${SPECTRUM_FILES_ROOT:-/data/spectrum_files}
     volumes:
       - ../.runtime:/app/.runtime
-      - ../backend/logs:/app/backend/logs
     restart: unless-stopped
     networks:
       - spec-agent

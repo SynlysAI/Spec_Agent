@@ -106,6 +106,21 @@ def resolve_input_path(input_data: dict[str, Any]) -> str:
     raise ValueError(f"不支持的 input_type: {input_type}")
 
 
+def resolve_file_id_to_path(file_id: str) -> str:
+    """将 file_id 解析为存储路径。
+
+    函数名称: resolve_file_id_to_path
+    参数说明:
+    - file_id: 上传文件 ID。
+    """
+    file_record = FileRepository.find_by_file_id(file_id)
+    if not file_record:
+        logger.warning("file_id 不存在: %s", file_id)
+        raise ValueError(f"file_id 不存在: {file_id}")
+    storage_path = str(file_record.storage_path).replace("\\", "/")
+    return str(settings.project_root / storage_path)
+
+
 def sanitize_gpc_structured_data(structured_data: dict[str, Any]) -> dict[str, Any]:
     """清洗 GPC 结构化数据。"""
     analysis_results = structured_data.get("analysis_results", [])
@@ -297,13 +312,28 @@ class GpcTaskExecutor(BaseTaskExecutor):
             if file_id:
                 file_record = FileRepository.find_by_file_id(file_id)
                 source_file_name = file_record.file_name if file_record else None
+
+        # 解析可选文件 file_id 为路径
+        three_color_file_ids = params.get("three_color_arw_file_ids")
+        three_color_paths = None
+        if three_color_file_ids and len(three_color_file_ids) == 3:
+            three_color_paths = tuple(resolve_file_id_to_path(fid) for fid in three_color_file_ids)
+
+        calibration_file_path = None
+        if params.get("calibration_file_id"):
+            calibration_file_path = resolve_file_id_to_path(params["calibration_file_id"])
+
+        comparison_report_pdf_path = None
+        if params.get("comparison_report_pdf_file_id"):
+            comparison_report_pdf_path = resolve_file_id_to_path(params["comparison_report_pdf_file_id"])
+
         result = run_gpc_analysis(
             input_path=input_path,
             detect_mode=params.get("detect_mode", "auto"),
             manual_interval=params.get("manual_interval"),
-            three_color_arw_paths=tuple(params["three_color_arw_paths"]) if params.get("three_color_arw_paths") else None,
-            calibration_file_path=params.get("calibration_file_path"),
-            comparison_report_pdf_path=params.get("comparison_report_pdf_path"),
+            three_color_arw_paths=three_color_paths,
+            calibration_file_path=calibration_file_path,
+            comparison_report_pdf_path=comparison_report_pdf_path,
             source_file_name=source_file_name,
             enable_llm=False,
             output_dir=str(output_dir),

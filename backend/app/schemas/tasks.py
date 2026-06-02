@@ -61,16 +61,16 @@ class GpcTaskParams(BaseModel):
     参数说明:
     - detect_mode: 峰检测模式，auto/manual。
     - manual_interval: 手动检测区间。
-    - three_color_arw_paths: 三色曲线路径列表。
-    - calibration_file_path: 校准文件路径。
-    - comparison_report_pdf_path: 对比 PDF 路径。
+    - three_color_arw_file_ids: 三色曲线文件 ID 列表（红/绿/白，传则必须传满 3 个）。
+    - calibration_file_id: 校准文件 ID。
+    - comparison_report_pdf_file_id: 对比报告 PDF 文件 ID。
     """
 
     detect_mode: Literal["auto", "manual"] = Field(default="auto", description="峰检测模式")
     manual_interval: Optional[list[float]] = Field(default=None, description="手动检测区间")
-    three_color_arw_paths: Optional[list[str]] = Field(default=None, description="三色曲线路径")
-    calibration_file_path: Optional[str] = Field(default=None, description="校准文件路径")
-    comparison_report_pdf_path: Optional[str] = Field(default=None, description="对比PDF路径")
+    three_color_arw_file_ids: Optional[list[str]] = Field(default=None, description="三色曲线文件ID列表（红/绿/白）")
+    calibration_file_id: Optional[str] = Field(default=None, description="校准文件ID")
+    comparison_report_pdf_file_id: Optional[str] = Field(default=None, description="对比报告PDF文件ID")
     source_file_name: Optional[str] = Field(default=None, description="上传原始文件名（可选，用于三色匹配）")
 
     @model_validator(mode="after")
@@ -84,6 +84,8 @@ class GpcTaskParams(BaseModel):
         if self.detect_mode == "manual":
             if not self.manual_interval or len(self.manual_interval) != 2:
                 raise ValueError("manual 模式下 manual_interval 必须为 [start, end]")
+        if self.three_color_arw_file_ids is not None and len(self.three_color_arw_file_ids) != 3:
+            raise ValueError("三色曲线文件必须传满 3 个（红/绿/白）")
         return self
 
 

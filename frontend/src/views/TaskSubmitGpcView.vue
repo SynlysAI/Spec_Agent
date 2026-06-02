@@ -15,20 +15,24 @@ const form = reactive({
   detectMode: 'auto',
   manualStart: null,
   manualEnd: null,
-  threeColorPathText: '',
-  calibrationFilePath: '',
-  comparisonReportPdfPath: '',
   priority: 5,
 })
 
+// 三色曲线文件（红/绿/白）
+const curveFiles = reactive({
+  red: { file: null, fileId: '', filename: '' },
+  green: { file: null, fileId: '', filename: '' },
+  white: { file: null, fileId: '', filename: '' },
+})
+
+// 校准文件
+const calibrationFile = reactive({ file: null, fileId: '', filename: '' })
+
+// 对比报告 PDF
+const comparisonPdf = reactive({ file: null, fileId: '', filename: '' })
+
 /**
- * 处理 GPC 文件选择（仅缓存，不立即上传）。
- *
- * Args:
- *   file: 上传文件对象。
- *
- * Returns:
- *   boolean
+ * 处理 GPC 谱图文件选择（仅缓存，不立即上传）。
  */
 async function handleUpload(file) {
   selectedUploadFile.value = file
@@ -39,10 +43,35 @@ async function handleUpload(file) {
 }
 
 /**
+ * 处理可选文件选择（通用）。
+ */
+function handleOptionalFile(file, target) {
+  target.file = file
+  target.fileId = ''
+  target.filename = file?.name || ''
+  ElMessage.success(`已选择文件：${target.filename}`)
+  return false
+}
+
+/**
+ * 清除可选文件。
+ */
+function clearOptionalFile(target) {
+  target.file = null
+  target.fileId = ''
+  target.filename = ''
+}
+
+/**
+ * 上传单个文件并返回 file_id。
+ */
+async function uploadSingleFile(file, bizType) {
+  const data = await uploadFile(file, bizType)
+  return data.file_id
+}
+
+/**
  * 构建任务输入对象。
- *
- * Returns:
- *   GPC 输入参数。
  */
 function buildInput() {
   return {
@@ -50,20 +79,6 @@ function buildInput() {
     input_path: null,
     file_id: uploadedFileId.value,
   }
-}
-
-/**
- * 解析三色曲线文本输入。
- *
- * Returns:
- *   string[] | null
- */
-function parseThreeColorPaths() {
-  const items = form.threeColorPathText
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
-  return items.length > 0 ? items : null
 }
 
 /**
@@ -98,25 +113,60 @@ async function submitTask() {
     return
   }
 
-  const payload = {
-    input: buildInput(),
-    params: {
-      detect_mode: form.detectMode,
-      manual_interval:
-        form.detectMode === 'manual' ? [Number(form.manualStart), Number(form.manualEnd)] : null,
-      three_color_arw_paths: parseThreeColorPaths(),
-      calibration_file_path: form.calibrationFilePath.trim() || null,
-      comparison_report_pdf_path: form.comparisonReportPdfPath.trim() || null,
-      source_file_name: uploadedFilename.value || null,
-    },
-    options: {
-      priority: Number(form.priority || 5),
-      callback_url: null,
-    },
+  // 三色曲线：如果有一个选了，就必须三个都选
+  const curveColors = ['red', 'green', 'white']
+  const hasAnyCurve = curveColors.some((c) => curveFiles[c].file)
+  if (hasAnyCurve) {
+    const missing = curveColors.filter((c) => !curveFiles[c].file)
+    if (missing.length > 0) {
+      const nameMap = { red: '红色', green: '绿色', white: '白色' }
+      ElMessage.warning(`三色曲线必须传完整，缺少：${missing.map((c) => nameMap[c]).join('、')}`)
+      return
+    }
   }
 
   submitting.value = true
   try {
+    // 上传可选文件
+    let threeColorFileIds = null
+    if (hasAnyCurve) {
+      threeColorFileIds = []
+      for (const color of curveColors) {
+        const fid = await uploadSingleFile(curveFiles[color].file, 'gpc')
+        curveFiles[color].fileId = fid
+        threeColorFileIds.push(fid)
+      }
+    }
+
+    let calibrationFileId = null
+    if (calibrationFile.file) {
+      calibrationFileId = await uploadSingleFile(calibrationFile.file, 'gpc')
+      calibrationFile.fileId = calibrationFileId
+    }
+
+    let comparisonPdfFileId = null
+    if (comparisonPdf.file) {
+      comparisonPdfFileId = await uploadSingleFile(comparisonPdf.file, 'gpc')
+      comparisonPdf.fileId = comparisonPdfFileId
+    }
+
+    const payload = {
+      input: buildInput(),
+      params: {
+        detect_mode: form.detectMode,
+        manual_interval:
+          form.detectMode === 'manual' ? [Number(form.manualStart), Number(form.manualEnd)] : null,
+        three_color_arw_file_ids: threeColorFileIds,
+        calibration_file_id: calibrationFileId,
+        comparison_report_pdf_file_id: comparisonPdfFileId,
+        source_file_name: uploadedFilename.value || null,
+      },
+      options: {
+        priority: Number(form.priority || 5),
+        callback_url: null,
+      },
+    }
+
     const data = await createGpcTask(payload)
     lastTaskId.value = data.task_id
     ElMessage.success(`GPC 任务创建成功：${data.task_id}`)
@@ -167,21 +217,41 @@ function goTaskDetail() {
           <el-input-number v-model="form.manualEnd" :precision="4" />
         </el-form-item>
 
-        <el-form-item label="三色曲线路径列表">
-          <el-input
-            v-model="form.threeColorPathText"
-            type="textarea"
-            :rows="3"
-            placeholder="每行一个路径，可选；为空则传 null"
-          />
+        <el-divider content-position="left">可选附件</el-divider>
+
+        <el-form-item label="三色曲线文件">
+          <div style="display: flex; gap: 16px; flex-wrap: wrap">
+            <div v-for="color in ['red', 'green', 'white']" :key="color" style="display: flex; align-items: center; gap: 8px">
+              <span style="min-width: 40px">{{ { red: '红色', green: '绿色', white: '白色' }[color] }}：</span>
+              <el-upload :show-file-list="false" :before-upload="(file) => handleOptionalFile(file, curveFiles[color])" accept=".arw">
+                <el-button size="small" plain>选择文件</el-button>
+              </el-upload>
+              <el-tag v-if="curveFiles[color].filename" closable @close="clearOptionalFile(curveFiles[color])" size="small">
+                {{ curveFiles[color].filename }}
+              </el-tag>
+            </div>
+          </div>
+          <div style="color: #7a8ca8; font-size: 12px; margin-top: 4px">可选，传则三个颜色必须传完整（.arw）</div>
         </el-form-item>
 
-        <el-form-item label="校准文件路径">
-          <el-input v-model="form.calibrationFilePath" placeholder="可选，设置 calibration_file_path" />
+        <el-form-item label="校准文件">
+          <el-upload :show-file-list="false" :before-upload="(file) => handleOptionalFile(file, calibrationFile)" accept=".json,.arw">
+            <el-button plain>选择文件</el-button>
+          </el-upload>
+          <el-tag v-if="calibrationFile.filename" closable @close="clearOptionalFile(calibrationFile)" style="margin-left: 10px">
+            {{ calibrationFile.filename }}
+          </el-tag>
+          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">可选，不传则使用默认校准文件</div>
         </el-form-item>
 
-        <el-form-item label="对比报告PDF路径">
-          <el-input v-model="form.comparisonReportPdfPath" placeholder="可选，设置 comparison_report_pdf_path" />
+        <el-form-item label="对比报告PDF">
+          <el-upload :show-file-list="false" :before-upload="(file) => handleOptionalFile(file, comparisonPdf)" accept=".pdf">
+            <el-button plain>选择文件</el-button>
+          </el-upload>
+          <el-tag v-if="comparisonPdf.filename" closable @close="clearOptionalFile(comparisonPdf)" style="margin-left: 10px">
+            {{ comparisonPdf.filename }}
+          </el-tag>
+          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">可选，不传则不进行对比报告分析</div>
         </el-form-item>
 
         <el-form-item label="任务优先级">

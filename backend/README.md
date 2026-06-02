@@ -173,7 +173,7 @@ analysis/            # 算法分析层（独立于 app）
 | `SPEC_AGENT_RUNTIME_ROOT` | 运行时根目录 | `.runtime` |
 | `SPEC_AGENT_UPLOAD_ROOT` | 上传目录 | `.runtime/uploads` |
 | `SPEC_AGENT_OUTPUT_ROOT` | 输出目录 | `.runtime/outputs` |
-| `SPEC_AGENT_LOG_ROOT` | 日志目录 | `backend/logs` |
+| `SPEC_AGENT_LOG_ROOT` | 日志目录 | `.runtime/logs` |
 | `SPECTRUM_FILES_ROOT` | 谱图样本根目录 | `sample_data` |
 
 ### 鉴权
@@ -382,7 +382,7 @@ backend/
 
 ## 日志
 
-默认目录：`backend/logs`
+默认目录：`.runtime/logs`
 
 | 日志文件 | 内容 |
 | --- | --- |
