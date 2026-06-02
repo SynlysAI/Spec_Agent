@@ -19,6 +19,8 @@ import ToolLcmsConvertView from '../views/ToolLcmsConvertView.vue'
 import ToolNmrServerView from '../views/ToolNmrServerView.vue'
 import ToolRamanCaptureView from '../views/ToolRamanCaptureView.vue'
 
+const AUTH_PUBLIC_PATHS = new Set(['/login', '/register'])
+
 const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/login', component: LoginView, meta: { public: true } },
@@ -48,8 +50,10 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  const isAuthPublicRoute = AUTH_PUBLIC_PATHS.has(to.path)
+
   if (!authState.authEnabled) {
-    if (to.meta.public === true) {
+    if (isAuthPublicRoute) {
       return '/dashboard'
     }
     return true
@@ -59,7 +63,7 @@ router.beforeEach((to) => {
     return true
   }
 
-  if (to.meta.public === true) {
+  if (isAuthPublicRoute) {
     if (authState.authenticated) {
       return '/dashboard'
     }

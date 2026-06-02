@@ -20,6 +20,7 @@ import { authState, clearAuthSession, setAuthEnabled, setAuthSession } from './a
 
 const route = useRoute()
 const router = useRouter()
+const AUTH_PUBLIC_PATHS = new Set(['/login', '/register'])
 const sidebarCollapsed = ref(false)
 const currentDate = ref(formatCurrentDate())
 const isAuthPage = computed(() => route.path === '/login' || route.path === '/register')
@@ -46,6 +47,7 @@ const currentUserRoleLabel = computed(() => {
   return ''
 })
 const currentUserAvatarText = computed(() => currentUserDisplayName.value.slice(0, 1) || 'S')
+const isAuthPublicRoute = computed(() => AUTH_PUBLIC_PATHS.has(route.path))
 
 /**
  * 解析接口文档地址。
@@ -145,7 +147,7 @@ function formatCurrentDate() {
  * 将当前页面跳转到登录页。
  */
 function redirectToLogin() {
-  if (route.meta.public === true) {
+  if (isAuthPublicRoute.value) {
     return
   }
   router.replace({
@@ -186,7 +188,7 @@ async function recoverAuthBootstrap(error) {
     const statusData = await getAuthStatus()
     setAuthEnabled(statusData.auth_enabled)
     if (!statusData.auth_enabled) {
-      if (route.meta.public === true) {
+      if (isAuthPublicRoute.value) {
         router.replace('/dashboard')
       }
       return
@@ -218,7 +220,7 @@ async function initializeAuthState() {
     const data = await getCurrentUser()
     setAuthEnabled(data.auth_enabled)
     if (!data.auth_enabled) {
-      if (route.meta.public === true) {
+      if (isAuthPublicRoute.value) {
         router.replace('/dashboard')
       }
       return
@@ -241,7 +243,7 @@ async function initializeAuthState() {
  */
 function handleAuthExpired() {
   clearAuthSession()
-  if (!authState.authEnabled || route.meta.public === true) {
+  if (!authState.authEnabled || isAuthPublicRoute.value) {
     return
   }
   router.replace({
