@@ -27,7 +27,10 @@ class LoginData(BaseModel):
     """登录结果数据。"""
 
     auth_enabled: bool = Field(description="是否启用登录校验")
+    user_id: str = Field(description="当前登录用户 ID")
     username: str = Field(description="当前登录用户名")
+    role: UserRole = Field(description="当前登录用户角色")
+    status: UserStatus = Field(description="当前登录用户状态")
     access_token: str = Field(description="访问令牌")
     token_type: str = Field(default="Bearer", description="令牌类型")
     expires_at: int = Field(description="过期时间戳（秒）")

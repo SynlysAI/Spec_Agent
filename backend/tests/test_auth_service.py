@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime
+from datetime import timedelta
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from app.infra.repositories import InviteCodeRepository
 from app.infra.repositories import UserRepository
 from app.schemas.identity_runtime import InviteCodeRecord, UserRecord
+from app.services.auth_service import AuthService
 from app.services.auth_service import ensure_identity_indexes
 
 
@@ -149,6 +151,69 @@ class TestIdentityRepositories(unittest.TestCase):
         invite_collection.create_index.assert_any_call("invite_code", unique=True)
         invite_collection.create_index.assert_any_call("invite_id", unique=True)
         invite_collection.create_index.assert_any_call("expires_at")
+
+
+class TestAuthService(unittest.TestCase):
+    """验证认证服务的注册与登录流程。"""
+
+    @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    @patch("app.services.auth_service.UserRepository.save")
+    @patch("app.services.auth_service.InviteCodeRepository.increment_usage")
+    def test_register_with_valid_invite(
+        self,
+        increment_usage: MagicMock,
+        save_user: MagicMock,
+        find_user: MagicMock,
+        find_invite: MagicMock,
+    ) -> None:
+        """有效邀请码应允许注册并递增使用次数。"""
+        find_user.return_value = None
+        find_invite.return_value = InviteCodeRecord(
+            invite_id="invite_001",
+            invite_code="ABC12345",
+            role="user",
+            status="active",
+            expires_at=datetime.now() + timedelta(hours=1),
+            max_uses=1,
+            used_count=0,
+            created_by="u_admin_001",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+
+        result = AuthService.register("ABC12345", "alice", "Password123!")
+
+        self.assertEqual(result.username, "alice")
+        self.assertEqual(result.role, "user")
+        save_user.assert_called_once()
+        increment_usage.assert_called_once_with("invite_001")
+
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    @patch("app.services.auth_service.UserRepository.update_last_login")
+    def test_login_with_database_user(
+        self,
+        update_last_login: MagicMock,
+        find_by_username: MagicMock,
+    ) -> None:
+        """数据库用户应可通过账号密码登录。"""
+        find_by_username.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash=AuthService.hash_password("Password123!"),
+            role="user",
+            status="active",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+
+        login_data = AuthService.login("alice", "Password123!")
+
+        self.assertEqual(login_data.username, "alice")
+        self.assertTrue(login_data.access_token)
+        update_last_login.assert_called_once_with("u_user_001")
 
 
 if __name__ == "__main__":

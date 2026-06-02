@@ -1,25 +1,29 @@
-"""本地登录接口。"""
+"""认证接口。"""
 
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi import Depends
 from fastapi import Header
 from fastapi import HTTPException
 
-from app.core.auth import build_access_token
+from app.core.auth import get_current_user
 from app.core.auth import resolve_authenticated_username
-from app.core.auth import verify_local_credentials
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.schemas.auth import AuthStatusData
+from app.schemas.auth import CurrentUserData
 from app.schemas.auth import LoginData
 from app.schemas.auth import LoginRequest
+from app.schemas.auth import RegisterRequest
 from app.schemas.common import ApiResponse
+from app.services.auth_service import AuthService
 
 logger = get_logger("spec_agent.api.auth")
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+auth_service = AuthService()
 
 
 @router.get("/status", response_model=ApiResponse[AuthStatusData])
@@ -52,7 +56,7 @@ def get_auth_status(authorization: str | None = Header(default=None)) -> ApiResp
 
 @router.post("/login", response_model=ApiResponse[LoginData])
 def login(payload: LoginRequest) -> ApiResponse[LoginData]:
-    """执行本地账号密码登录。
+    """执行用户账号密码登录。
 
     Args:
         payload: 登录请求参数。
@@ -63,16 +67,81 @@ def login(payload: LoginRequest) -> ApiResponse[LoginData]:
     if not settings.auth_enabled:
         logger.warning("登录失败：当前服务未启用登录校验")
         raise HTTPException(status_code=400, detail="当前服务未启用登录校验")
-    if not verify_local_credentials(payload.username, payload.password):
-        logger.warning("登录失败：账号或密码错误，用户名=%s", payload.username)
-        raise HTTPException(status_code=401, detail="账号或密码错误")
-
-    token, expires_at = build_access_token(payload.username)
-    data = LoginData(
-        auth_enabled=True,
-        username=payload.username,
-        access_token=token,
-        token_type="Bearer",
-        expires_at=expires_at,
-    )
+    try:
+        data = auth_service.login(
+            username=payload.username.strip(),
+            password=payload.password,
+        )
+    except ValueError as exc:
+        logger.warning("登录失败：%s，用户名=%s", str(exc), payload.username)
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.post("/register", response_model=ApiResponse[CurrentUserData])
+def register(payload: RegisterRequest) -> ApiResponse[CurrentUserData]:
+    """执行邀请码注册。
+
+    Args:
+        payload: 注册请求参数。
+
+    Returns:
+        注册成功后的当前用户信息。
+    """
+    if not settings.auth_enabled:
+        logger.warning("注册失败：当前服务未启用登录校验")
+        raise HTTPException(status_code=400, detail="当前服务未启用登录校验")
+    try:
+        user = auth_service.register(
+            invite_code=payload.invite_code.strip(),
+            username=payload.username.strip(),
+            password=payload.password,
+        )
+    except ValueError as exc:
+        logger.warning("注册失败：%s，用户名=%s", str(exc), payload.username)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ApiResponse(
+        code=0,
+        message="ok",
+        data=CurrentUserData(
+            auth_enabled=True,
+            authenticated=True,
+            user_id=user.user_id,
+            username=user.username,
+            role=user.role,
+            status=user.status,
+        ),
+    )
+
+
+@router.get("/me", response_model=ApiResponse[CurrentUserData])
+def get_current_user_profile(
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[CurrentUserData]:
+    """获取当前登录用户信息。
+
+    Args:
+        current_user: 当前登录用户信息。
+
+    Returns:
+        当前用户信息；未登录时返回匿名状态。
+    """
+    if not current_user:
+        return ApiResponse(
+            code=0,
+            message="ok",
+            data=CurrentUserData(auth_enabled=settings.auth_enabled, authenticated=False),
+        )
+    return ApiResponse(
+        code=0,
+        message="ok",
+        data=CurrentUserData(
+            auth_enabled=True,
+            authenticated=True,
+            user_id=current_user["user_id"],
+            username=current_user["username"],
+            role=current_user["role"],
+            status="active",
+        ),
+    )

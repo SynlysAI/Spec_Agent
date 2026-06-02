@@ -151,6 +151,23 @@ class UserRepository:
         doc = get_users_collection().find_one({"username": username}, {"_id": 0})
         return UserRecord(**doc) if doc else None
 
+    @staticmethod
+    def update_last_login(user_id: str) -> None:
+        """更新用户最近登录时间。
+
+        Args:
+            user_id: 用户 ID。
+        """
+        get_users_collection().update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "last_login_at": datetime.now(),
+                    "updated_at": datetime.now(),
+                }
+            },
+        )
+
 
 class InviteCodeRepository:
     """邀请码仓储。"""
@@ -166,6 +183,34 @@ class InviteCodeRepository:
             {"invite_id": invite_record.invite_id},
             {"$set": invite_record.model_dump(mode="python")},
             upsert=True,
+        )
+
+    @staticmethod
+    def find_by_code(invite_code: str) -> InviteCodeRecord | None:
+        """按邀请码查询记录。
+
+        Args:
+            invite_code: 邀请码。
+
+        Returns:
+            命中的邀请码记录；若不存在则返回 None。
+        """
+        doc = get_invite_codes_collection().find_one({"invite_code": invite_code}, {"_id": 0})
+        return InviteCodeRecord(**doc) if doc else None
+
+    @staticmethod
+    def increment_usage(invite_id: str) -> None:
+        """递增邀请码使用次数。
+
+        Args:
+            invite_id: 邀请码 ID。
+        """
+        get_invite_codes_collection().update_one(
+            {"invite_id": invite_id},
+            {
+                "$inc": {"used_count": 1},
+                "$set": {"updated_at": datetime.now()},
+            },
         )
 
 

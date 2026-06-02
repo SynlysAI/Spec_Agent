@@ -1,4 +1,4 @@
-"""本地账号密码鉴权能力。"""
+"""访问令牌鉴权能力。"""
 
 from __future__ import annotations
 
@@ -74,36 +74,22 @@ def _parse_authorization_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def verify_local_credentials(username: str, password: str) -> bool:
-    """校验本地配置的用户名与密码。
+def build_access_token(user_id: str, username: str, role: str) -> tuple[str, int]:
+    """生成访问令牌。
 
     Args:
+        user_id: 用户 ID。
         username: 登录用户名。
-        password: 登录密码。
-
-    Returns:
-        账号密码是否匹配。
-    """
-    expected_username = settings.auth_username
-    expected_password = settings.auth_password
-    return hmac.compare_digest(username, expected_username) and hmac.compare_digest(
-        password,
-        expected_password,
-    )
-
-
-def build_access_token(username: str) -> tuple[str, int]:
-    """生成本地访问令牌。
-
-    Args:
-        username: 登录用户名。
+        role: 用户角色。
 
     Returns:
         访问令牌与过期时间戳。
     """
     expires_at = int(time.time()) + settings.auth_token_expire_hours * 3600
     payload = {
-        "sub": username,
+        "sub": user_id,
+        "username": username,
+        "role": role,
         "exp": expires_at,
         "iat": int(time.time()),
     }
@@ -139,16 +125,38 @@ def parse_access_token(token: str) -> dict[str, object]:
         raise HTTPException(status_code=401, detail="无效的登录凭证") from exc
 
     expires_at = int(payload.get("exp", 0))
-    username = str(payload.get("sub", ""))
-    if not username or username != settings.auth_username:
+    user_id = str(payload.get("sub", ""))
+    username = str(payload.get("username", ""))
+    role = str(payload.get("role", ""))
+    if not user_id or not username or role not in {"admin", "user"}:
         raise HTTPException(status_code=401, detail="无效的登录凭证")
     if expires_at <= int(time.time()):
         raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
     return payload
 
 
+def get_current_user(authorization: str | None = Header(default=None)) -> dict[str, str] | None:
+    """解析当前请求对应的登录用户。
+
+    Args:
+        authorization: 请求头中的 Authorization 值。
+
+    Returns:
+        当前登录用户信息；未启用登录时返回 `None`。
+    """
+    if not settings.auth_enabled:
+        return None
+    token = _parse_authorization_token(authorization)
+    payload = parse_access_token(token)
+    return {
+        "user_id": str(payload["sub"]),
+        "username": str(payload["username"]),
+        "role": str(payload["role"]),
+    }
+
+
 def resolve_authenticated_username(authorization: str | None) -> str | None:
-    """解析当前请求对应的登录用户名。
+    """兼容旧接口，解析当前请求对应的登录用户名。
 
     Args:
         authorization: 请求头中的 Authorization 值。
@@ -156,19 +164,31 @@ def resolve_authenticated_username(authorization: str | None) -> str | None:
     Returns:
         当前登录用户名；未启用登录时返回 `None`。
     """
-    if not settings.auth_enabled:
+    current_user = get_current_user(authorization)
+    if not current_user:
         return None
-    token = _parse_authorization_token(authorization)
-    payload = parse_access_token(token)
-    return str(payload["sub"])
+    return current_user["username"]
 
 
 def require_authenticated(authorization: str | None = Header(default=None)) -> None:
-    """要求当前请求已通过本地登录验证。
+    """要求当前请求已通过登录验证。
 
     Args:
         authorization: 请求头中的 Authorization 值。
     """
     if not settings.auth_enabled:
         return
-    resolve_authenticated_username(authorization)
+    get_current_user(authorization)
+
+
+def require_admin(authorization: str | None = Header(default=None)) -> None:
+    """要求当前请求具备管理员权限。
+
+    Args:
+        authorization: 请求头中的 Authorization 值。
+    """
+    if not settings.auth_enabled:
+        return
+    current_user = get_current_user(authorization)
+    if not current_user or current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="无管理员权限")
