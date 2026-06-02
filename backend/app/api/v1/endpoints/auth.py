@@ -8,9 +8,11 @@ from fastapi import Header
 from fastapi import HTTPException
 
 from app.core.auth import get_current_user
+from app.core.auth import get_current_user_optional
 from app.core.auth import resolve_authenticated_username
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.infra.repositories import UserRepository
 from app.schemas.auth import AuthStatusData
 from app.schemas.auth import CurrentUserData
 from app.schemas.auth import LoginData
@@ -117,7 +119,7 @@ def register(payload: RegisterRequest) -> ApiResponse[CurrentUserData]:
 
 @router.get("/me", response_model=ApiResponse[CurrentUserData])
 def get_current_user_profile(
-    current_user: dict[str, str] | None = Depends(get_current_user),
+    current_user: dict[str, str] | None = Depends(get_current_user_optional),
 ) -> ApiResponse[CurrentUserData]:
     """获取当前登录用户信息。
 
@@ -133,6 +135,13 @@ def get_current_user_profile(
             message="ok",
             data=CurrentUserData(auth_enabled=settings.auth_enabled, authenticated=False),
         )
+    user_record = UserRepository.find_by_user_id(current_user["user_id"])
+    if not user_record:
+        return ApiResponse(
+            code=0,
+            message="ok",
+            data=CurrentUserData(auth_enabled=settings.auth_enabled, authenticated=False),
+        )
     return ApiResponse(
         code=0,
         message="ok",
@@ -142,6 +151,6 @@ def get_current_user_profile(
             user_id=current_user["user_id"],
             username=current_user["username"],
             role=current_user["role"],
-            status="active",
+            status=user_record.status,
         ),
     )

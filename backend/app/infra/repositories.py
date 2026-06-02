@@ -152,6 +152,19 @@ class UserRepository:
         return UserRecord(**doc) if doc else None
 
     @staticmethod
+    def find_by_user_id(user_id: str) -> UserRecord | None:
+        """按用户 ID 查询用户记录。
+
+        Args:
+            user_id: 用户 ID。
+
+        Returns:
+            命中的用户记录；若不存在则返回 None。
+        """
+        doc = get_users_collection().find_one({"user_id": user_id}, {"_id": 0})
+        return UserRecord(**doc) if doc else None
+
+    @staticmethod
     def update_last_login(user_id: str) -> None:
         """更新用户最近登录时间。
 

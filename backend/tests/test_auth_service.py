@@ -8,6 +8,11 @@ from datetime import timedelta
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api.v1.endpoints.auth import router as auth_router
+from app.core.auth import get_current_user_optional
 from app.infra.repositories import InviteCodeRepository
 from app.infra.repositories import UserRepository
 from app.schemas.identity_runtime import InviteCodeRecord, UserRecord
@@ -214,6 +219,66 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(login_data.username, "alice")
         self.assertTrue(login_data.access_token)
         update_last_login.assert_called_once_with("u_user_001")
+
+
+class TestAuthEndpoints(unittest.TestCase):
+    """验证认证接口行为。"""
+
+    @staticmethod
+    def _create_client() -> TestClient:
+        """创建仅包含认证路由的测试客户端。"""
+        app = FastAPI()
+        app.include_router(auth_router)
+        return TestClient(app)
+
+    @patch("app.api.v1.endpoints.auth.settings.auth_enabled", True)
+    def test_get_current_user_profile_without_token_returns_anonymous(self) -> None:
+        """未携带令牌时 /auth/me 应返回匿名态而非 401。"""
+        client = self._create_client()
+
+        response = client.get("/auth/me")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["code"], 0)
+        self.assertFalse(payload["data"]["authenticated"])
+        self.assertIsNone(payload["data"]["user_id"])
+
+    @patch("app.api.v1.endpoints.auth.UserRepository.find_by_user_id")
+    @patch("app.api.v1.endpoints.auth.settings.auth_enabled", True)
+    def test_get_current_user_profile_returns_database_status(
+        self,
+        find_by_user_id: MagicMock,
+    ) -> None:
+        """已登录用户的 /auth/me 应返回数据库中的真实状态。"""
+        now = datetime.now()
+        find_by_user_id.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash="hashed",
+            role="user",
+            status="disabled",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+
+        app = FastAPI()
+        app.include_router(auth_router)
+        app.dependency_overrides[get_current_user_optional] = lambda: {
+            "user_id": "u_user_001",
+            "username": "alice",
+            "role": "user",
+        }
+        client = TestClient(app)
+
+        response = client.get("/auth/me")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["status"], "disabled")
+        find_by_user_id.assert_called_once_with("u_user_001")
 
 
 if __name__ == "__main__":

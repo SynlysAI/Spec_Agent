@@ -155,6 +155,28 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict[s
     }
 
 
+def get_current_user_optional(authorization: str | None = Header(default=None)) -> dict[str, str] | None:
+    """以可选方式解析当前请求对应的登录用户。
+
+    Args:
+        authorization: 请求头中的 Authorization 值。
+
+    Returns:
+        当前登录用户信息；未启用登录或未携带令牌时返回 `None`。
+    """
+    if not settings.auth_enabled:
+        return None
+    if not authorization:
+        return None
+    token = _parse_authorization_token(authorization)
+    payload = parse_access_token(token)
+    return {
+        "user_id": str(payload["sub"]),
+        "username": str(payload["username"]),
+        "role": str(payload["role"]),
+    }
+
+
 def resolve_authenticated_username(authorization: str | None) -> str | None:
     """兼容旧接口，解析当前请求对应的登录用户名。
 
