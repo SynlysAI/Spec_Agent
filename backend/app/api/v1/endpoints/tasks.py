@@ -32,6 +32,7 @@ def list_tasks(
     page_size: int = 20,
     status: TaskStatus | None = None,
     task_type: TaskKind | None = None,
+    current_user: dict[str, str] | None = Depends(get_current_user),
 ) -> ApiResponse[TaskListData]:
     """分页查询任务列表。
 
@@ -44,7 +45,13 @@ def list_tasks(
     Returns:
         任务分页列表响应。
     """
-    data = task_service.list_tasks(page=page, page_size=page_size, status=status, task_type=task_type)
+    data = task_service.list_tasks(
+        page=page,
+        page_size=page_size,
+        status=status,
+        task_type=task_type,
+        current_user=current_user,
+    )
     return ApiResponse(code=0, message="ok", data=data)
 
 
@@ -198,14 +205,14 @@ def create_lcms_task(
 
 
 @router.get("/{task_id}", response_model=ApiResponse[TaskStatusData])
-def get_task_status(task_id: str) -> ApiResponse[TaskStatusData]:
+def get_task_status(task_id: str, current_user: dict[str, str] | None = Depends(get_current_user)) -> ApiResponse[TaskStatusData]:
     """查询任务状态。
 
     函数名称: get_task_status
     参数说明:
     - task_id: 任务ID。
     """
-    data = task_service.get_task_status(task_id)
+    data = task_service.get_task_status(task_id, current_user=current_user)
     if not data:
         logger.warning("查询任务状态失败, task_id 不存在: %s", task_id)
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -213,14 +220,14 @@ def get_task_status(task_id: str) -> ApiResponse[TaskStatusData]:
 
 
 @router.get("/{task_id}/result", response_model=ApiResponse[TaskResultData])
-def get_task_result(task_id: str) -> ApiResponse[TaskResultData]:
+def get_task_result(task_id: str, current_user: dict[str, str] | None = Depends(get_current_user)) -> ApiResponse[TaskResultData]:
     """查询任务结果。
 
     函数名称: get_task_result
     参数说明:
     - task_id: 任务ID。
     """
-    payload = task_service.get_task_result(task_id)
+    payload = task_service.get_task_result(task_id, current_user=current_user)
     if not payload:
         logger.warning("查询任务结果失败, task_id 不存在: %s", task_id)
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -228,7 +235,10 @@ def get_task_result(task_id: str) -> ApiResponse[TaskResultData]:
 
 
 @router.get("/{task_id}/artifacts", response_model=ApiResponse[TaskArtifactsData])
-def get_task_artifacts(task_id: str) -> ApiResponse[TaskArtifactsData]:
+def get_task_artifacts(
+    task_id: str,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[TaskArtifactsData]:
     """查询任务输出产物列表。
 
     Args:
@@ -237,5 +247,8 @@ def get_task_artifacts(task_id: str) -> ApiResponse[TaskArtifactsData]:
     Returns:
         任务产物列表响应。
     """
-    data = task_service.list_task_artifacts(task_id)
+    data = task_service.list_task_artifacts(task_id, current_user=current_user)
+    if not data:
+        logger.warning("查询任务产物失败, task_id 不存在或无权限: %s", task_id)
+        raise HTTPException(status_code=404, detail="任务不存在")
     return ApiResponse(code=0, message="ok", data=data)

@@ -92,25 +92,12 @@ class TaskService:
             )
             return {"task_id": task_id, "task_type": task_type, "status": "FAILED"}
 
-    @staticmethod
-    def get_task_status(task_id: str) -> TaskStatusData | None:
-        """获取任务状态。
-
-        函数名称: get_task_status
-        参数说明:
-        - task_id: 任务ID。
-        """
-        task_record = TaskRepository.find_by_task_id(task_id)
-        if not task_record:
-            return None
-        return TaskStatusData(**task_record.model_dump(mode="python"))
-
-    @staticmethod
     def list_tasks(
         page: int = 1,
         page_size: int = 20,
         status: TaskStatus | None = None,
         task_type: TaskKind | None = None,
+        current_user: dict[str, str] | None = None,
     ) -> TaskListData:
         """分页查询任务列表。
 
@@ -119,32 +106,36 @@ class TaskService:
             page_size: 每页数量。
             status: 可选任务状态过滤条件。
             task_type: 可选任务类型过滤条件。
+            current_user: 当前登录用户上下文。
 
         Returns:
             任务分页列表结果。
         """
         safe_page = max(page, 1)
         safe_size = min(max(page_size, 1), 100)
-        query: dict[str, Any] = {}
-        if status:
-            query["status"] = status
-        if task_type:
-            query["task_type"] = task_type
+        query = TaskService._build_task_query(
+            status=status,
+            task_type=task_type,
+            current_user=current_user,
+        )
 
         total, task_records = TaskRepository.list_paginated(query=query, page=safe_page, page_size=safe_size)
         items = [TaskListItem(**record.model_dump(mode="python")) for record in task_records]
         return TaskListData(total=total, page=safe_page, page_size=safe_size, items=items)
 
     @staticmethod
-    def get_task_result(task_id: str) -> TaskResultData | None:
+    def get_task_result(task_id: str, current_user: dict[str, str] | None = None) -> TaskResultData | None:
         """获取任务结果。
 
         函数名称: get_task_result
         参数说明:
         - task_id: 任务ID。
+        - current_user: 当前登录用户上下文。
         """
         task_record = TaskRepository.find_by_task_id(task_id)
         if not task_record:
+            return None
+        if not TaskService._can_access_task(task_record, current_user):
             return None
 
         status = task_record.status
@@ -179,15 +170,22 @@ class TaskService:
         return TaskResultData(task_id=task_id, status=status, result=payload)
 
     @staticmethod
-    def list_task_artifacts(task_id: str) -> TaskArtifactsData:
+    def list_task_artifacts(task_id: str, current_user: dict[str, str] | None = None) -> TaskArtifactsData | None:
         """查询任务输出产物列表。
 
         Args:
             task_id: 任务 ID。
+            current_user: 当前登录用户上下文。
 
         Returns:
-            任务产物列表对象。
+            任务产物列表对象；无权限时返回 `None`。
         """
+        task_record = TaskRepository.find_by_task_id(task_id)
+        if not task_record:
+            return None
+        if not TaskService._can_access_task(task_record, current_user):
+            return None
+
         output_dir = settings.outputs_root / "tasks" / task_id
         if not output_dir.exists() or not output_dir.is_dir():
             return TaskArtifactsData(task_id=task_id, items=[])
@@ -216,6 +214,66 @@ class TaskService:
                 )
             )
         return TaskArtifactsData(task_id=task_id, items=items)
+
+    @staticmethod
+    def get_task_status(task_id: str, current_user: dict[str, str] | None = None) -> TaskStatusData | None:
+        """获取任务状态。
+
+        Args:
+            task_id: 任务 ID。
+            current_user: 当前登录用户上下文。
+
+        Returns:
+            任务状态；无权限时返回 `None`。
+        """
+        task_record = TaskRepository.find_by_task_id(task_id)
+        if not task_record:
+            return None
+        if not TaskService._can_access_task(task_record, current_user):
+            return None
+        return TaskStatusData(**task_record.model_dump(mode="python"))
+
+    @staticmethod
+    def _build_task_query(
+        status: TaskStatus | None,
+        task_type: TaskKind | None,
+        current_user: dict[str, str] | None,
+    ) -> dict[str, Any]:
+        """构建按用户可见范围过滤后的任务查询条件。
+
+        Args:
+            status: 可选任务状态过滤条件。
+            task_type: 可选任务类型过滤条件。
+            current_user: 当前登录用户上下文。
+
+        Returns:
+            任务查询条件字典。
+        """
+        query: dict[str, Any] = {}
+        if status:
+            query["status"] = status
+        if task_type:
+            query["task_type"] = task_type
+        if current_user and current_user.get("role") != "admin":
+            query["created_by"] = current_user["user_id"]
+        return query
+
+    @staticmethod
+    def _can_access_task(task_record: TaskRecord, current_user: dict[str, str] | None) -> bool:
+        """判断当前用户是否可访问任务及其派生产物。
+
+        Args:
+            task_record: 任务记录。
+            current_user: 当前登录用户上下文。
+
+        Returns:
+            是否有权限访问。
+        """
+        if not current_user:
+            return True
+        if current_user.get("role") == "admin":
+            return True
+        return task_record.created_by == current_user.get("user_id")
 
     @staticmethod
     def _validate_input_source(input_data: dict[str, Any]) -> None:
