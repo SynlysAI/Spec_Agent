@@ -238,6 +238,21 @@ class InviteCodeRepository:
         )
         return InviteCodeRecord(**doc) if doc else None
 
+    @staticmethod
+    def rollback_usage(invite_id: str) -> None:
+        """回滚邀请码使用次数。
+
+        Args:
+            invite_id: 邀请码 ID。
+        """
+        get_invite_codes_collection().update_one(
+            {"invite_id": invite_id},
+            {
+                "$inc": {"used_count": -1},
+                "$set": {"updated_at": datetime.now()},
+            },
+        )
+
 
 class AcceptanceRunRepository:
     """验收批次仓储。"""

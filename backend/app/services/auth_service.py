@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import secrets
 from datetime import datetime
 from uuid import uuid4
 
@@ -13,6 +14,9 @@ from app.infra.repositories import InviteCodeRepository
 from app.infra.repositories import UserRepository
 from app.schemas.auth import LoginData
 from app.schemas.identity_runtime import UserRecord
+
+PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 260000
 
 
 def ensure_identity_indexes() -> None:
@@ -39,9 +43,19 @@ class AuthService:
             password: 明文密码。
 
         Returns:
-            SHA-256 哈希结果。
+            PBKDF2-SHA256 密码哈希结果。
         """
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+        salt = secrets.token_bytes(16)
+        password_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            PASSWORD_HASH_ITERATIONS,
+        )
+        return (
+            f"{PASSWORD_HASH_ALGORITHM}${PASSWORD_HASH_ITERATIONS}$"
+            f"{salt.hex()}${password_hash.hex()}"
+        )
 
     @staticmethod
     def verify_password(password: str, password_hash: str) -> bool:
@@ -54,7 +68,23 @@ class AuthService:
         Returns:
             密码是否匹配。
         """
-        return hmac.compare_digest(AuthService.hash_password(password), password_hash)
+        if password_hash.startswith(f"{PASSWORD_HASH_ALGORITHM}$"):
+            try:
+                _, iterations_raw, salt_hex, expected_hash = password_hash.split("$", 3)
+                iterations = int(iterations_raw)
+                salt = bytes.fromhex(salt_hex)
+            except (ValueError, TypeError):
+                return False
+            actual_hash = hashlib.pbkdf2_hmac(
+                "sha256",
+                password.encode("utf-8"),
+                salt,
+                iterations,
+            ).hex()
+            return hmac.compare_digest(actual_hash, expected_hash)
+
+        legacy_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(legacy_hash, password_hash)
 
     @staticmethod
     def register(invite_code: str, username: str, password: str) -> UserRecord:
@@ -95,7 +125,11 @@ class AuthService:
             last_login_at=None,
             created_by=invite.created_by,
         )
-        UserRepository.save(user_record)
+        try:
+            UserRepository.save(user_record)
+        except Exception:
+            InviteCodeRepository.rollback_usage(invite.invite_id)
+            raise
         return user_record
 
     @staticmethod

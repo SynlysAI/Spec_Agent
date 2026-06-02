@@ -141,6 +141,38 @@ class TestIdentityRepositories(unittest.TestCase):
         _, kwargs = collection.update_one.call_args
         self.assertTrue(kwargs["upsert"])
 
+    @patch("app.infra.repositories.get_invite_codes_collection")
+    def test_invite_code_repository_consume_available_code_uses_atomic_conditions(
+        self,
+        get_invite_codes_collection: MagicMock,
+    ) -> None:
+        """消费邀请码时应使用原子条件更新。"""
+        collection = MagicMock()
+        get_invite_codes_collection.return_value = collection
+        now = datetime.now()
+        collection.find_one_and_update.return_value = {
+            "invite_id": "invite_001",
+            "invite_code": "ABC12345",
+            "role": "user",
+            "status": "active",
+            "expires_at": now + timedelta(hours=1),
+            "max_uses": 1,
+            "used_count": 1,
+            "created_by": "u_admin_001",
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        result = InviteCodeRepository.consume_available_code("ABC12345", now)
+
+        self.assertIsInstance(result, InviteCodeRecord)
+        query, update = collection.find_one_and_update.call_args.args[:2]
+        self.assertEqual(query["invite_code"], "ABC12345")
+        self.assertEqual(query["status"], "active")
+        self.assertEqual(query["expires_at"], {"$gt": now})
+        self.assertEqual(query["$expr"], {"$lt": ["$used_count", "$max_uses"]})
+        self.assertEqual(update["$inc"], {"used_count": 1})
+
     @patch("app.services.auth_service.get_invite_codes_collection")
     @patch("app.services.auth_service.get_users_collection")
     def test_ensure_identity_indexes_creates_required_indexes(
@@ -168,12 +200,22 @@ class TestAuthService(unittest.TestCase):
 
     def test_hash_password_and_verify_password(self) -> None:
         """密码哈希与校验方法应返回正确结果。"""
-        password_hash = AuthService.hash_password("Password123!")
+        first_hash = AuthService.hash_password("Password123!")
+        second_hash = AuthService.hash_password("Password123!")
 
-        self.assertTrue(password_hash)
-        self.assertNotEqual(password_hash, "Password123!")
-        self.assertTrue(AuthService.verify_password("Password123!", password_hash))
-        self.assertFalse(AuthService.verify_password("WrongPassword!", password_hash))
+        self.assertTrue(first_hash.startswith("pbkdf2_sha256$"))
+        self.assertTrue(second_hash.startswith("pbkdf2_sha256$"))
+        self.assertNotEqual(first_hash, second_hash)
+        self.assertTrue(AuthService.verify_password("Password123!", first_hash))
+        self.assertFalse(AuthService.verify_password("WrongPassword!", first_hash))
+
+    def test_verify_password_supports_legacy_sha256_hash(self) -> None:
+        """密码校验应兼容旧 SHA-256 哈希格式。"""
+        legacy_hash = (
+            "a109e36947ad56de1dca1cc49f0ef8ac9ad9a7b1aa0df41fb3c4cb73c1ff01ea"
+        )
+
+        self.assertTrue(AuthService.verify_password("Password123!", legacy_hash))
 
     @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
     @patch("app.services.auth_service.UserRepository.find_by_username")
@@ -205,6 +247,38 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(result.role, "user")
         save_user.assert_called_once()
         consume_invite.assert_called_once()
+
+    @patch("app.services.auth_service.InviteCodeRepository.rollback_usage")
+    @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    @patch("app.services.auth_service.UserRepository.save")
+    def test_register_rolls_back_invite_usage_when_save_fails(
+        self,
+        save_user: MagicMock,
+        find_user: MagicMock,
+        consume_invite: MagicMock,
+        rollback_usage: MagicMock,
+    ) -> None:
+        """用户保存失败时应回滚已消费的邀请码次数。"""
+        find_user.return_value = None
+        consume_invite.return_value = InviteCodeRecord(
+            invite_id="invite_001",
+            invite_code="ABC12345",
+            role="user",
+            status="active",
+            expires_at=datetime.now() + timedelta(hours=1),
+            max_uses=1,
+            used_count=0,
+            created_by="u_admin_001",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        save_user.side_effect = RuntimeError("save failed")
+
+        with self.assertRaisesRegex(RuntimeError, "save failed"):
+            AuthService.register("ABC12345", "alice", "Password123!")
+
+        rollback_usage.assert_called_once_with("invite_001")
 
     @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
     @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
