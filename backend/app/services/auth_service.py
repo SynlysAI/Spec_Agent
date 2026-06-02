@@ -68,19 +68,22 @@ class AuthService:
         Returns:
             新创建的用户记录。
         """
-        invite = InviteCodeRepository.find_by_code(invite_code)
-        if not invite:
-            raise ValueError("邀请码不存在")
-        if invite.status != "active":
-            raise ValueError("邀请码不可用")
-        if invite.expires_at <= datetime.now():
-            raise ValueError("邀请码已过期")
-        if invite.used_count >= invite.max_uses:
-            raise ValueError("邀请码已用尽")
         if UserRepository.find_by_username(username):
             raise ValueError("用户名已存在")
-
         now = datetime.now()
+        invite = InviteCodeRepository.consume_available_code(invite_code, now)
+        if not invite:
+            original_invite = InviteCodeRepository.find_by_code(invite_code)
+            if not original_invite:
+                raise ValueError("邀请码不存在")
+            if original_invite.status != "active":
+                raise ValueError("邀请码不可用")
+            if original_invite.expires_at <= now:
+                raise ValueError("邀请码已过期")
+            if original_invite.used_count >= original_invite.max_uses:
+                raise ValueError("邀请码已用尽")
+            raise ValueError("邀请码不可用")
+
         user_record = UserRecord(
             user_id=f"u_{uuid4().hex[:12]}",
             username=username,
@@ -93,7 +96,6 @@ class AuthService:
             created_by=invite.created_by,
         )
         UserRepository.save(user_record)
-        InviteCodeRepository.increment_usage(invite.invite_id)
         return user_record
 
     @staticmethod

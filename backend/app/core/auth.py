@@ -12,6 +12,7 @@ from fastapi import Header
 from fastapi import HTTPException
 
 from app.core.config import settings
+from app.infra.repositories import UserRepository
 
 
 AUTH_SCHEME = "Bearer"
@@ -135,6 +136,28 @@ def parse_access_token(token: str) -> dict[str, object]:
     return payload
 
 
+def _build_current_user_context(user_id: str) -> dict[str, str]:
+    """按用户 ID 构建真实的当前用户上下文。
+
+    Args:
+        user_id: Token 中的用户 ID。
+
+    Returns:
+        来自数据库的真实用户上下文。
+    """
+    user_record = UserRepository.find_by_user_id(user_id)
+    if not user_record:
+        raise HTTPException(status_code=401, detail="无效的登录凭证")
+    if user_record.status != "active":
+        raise HTTPException(status_code=401, detail="当前账号已被禁用")
+    return {
+        "user_id": user_record.user_id,
+        "username": user_record.username,
+        "role": user_record.role,
+        "status": user_record.status,
+    }
+
+
 def get_current_user(authorization: str | None = Header(default=None)) -> dict[str, str] | None:
     """解析当前请求对应的登录用户。
 
@@ -148,11 +171,7 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict[s
         return None
     token = _parse_authorization_token(authorization)
     payload = parse_access_token(token)
-    return {
-        "user_id": str(payload["sub"]),
-        "username": str(payload["username"]),
-        "role": str(payload["role"]),
-    }
+    return _build_current_user_context(str(payload["sub"]))
 
 
 def get_current_user_optional(authorization: str | None = Header(default=None)) -> dict[str, str] | None:
@@ -170,11 +189,7 @@ def get_current_user_optional(authorization: str | None = Header(default=None)) 
         return None
     token = _parse_authorization_token(authorization)
     payload = parse_access_token(token)
-    return {
-        "user_id": str(payload["sub"]),
-        "username": str(payload["username"]),
-        "role": str(payload["role"]),
-    }
+    return _build_current_user_context(str(payload["sub"]))
 
 
 def resolve_authenticated_username(authorization: str | None) -> str | None:

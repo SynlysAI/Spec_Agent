@@ -212,19 +212,31 @@ class InviteCodeRepository:
         return InviteCodeRecord(**doc) if doc else None
 
     @staticmethod
-    def increment_usage(invite_id: str) -> None:
-        """递增邀请码使用次数。
+    def consume_available_code(invite_code: str, now: datetime) -> InviteCodeRecord | None:
+        """原子消费一个仍可使用的邀请码。
 
         Args:
-            invite_id: 邀请码 ID。
+            invite_code: 邀请码。
+            now: 当前时间。
+
+        Returns:
+            消费成功后的邀请码记录；若不可用则返回 None。
         """
-        get_invite_codes_collection().update_one(
-            {"invite_id": invite_id},
+        doc = get_invite_codes_collection().find_one_and_update(
+            {
+                "invite_code": invite_code,
+                "status": "active",
+                "expires_at": {"$gt": now},
+                "$expr": {"$lt": ["$used_count", "$max_uses"]},
+            },
             {
                 "$inc": {"used_count": 1},
                 "$set": {"updated_at": datetime.now()},
             },
+            projection={"_id": 0},
+            return_document=True,
         )
+        return InviteCodeRecord(**doc) if doc else None
 
 
 class AcceptanceRunRepository:

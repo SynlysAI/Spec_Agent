@@ -9,10 +9,14 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from fastapi import FastAPI
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.v1.endpoints.auth import router as auth_router
+from app.core.auth import build_access_token
+from app.core.auth import get_current_user
 from app.core.auth import get_current_user_optional
+from app.core.auth import require_admin
 from app.infra.repositories import InviteCodeRepository
 from app.infra.repositories import UserRepository
 from app.schemas.identity_runtime import InviteCodeRecord, UserRecord
@@ -161,20 +165,18 @@ class TestIdentityRepositories(unittest.TestCase):
 class TestAuthService(unittest.TestCase):
     """验证认证服务的注册与登录流程。"""
 
-    @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
+    @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
     @patch("app.services.auth_service.UserRepository.find_by_username")
     @patch("app.services.auth_service.UserRepository.save")
-    @patch("app.services.auth_service.InviteCodeRepository.increment_usage")
     def test_register_with_valid_invite(
         self,
-        increment_usage: MagicMock,
         save_user: MagicMock,
         find_user: MagicMock,
-        find_invite: MagicMock,
+        consume_invite: MagicMock,
     ) -> None:
-        """有效邀请码应允许注册并递增使用次数。"""
+        """有效邀请码应允许注册并原子消费使用次数。"""
         find_user.return_value = None
-        find_invite.return_value = InviteCodeRecord(
+        consume_invite.return_value = InviteCodeRecord(
             invite_id="invite_001",
             invite_code="ABC12345",
             role="user",
@@ -192,7 +194,94 @@ class TestAuthService(unittest.TestCase):
         self.assertEqual(result.username, "alice")
         self.assertEqual(result.role, "user")
         save_user.assert_called_once()
-        increment_usage.assert_called_once_with("invite_001")
+        consume_invite.assert_called_once()
+
+    @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
+    @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    def test_register_with_expired_invite_raises_error(
+        self,
+        find_user: MagicMock,
+        consume_invite: MagicMock,
+        find_invite: MagicMock,
+    ) -> None:
+        """邀请码已过期时注册应失败。"""
+        now = datetime.now()
+        find_user.return_value = None
+        consume_invite.return_value = None
+        find_invite.return_value = InviteCodeRecord(
+            invite_id="invite_001",
+            invite_code="ABC12345",
+            role="user",
+            status="active",
+            expires_at=now - timedelta(seconds=1),
+            max_uses=1,
+            used_count=0,
+            created_by="u_admin_001",
+            created_at=now,
+            updated_at=now,
+        )
+
+        with self.assertRaisesRegex(ValueError, "邀请码已过期"):
+            AuthService.register("ABC12345", "alice", "Password123!")
+
+    @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
+    @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    def test_register_with_unavailable_invite_raises_error(
+        self,
+        find_user: MagicMock,
+        consume_invite: MagicMock,
+        find_invite: MagicMock,
+    ) -> None:
+        """邀请码不可用或已用尽时注册应失败。"""
+        now = datetime.now()
+        find_user.return_value = None
+        consume_invite.return_value = None
+        find_invite.return_value = InviteCodeRecord(
+            invite_id="invite_001",
+            invite_code="ABC12345",
+            role="user",
+            status="disabled",
+            expires_at=now + timedelta(hours=1),
+            max_uses=1,
+            used_count=0,
+            created_by="u_admin_001",
+            created_at=now,
+            updated_at=now,
+        )
+
+        with self.assertRaisesRegex(ValueError, "邀请码不可用"):
+            AuthService.register("ABC12345", "alice", "Password123!")
+
+    @patch("app.services.auth_service.InviteCodeRepository.find_by_code")
+    @patch("app.services.auth_service.InviteCodeRepository.consume_available_code")
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    def test_register_with_used_up_invite_raises_error(
+        self,
+        find_user: MagicMock,
+        consume_invite: MagicMock,
+        find_invite: MagicMock,
+    ) -> None:
+        """邀请码已用尽时注册应失败。"""
+        now = datetime.now()
+        find_user.return_value = None
+        consume_invite.return_value = None
+        find_invite.return_value = InviteCodeRecord(
+            invite_id="invite_001",
+            invite_code="ABC12345",
+            role="user",
+            status="active",
+            expires_at=now + timedelta(hours=1),
+            max_uses=1,
+            used_count=1,
+            created_by="u_admin_001",
+            created_at=now,
+            updated_at=now,
+        )
+
+        with self.assertRaisesRegex(ValueError, "邀请码已用尽"):
+            AuthService.register("ABC12345", "alice", "Password123!")
 
     @patch("app.services.auth_service.UserRepository.find_by_username")
     @patch("app.services.auth_service.UserRepository.update_last_login")
@@ -220,6 +309,127 @@ class TestAuthService(unittest.TestCase):
         self.assertTrue(login_data.access_token)
         update_last_login.assert_called_once_with("u_user_001")
 
+    @patch("app.services.auth_service.UserRepository.find_by_username")
+    def test_login_with_disabled_user_raises_error(
+        self,
+        find_by_username: MagicMock,
+    ) -> None:
+        """禁用用户登录应失败。"""
+        find_by_username.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash=AuthService.hash_password("Password123!"),
+            role="user",
+            status="disabled",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+
+        with self.assertRaisesRegex(ValueError, "当前账号已被禁用"):
+            AuthService.login("alice", "Password123!")
+
+
+class TestAuthContext(unittest.TestCase):
+    """验证认证上下文解析与权限控制。"""
+
+    @staticmethod
+    def _build_authorization(user_id: str = "u_user_001", username: str = "alice", role: str = "user") -> str:
+        """构造 Bearer 认证头。"""
+        token, _ = build_access_token(user_id, username, role)
+        return f"Bearer {token}"
+
+    @patch("app.infra.repositories.UserRepository.find_by_user_id")
+    @patch("app.core.auth.settings.auth_enabled", True)
+    def test_get_current_user_uses_database_role_and_status(
+        self,
+        find_by_user_id: MagicMock,
+    ) -> None:
+        """当前用户上下文应以数据库中的真实角色与状态为准。"""
+        now = datetime.now()
+        find_by_user_id.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice-db",
+            password_hash="hashed",
+            role="admin",
+            status="active",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+
+        current_user = get_current_user(self._build_authorization())
+
+        self.assertEqual(current_user["username"], "alice-db")
+        self.assertEqual(current_user["role"], "admin")
+        self.assertEqual(current_user["status"], "active")
+
+    @patch("app.infra.repositories.UserRepository.find_by_user_id")
+    @patch("app.core.auth.settings.auth_enabled", True)
+    def test_get_current_user_rejects_missing_database_user(
+        self,
+        find_by_user_id: MagicMock,
+    ) -> None:
+        """数据库不存在对应用户时应拒绝当前认证。"""
+        find_by_user_id.return_value = None
+
+        with self.assertRaises(HTTPException) as context:
+            get_current_user(self._build_authorization())
+
+        self.assertEqual(context.exception.status_code, 401)
+
+    @patch("app.infra.repositories.UserRepository.find_by_user_id")
+    @patch("app.core.auth.settings.auth_enabled", True)
+    def test_get_current_user_rejects_disabled_user(
+        self,
+        find_by_user_id: MagicMock,
+    ) -> None:
+        """数据库中的禁用用户应被拒绝访问。"""
+        now = datetime.now()
+        find_by_user_id.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash="hashed",
+            role="user",
+            status="disabled",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            get_current_user(self._build_authorization())
+
+        self.assertEqual(context.exception.status_code, 401)
+
+    @patch("app.infra.repositories.UserRepository.find_by_user_id")
+    @patch("app.core.auth.settings.auth_enabled", True)
+    def test_require_admin_rejects_normal_user_context(
+        self,
+        find_by_user_id: MagicMock,
+    ) -> None:
+        """普通用户上下文访问管理员依赖时应被拒绝。"""
+        now = datetime.now()
+        find_by_user_id.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash="hashed",
+            role="user",
+            status="active",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            require_admin(self._build_authorization())
+
+        self.assertEqual(context.exception.status_code, 403)
+
 
 class TestAuthEndpoints(unittest.TestCase):
     """验证认证接口行为。"""
@@ -244,32 +454,18 @@ class TestAuthEndpoints(unittest.TestCase):
         self.assertFalse(payload["data"]["authenticated"])
         self.assertIsNone(payload["data"]["user_id"])
 
-    @patch("app.api.v1.endpoints.auth.UserRepository.find_by_user_id")
     @patch("app.api.v1.endpoints.auth.settings.auth_enabled", True)
     def test_get_current_user_profile_returns_database_status(
         self,
-        find_by_user_id: MagicMock,
     ) -> None:
         """已登录用户的 /auth/me 应返回数据库中的真实状态。"""
-        now = datetime.now()
-        find_by_user_id.return_value = UserRecord(
-            user_id="u_user_001",
-            username="alice",
-            password_hash="hashed",
-            role="user",
-            status="disabled",
-            created_at=now,
-            updated_at=now,
-            last_login_at=None,
-            created_by="u_admin_001",
-        )
-
         app = FastAPI()
         app.include_router(auth_router)
         app.dependency_overrides[get_current_user_optional] = lambda: {
             "user_id": "u_user_001",
             "username": "alice",
             "role": "user",
+            "status": "disabled",
         }
         client = TestClient(app)
 
@@ -278,7 +474,6 @@ class TestAuthEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["data"]["status"], "disabled")
-        find_by_user_id.assert_called_once_with("u_user_001")
 
 
 if __name__ == "__main__":
