@@ -62,6 +62,26 @@ def get_files_collection() -> Collection:
     return get_database()["files"]
 
 
+def get_users_collection() -> Collection:
+    """获取 users 集合。
+
+    函数名称: get_users_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["users"]
+
+
+def get_invite_codes_collection() -> Collection:
+    """获取 invite_codes 集合。
+
+    函数名称: get_invite_codes_collection
+    参数说明:
+    - 无。
+    """
+    return get_database()["invite_codes"]
+
+
 def get_acceptance_runs_collection() -> Collection:
     """获取 acceptance_runs 集合。
 

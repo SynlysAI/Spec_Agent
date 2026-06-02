@@ -49,6 +49,13 @@ class Settings:
         self.auth_password: str = os.getenv("AUTH_PASSWORD", "admin123456")
         self.auth_secret: str = os.getenv("AUTH_SECRET", "")
         self.auth_token_expire_hours: int = int(os.getenv("AUTH_TOKEN_EXPIRE_HOURS", "12"))
+        self.auth_bootstrap_enabled: bool = os.getenv("AUTH_BOOTSTRAP_ENABLED", "true").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.auth_invite_default_hours: int = int(os.getenv("AUTH_INVITE_DEFAULT_HOURS", "72"))
 
         # MongoDB 配置
         self.mongodb_host: str = os.getenv("MONGODB_HOST", "127.0.0.1")

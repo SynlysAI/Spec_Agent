@@ -13,6 +13,14 @@ class LoginRequest(BaseModel):
     password: str = Field(description="登录密码")
 
 
+class RegisterRequest(BaseModel):
+    """邀请码注册请求。"""
+
+    invite_code: str = Field(description="邀请码")
+    username: str = Field(description="注册用户名")
+    password: str = Field(description="登录密码")
+
+
 class LoginData(BaseModel):
     """登录结果数据。"""
 
@@ -29,3 +37,14 @@ class AuthStatusData(BaseModel):
     auth_enabled: bool = Field(description="是否启用登录校验")
     authenticated: bool = Field(description="当前请求是否已认证")
     username: str | None = Field(default=None, description="当前登录用户名")
+
+
+class CurrentUserData(BaseModel):
+    """当前用户信息。"""
+
+    auth_enabled: bool = Field(description="是否启用登录鉴权")
+    authenticated: bool = Field(description="是否已认证")
+    user_id: str | None = Field(default=None, description="用户 ID")
+    username: str | None = Field(default=None, description="用户名")
+    role: str | None = Field(default=None, description="角色")
+    status: str | None = Field(default=None, description="状态")

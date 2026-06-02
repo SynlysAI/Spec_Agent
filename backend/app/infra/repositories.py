@@ -9,13 +9,16 @@ from app.infra.mongo import (
     get_acceptance_runs_collection,
     get_consistency_runs_collection,
     get_files_collection,
+    get_invite_codes_collection,
     get_lab_collect_runs_collection,
     get_molecular_statistics_collection,
     get_results_collection,
     get_spectrum_sample_files_collection,
     get_spectrum_samples_collection,
     get_tasks_collection,
+    get_users_collection,
 )
+from app.schemas.identity_runtime import InviteCodeRecord, UserRecord
 from app.schemas.lab_collect import (
     LabCollectRunRecord,
     MolecularStatisticsData,
@@ -117,6 +120,53 @@ class FileRepository:
         """按文件 ID 查询。"""
         doc = get_files_collection().find_one({"file_id": file_id}, {"_id": 0})
         return FileRecord(**doc) if doc else None
+
+
+class UserRepository:
+    """用户仓储。"""
+
+    @staticmethod
+    def save(user_record: UserRecord) -> None:
+        """保存用户记录。
+
+        Args:
+            user_record: 待保存的用户运行态实体。
+        """
+        get_users_collection().update_one(
+            {"user_id": user_record.user_id},
+            {"$set": user_record.model_dump(mode="python")},
+            upsert=True,
+        )
+
+    @staticmethod
+    def find_by_username(username: str) -> UserRecord | None:
+        """按用户名查询用户记录。
+
+        Args:
+            username: 用户名。
+
+        Returns:
+            命中的用户记录；若不存在则返回 None。
+        """
+        doc = get_users_collection().find_one({"username": username}, {"_id": 0})
+        return UserRecord(**doc) if doc else None
+
+
+class InviteCodeRepository:
+    """邀请码仓储。"""
+
+    @staticmethod
+    def save(invite_record: InviteCodeRecord) -> None:
+        """保存邀请码记录。
+
+        Args:
+            invite_record: 待保存的邀请码运行态实体。
+        """
+        get_invite_codes_collection().update_one(
+            {"invite_id": invite_record.invite_id},
+            {"$set": invite_record.model_dump(mode="python")},
+            upsert=True,
+        )
 
 
 class AcceptanceRunRepository:
