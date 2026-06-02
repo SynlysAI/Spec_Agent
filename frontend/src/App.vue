@@ -352,7 +352,7 @@ onBeforeUnmount(() => {
               <span>邀请码管理</span>
             </el-menu-item>
           </el-sub-menu>
-          <el-menu-item index="/docs">
+          <el-menu-item v-if="canAccessAdminFeatures" index="/docs">
             <el-icon><Document /></el-icon>
             <span>接口文档</span>
           </el-menu-item>

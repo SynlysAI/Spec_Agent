@@ -12,8 +12,6 @@ const uploadedFilename = ref('')
 const lastTaskId = ref('')
 
 const form = reactive({
-  inputMode: 'upload',
-  inputPath: '',
   priority: 5,
 })
 
@@ -41,13 +39,6 @@ async function handleUpload(file) {
  *   LCMS 输入参数。
  */
 function buildInput() {
-  if (form.inputMode === 'path') {
-    return {
-      input_type: 'file_path',
-      input_path: form.inputPath.trim(),
-      file_id: null,
-    }
-  }
   return {
     input_type: 'file_id',
     input_path: null,
@@ -62,11 +53,7 @@ function buildInput() {
  *   Promise<void>
  */
 async function submitTask() {
-  if (form.inputMode === 'path' && !form.inputPath.trim()) {
-    ElMessage.warning('请填写 LCMS 文件路径')
-    return
-  }
-  if (form.inputMode === 'upload' && !uploadedFileId.value) {
+  if (!uploadedFileId.value) {
     if (!selectedUploadFile.value) {
       ElMessage.warning('请先选择 LCMS 文件')
       return
@@ -80,7 +67,7 @@ async function submitTask() {
       return
     }
   }
-  if (form.inputMode === 'upload' && !uploadedFileId.value) {
+  if (!uploadedFileId.value) {
     ElMessage.warning('上传失败，请重新选择文件')
     return
   }
@@ -88,7 +75,7 @@ async function submitTask() {
   const payload = {
     input: buildInput(),
     params: {
-      source_file_name: form.inputMode === 'upload' ? uploadedFilename.value || null : null,
+      source_file_name: uploadedFilename.value || null,
     },
     options: {
       priority: Number(form.priority || 5),
@@ -126,18 +113,7 @@ function goTaskDetail() {
     </div>
     <div class="panel-body">
       <el-form label-width="180px">
-        <el-form-item label="输入方式">
-          <el-radio-group v-model="form.inputMode">
-            <el-radio value="upload">上传文件</el-radio>
-            <el-radio value="path">服务器本地文件路径</el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item v-if="form.inputMode === 'path'" label="谱图文件路径">
-          <el-input v-model="form.inputPath" placeholder="示例：E:/spectrum_files/lcms/sample_001.csv" />
-        </el-form-item>
-
-        <el-form-item v-else label="上传谱图文件">
+        <el-form-item label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".txt,.csv">
             <el-button type="primary" plain>选择文件</el-button>
           </el-upload>

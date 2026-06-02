@@ -22,8 +22,6 @@ const pageTitle = computed(() => (props.spectype === 'raman' ? 'Raman 任务提�
 const formatHint = computed(() => (props.spectype === 'raman' ? '支持格式：txt/csv（Raman）' : '支持格式：txt/csv（IR）'))
 
 const form = reactive({
-  inputMode: 'upload',
-  inputPath: '',
   mode: 'function_groups',
   k: 10,
   x0: 400,
@@ -57,13 +55,6 @@ async function handleUpload(file) {
  *   IR/Raman 输入参数。
  */
 function buildInput() {
-  if (form.inputMode === 'path') {
-    return {
-      input_type: 'file_path',
-      input_path: form.inputPath.trim(),
-      file_id: null,
-    }
-  }
   return {
     input_type: 'file_id',
     input_path: null,
@@ -78,11 +69,7 @@ function buildInput() {
  *   Promise<void>
  */
 async function submitTask() {
-  if (form.inputMode === 'path' && !form.inputPath.trim()) {
-    ElMessage.warning('请填写谱图文件路径')
-    return
-  }
-  if (form.inputMode === 'upload' && !uploadedFileId.value) {
+  if (!uploadedFileId.value) {
     if (!selectedUploadFile.value) {
       ElMessage.warning('请先选择谱图文件')
       return
@@ -92,7 +79,7 @@ async function submitTask() {
     ElMessage.warning('x0 必须小于 x1')
     return
   }
-  if (form.inputMode === 'upload' && selectedUploadFile.value) {
+  if (selectedUploadFile.value) {
     try {
       const data = await uploadFile(selectedUploadFile.value, props.spectype)
       uploadedFileId.value = data.file_id
@@ -153,18 +140,7 @@ function goTaskDetail() {
     </div>
     <div class="panel-body">
       <el-form label-width="180px">
-        <el-form-item label="输入方式">
-          <el-radio-group v-model="form.inputMode">
-            <el-radio value="upload">上传文件</el-radio>
-            <el-radio value="path">服务器本地文件路径</el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item v-if="form.inputMode === 'path'" label="谱图文件路径">
-          <el-input v-model="form.inputPath" placeholder="示例：E:/spectrum_files/ir/spectrum/ir_00005.txt" />
-        </el-form-item>
-
-        <el-form-item v-else label="上传谱图文件">
+        <el-form-item label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".txt,.csv">
             <el-button type="primary" plain>选择文件</el-button>
           </el-upload>

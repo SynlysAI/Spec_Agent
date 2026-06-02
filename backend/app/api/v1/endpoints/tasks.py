@@ -26,6 +26,19 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 logger = get_logger("spec_agent.api.tasks")
 
 
+def _ensure_uploaded_file_input(input_data: dict[str, object]) -> None:
+    """要求用户任务提交只能使用上传文件引用。
+
+    Args:
+        input_data: 任务输入参数。
+
+    Raises:
+        HTTPException: 当输入类型不是 `file_id` 时抛出。
+    """
+    if input_data.get("input_type") != "file_id":
+        raise HTTPException(status_code=400, detail="当前版本仅支持上传文件方式提交任务")
+
+
 @router.get("", response_model=ApiResponse[TaskListData])
 def list_tasks(
     page: int = 1,
@@ -69,6 +82,7 @@ def create_gpc_task(
     Returns:
         任务创建响应。
     """
+    _ensure_uploaded_file_input(payload.input.model_dump())
     try:
         entity = task_service.create_task(
             task_type="gpc_analysis",
@@ -98,6 +112,7 @@ def create_nmr_task(
     Returns:
         任务创建响应。
     """
+    _ensure_uploaded_file_input(payload.input.model_dump())
     try:
         entity = task_service.create_task(
             task_type="nmr_analysis",
@@ -127,6 +142,7 @@ def create_ir_task(
     Returns:
         任务创建响应。
     """
+    _ensure_uploaded_file_input(payload.input.model_dump())
     try:
         params = payload.params.model_dump()
         params["spectype"] = "ir"
@@ -158,6 +174,7 @@ def create_raman_task(
     Returns:
         任务创建响应。
     """
+    _ensure_uploaded_file_input(payload.input.model_dump())
     try:
         params = payload.params.model_dump()
         params["spectype"] = "raman"
@@ -189,6 +206,7 @@ def create_lcms_task(
     Returns:
         任务创建响应。
     """
+    _ensure_uploaded_file_input(payload.input.model_dump())
     try:
         entity = task_service.create_task(
             task_type="lcms_analysis",

@@ -31,8 +31,6 @@ const NMR_PEAK_PRESETS = {
 }
 
 const form = reactive({
-  inputMode: 'upload',
-  inputPath: '',
   nucleus: '1H',
   threshold: NMR_PEAK_PRESETS['1H'].threshold,
   minDistance: NMR_PEAK_PRESETS['1H'].minDistance,
@@ -143,13 +141,6 @@ async function handleFolderChange(event) {
  *   NMR 输入参数。
  */
 function buildInput() {
-  if (form.inputMode === 'path') {
-    return {
-      input_type: 'folder_path',
-      input_path: form.inputPath.trim(),
-      file_id: null,
-    }
-  }
   return {
     input_type: 'file_id',
     input_path: null,
@@ -164,17 +155,13 @@ function buildInput() {
  *   Promise<void>
  */
 async function submitTask() {
-  if (form.inputMode === 'path' && !form.inputPath.trim()) {
-    ElMessage.warning('请填写 NMR 文件夹路径')
-    return
-  }
-  if (form.inputMode === 'upload' && !uploadedFileId.value) {
+  if (!uploadedFileId.value) {
     if (!selectedZipFile.value) {
       ElMessage.warning('请先选择 NMR 文件夹')
       return
     }
   }
-  if (form.inputMode === 'upload' && selectedZipFile.value) {
+  if (selectedZipFile.value) {
     try {
       const data = await uploadFile(selectedZipFile.value, 'nmr')
       uploadedFileId.value = data.file_id
@@ -184,7 +171,7 @@ async function submitTask() {
       return
     }
   }
-  if (form.inputMode === 'upload' && !uploadedFileId.value) {
+  if (!uploadedFileId.value) {
     ElMessage.warning('上传失败，请重新选择文件夹')
     return
   }
@@ -255,18 +242,7 @@ function goTaskDetail() {
     </div>
     <div class="panel-body">
       <el-form label-width="190px">
-        <el-form-item label="输入方式">
-          <el-radio-group v-model="form.inputMode">
-            <el-radio value="upload">上传文件</el-radio>
-            <el-radio value="path">服务器本地文件夹路径</el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item v-if="form.inputMode === 'path'" label="NMR 文件夹路径">
-          <el-input v-model="form.inputPath" placeholder="示例：E:/spectrum_files/nmr/2026-03-17/WLS-0312-H" />
-        </el-form-item>
-
-        <el-form-item v-else label="上传 NMR 文件夹">
+        <el-form-item label="上传 NMR 文件夹">
           <input
             ref="folderInputRef"
             type="file"

@@ -92,6 +92,7 @@ class TaskService:
             )
             return {"task_id": task_id, "task_type": task_type, "status": "FAILED"}
 
+    @staticmethod
     def list_tasks(
         page: int = 1,
         page_size: int = 20,
