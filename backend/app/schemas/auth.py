@@ -5,6 +5,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 from pydantic import Field
 
+from app.schemas.identity_runtime import UserRole, UserStatus
+
 
 class LoginRequest(BaseModel):
     """登录请求。"""
@@ -46,5 +48,5 @@ class CurrentUserData(BaseModel):
     authenticated: bool = Field(description="是否已认证")
     user_id: str | None = Field(default=None, description="用户 ID")
     username: str | None = Field(default=None, description="用户名")
-    role: str | None = Field(default=None, description="角色")
-    status: str | None = Field(default=None, description="状态")
+    role: UserRole | None = Field(default=None, description="角色")
+    status: UserStatus | None = Field(default=None, description="状态")
