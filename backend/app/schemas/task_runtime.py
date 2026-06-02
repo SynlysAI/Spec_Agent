@@ -42,6 +42,7 @@ class ResultRecord(BaseModel):
     structured_data: dict[str, Any]
     text_report: str
     metadata: dict[str, Any]
+    created_by: str | None = None
     created_at: datetime
 
 

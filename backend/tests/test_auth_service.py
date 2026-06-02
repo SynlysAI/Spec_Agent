@@ -17,6 +17,8 @@ from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 from app.api.v1.endpoints.auth import router as auth_router
+from app.api.v1.endpoints.files import router as files_router
+from app.api.v1.endpoints.tasks import router as tasks_router
 from app.core.auth import build_access_token
 from app.core.auth import get_current_user
 from app.core.auth import get_current_user_optional
@@ -25,10 +27,12 @@ from app.core.auth import require_admin
 from app.infra.repositories import InviteCodeRepository
 from app.infra.repositories import UserRepository
 from app.schemas.identity_runtime import InviteCodeRecord, UserRecord
+from app.schemas.task_runtime import TaskRecord
 from app.services.auth_service import AuthService
 from app.services.auth_service import ensure_identity_indexes
 from app.services.file_service import FileService
 from app.services.task_service import TaskService
+from app.worker.tasks import execute_analysis_task
 
 
 class TestIdentityRuntimeModels(unittest.TestCase):
@@ -508,6 +512,126 @@ class TestTaskAndFileOwnership(unittest.TestCase):
         task_record = create_task_record.call_args.args[0]
         self.assertEqual(task_record.created_by, "u_user_001")
         self.assertEqual(result["status"], "QUEUED")
+
+    @patch("app.worker.tasks.TaskRepository.update")
+    @patch("app.worker.tasks.ResultRepository.save")
+    @patch("app.worker.tasks.execute_analysis_sync")
+    @patch("app.worker.tasks.TaskRepository.find_by_task_id")
+    def test_execute_analysis_task_saves_result_with_created_by(
+        self,
+        find_task: MagicMock,
+        execute_analysis_sync_mock: MagicMock,
+        save_result: MagicMock,
+        update_task: MagicMock,
+    ) -> None:
+        """任务执行保存结果时应透传任务归属字段。"""
+        now = datetime.now()
+        find_task.return_value = TaskRecord(
+            task_id="t_gpc_001",
+            task_type="gpc_analysis",
+            status="RUNNING",
+            progress=20,
+            message="running",
+            input={"input_type": "file_id", "file_id": "f_001"},
+            params={"top_k": 3},
+            result_ref=None,
+            error=None,
+            created_by="u_user_001",
+            created_at=now,
+            updated_at=now,
+        )
+        execute_analysis_sync_mock.return_value = {
+            "structured_data": {"summary": "ok"},
+            "text_report": "done",
+            "metadata": {"source": "unit-test"},
+        }
+
+        execute_analysis_task("t_gpc_001")
+
+        save_result.assert_called_once()
+        update_task.assert_called()
+        result_record = save_result.call_args.args[0]
+        self.assertEqual(result_record.created_by, "u_user_001")
+
+
+class TestOwnershipEndpoints(unittest.TestCase):
+    """验证 HTTP 入口会透传归属字段。"""
+
+    @staticmethod
+    def _create_files_client() -> TestClient:
+        """创建仅包含文件路由的测试客户端。"""
+        app = FastAPI()
+        app.include_router(files_router)
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": "u_user_001",
+            "username": "alice",
+            "role": "user",
+            "status": "active",
+        }
+        return TestClient(app)
+
+    @staticmethod
+    def _create_tasks_client() -> TestClient:
+        """创建仅包含任务路由的测试客户端。"""
+        app = FastAPI()
+        app.include_router(tasks_router)
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": "u_user_001",
+            "username": "alice",
+            "role": "user",
+            "status": "active",
+        }
+        return TestClient(app)
+
+    @patch("app.api.v1.endpoints.files.FileService.save_upload_file")
+    def test_upload_file_endpoint_passes_created_by_to_service(
+        self,
+        save_upload_file: MagicMock,
+    ) -> None:
+        """文件上传接口应将当前用户 ID 透传给文件服务。"""
+        save_upload_file.return_value = {
+            "file_id": "f_001",
+            "file_name": "sample.txt",
+            "file_size": 12,
+            "file_ext": ".txt",
+            "storage_path": "uploads/sample.txt",
+            "sha256": "abc",
+        }
+        client = self._create_files_client()
+
+        response = client.post(
+            "/files/upload",
+            data={"biz_type": "nmr"},
+            files={"file": ("sample.txt", b"demo-content", "text/plain")},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(save_upload_file.call_args.kwargs["created_by"], "u_user_001")
+
+    @patch("app.api.v1.endpoints.tasks.task_service.create_task")
+    def test_create_task_endpoint_passes_created_by_to_service(
+        self,
+        create_task: MagicMock,
+    ) -> None:
+        """任务创建接口应将当前用户 ID 透传给任务服务。"""
+        create_task.return_value = {
+            "task_id": "t_gpc_001",
+            "task_type": "gpc_analysis",
+            "status": "QUEUED",
+        }
+        client = self._create_tasks_client()
+
+        response = client.post(
+            "/tasks/gpc",
+            json={
+                "input": {"input_type": "file_id", "file_id": "f_001"},
+                "params": {"detect_mode": "auto"},
+                "options": {"priority": 5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(create_task.call_args.kwargs["created_by"], "u_user_001")
 
 
 class TestAuthContext(unittest.TestCase):

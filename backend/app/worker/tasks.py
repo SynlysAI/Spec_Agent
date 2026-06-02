@@ -62,6 +62,7 @@ def execute_analysis_task(task_id: str) -> None:
                 structured_data=result_payload.get("structured_data", {}),
                 text_report=result_payload.get("text_report", ""),
                 metadata=result_payload.get("metadata", {}),
+                created_by=task.created_by,
                 created_at=task.updated_at,
             )
         )
