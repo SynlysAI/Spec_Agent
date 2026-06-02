@@ -181,6 +181,33 @@ class UserRepository:
             },
         )
 
+    @staticmethod
+    def list_all() -> list[UserRecord]:
+        """查询全部用户列表。
+
+        Returns:
+            用户记录列表。
+        """
+        cursor = get_users_collection().find({}, {"_id": 0}).sort([("created_at", -1)])
+        return [UserRecord(**doc) for doc in cursor]
+
+    @staticmethod
+    def update_status(user_id: str, status: str) -> bool:
+        """更新用户状态。
+
+        Args:
+            user_id: 用户 ID。
+            status: 用户状态。
+
+        Returns:
+            是否成功命中并更新用户。
+        """
+        result = get_users_collection().update_one(
+            {"user_id": user_id},
+            {"$set": {"status": status, "updated_at": datetime.now()}},
+        )
+        return result.matched_count > 0
+
 
 class InviteCodeRepository:
     """邀请码仓储。"""
@@ -252,6 +279,32 @@ class InviteCodeRepository:
                 "$set": {"updated_at": datetime.now()},
             },
         )
+
+    @staticmethod
+    def list_all() -> list[InviteCodeRecord]:
+        """查询全部邀请码列表。
+
+        Returns:
+            邀请码记录列表。
+        """
+        cursor = get_invite_codes_collection().find({}, {"_id": 0}).sort([("created_at", -1)])
+        return [InviteCodeRecord(**doc) for doc in cursor]
+
+    @staticmethod
+    def disable(invite_id: str) -> bool:
+        """禁用邀请码。
+
+        Args:
+            invite_id: 邀请码 ID。
+
+        Returns:
+            是否成功命中并更新邀请码。
+        """
+        result = get_invite_codes_collection().update_one(
+            {"invite_id": invite_id},
+            {"$set": {"status": "disabled", "updated_at": datetime.now()}},
+        )
+        return result.matched_count > 0
 
 
 class AcceptanceRunRepository:
