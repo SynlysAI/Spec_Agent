@@ -208,6 +208,22 @@ class UserRepository:
         )
         return result.matched_count > 0
 
+    @staticmethod
+    def count_active_admins() -> int:
+        """统计启用中的管理员数量。
+
+        Returns:
+            当前状态为 active 的管理员数量。
+        """
+        return int(
+            get_users_collection().count_documents(
+                {
+                    "role": "admin",
+                    "status": "active",
+                }
+            )
+        )
+
 
 class InviteCodeRepository:
     """邀请码仓储。"""

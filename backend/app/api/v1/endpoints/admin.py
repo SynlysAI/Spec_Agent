@@ -123,16 +123,34 @@ def create_invite_code(
 
 
 @router.patch("/users/{user_id}/status", response_model=ApiResponse[AdminUserStatusData])
-def update_user_status(user_id: str, payload: AdminUserStatusRequest) -> ApiResponse[AdminUserStatusData]:
+def update_user_status(
+    user_id: str,
+    payload: AdminUserStatusRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[AdminUserStatusData]:
     """更新指定用户状态。
 
     Args:
         user_id: 目标用户 ID。
         payload: 状态更新请求。
+        current_user: 当前管理员上下文。
 
     Returns:
         更新后的用户状态。
     """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="未登录或登录已失效")
+
+    target_user = UserRepository.find_by_user_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if payload.status == "disabled":
+        if target_user.user_id == current_user["user_id"]:
+            raise HTTPException(status_code=400, detail="不允许禁用当前管理员自己")
+        if target_user.role == "admin" and UserRepository.count_active_admins() <= 1:
+            raise HTTPException(status_code=400, detail="至少需要保留一个启用中的管理员")
+
     updated = UserRepository.update_status(user_id=user_id, status=payload.status)
     if not updated:
         raise HTTPException(status_code=404, detail="用户不存在")

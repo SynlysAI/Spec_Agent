@@ -196,3 +196,174 @@ class TestAdminEndpoints(unittest.TestCase):
         for route in matched_routes:
             dependency_calls = {dependency.call for dependency in route.dependant.dependencies}
             self.assertIn(require_admin, dependency_calls)
+
+    @patch("app.api.v1.endpoints.admin.UserRepository.update_status")
+    @patch("app.api.v1.endpoints.admin.UserRepository.find_by_user_id")
+    def test_patch_admin_user_status_returns_success_when_updated(
+        self,
+        find_by_user_id: MagicMock,
+        update_status: MagicMock,
+    ) -> None:
+        """更新用户状态成功时应返回 200。"""
+        now = datetime.now()
+        find_by_user_id.return_value = UserRecord(
+            user_id="u_user_001",
+            username="alice",
+            password_hash="hashed",
+            role="user",
+            status="active",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by="u_admin_001",
+        )
+        update_status.return_value = True
+        app = self._create_app()
+        app.dependency_overrides[require_admin] = lambda: None
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": "u_admin_001",
+            "username": "admin",
+            "role": "admin",
+            "status": "active",
+        }
+        client = TestClient(app)
+
+        response = client.patch(
+            "/api/v1/admin/users/u_user_001/status",
+            json={"status": "disabled"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["user_id"], "u_user_001")
+        self.assertEqual(payload["data"]["status"], "disabled")
+
+    @patch("app.api.v1.endpoints.admin.UserRepository.find_by_user_id")
+    def test_patch_admin_user_status_returns_not_found_for_missing_user(
+        self,
+        find_by_user_id: MagicMock,
+    ) -> None:
+        """目标用户不存在时应返回 404。"""
+        find_by_user_id.return_value = None
+        app = self._create_app()
+        app.dependency_overrides[require_admin] = lambda: None
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": "u_admin_001",
+            "username": "admin",
+            "role": "admin",
+            "status": "active",
+        }
+        client = TestClient(app)
+
+        response = client.patch(
+            "/api/v1/admin/users/u_missing/status",
+            json={"status": "disabled"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    @patch("app.api.v1.endpoints.admin.UserRepository.find_by_user_id")
+    def test_patch_admin_user_status_rejects_disabling_self(
+        self,
+        find_by_user_id: MagicMock,
+    ) -> None:
+        """管理员禁用自己时应返回 400。"""
+        now = datetime.now()
+        find_by_user_id.return_value = UserRecord(
+            user_id="u_admin_001",
+            username="admin",
+            password_hash="hashed",
+            role="admin",
+            status="active",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by=None,
+        )
+        app = self._create_app()
+        app.dependency_overrides[require_admin] = lambda: None
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": "u_admin_001",
+            "username": "admin",
+            "role": "admin",
+            "status": "active",
+        }
+        client = TestClient(app)
+
+        response = client.patch(
+            "/api/v1/admin/users/u_admin_001/status",
+            json={"status": "disabled"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch("app.api.v1.endpoints.admin.UserRepository.count_active_admins")
+    @patch("app.api.v1.endpoints.admin.UserRepository.find_by_user_id")
+    def test_patch_admin_user_status_rejects_disabling_last_active_admin(
+        self,
+        find_by_user_id: MagicMock,
+        count_active_admins: MagicMock,
+    ) -> None:
+        """禁用最后一个启用中的管理员时应返回 400。"""
+        now = datetime.now()
+        find_by_user_id.return_value = UserRecord(
+            user_id="u_admin_002",
+            username="backup-admin",
+            password_hash="hashed",
+            role="admin",
+            status="active",
+            created_at=now,
+            updated_at=now,
+            last_login_at=None,
+            created_by=None,
+        )
+        count_active_admins.return_value = 1
+        app = self._create_app()
+        app.dependency_overrides[require_admin] = lambda: None
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": "u_admin_001",
+            "username": "admin",
+            "role": "admin",
+            "status": "active",
+        }
+        client = TestClient(app)
+
+        response = client.patch(
+            "/api/v1/admin/users/u_admin_002/status",
+            json={"status": "disabled"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    @patch("app.api.v1.endpoints.admin.InviteCodeRepository.disable")
+    def test_patch_admin_invite_disable_returns_success(
+        self,
+        disable_invite: MagicMock,
+    ) -> None:
+        """禁用邀请码成功时应返回 200。"""
+        disable_invite.return_value = True
+        app = self._create_app()
+        app.dependency_overrides[require_admin] = lambda: None
+        client = TestClient(app)
+
+        response = client.patch("/api/v1/admin/invite-codes/invite_001/disable")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["data"]["invite_id"], "invite_001")
+        self.assertEqual(payload["data"]["status"], "disabled")
+
+    @patch("app.api.v1.endpoints.admin.InviteCodeRepository.disable")
+    def test_patch_admin_invite_disable_returns_not_found(
+        self,
+        disable_invite: MagicMock,
+    ) -> None:
+        """目标邀请码不存在时应返回 404。"""
+        disable_invite.return_value = False
+        app = self._create_app()
+        app.dependency_overrides[require_admin] = lambda: None
+        client = TestClient(app)
+
+        response = client.patch("/api/v1/admin/invite-codes/invite_missing/disable")
+
+        self.assertEqual(response.status_code, 404)
