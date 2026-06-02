@@ -145,11 +145,8 @@ def update_user_status(
     if not target_user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    if payload.status == "disabled":
-        if target_user.user_id == current_user["user_id"]:
-            raise HTTPException(status_code=400, detail="不允许禁用当前管理员自己")
-        if target_user.role == "admin" and UserRepository.count_active_admins() <= 1:
-            raise HTTPException(status_code=400, detail="至少需要保留一个启用中的管理员")
+    if payload.status == "disabled" and target_user.role == "admin":
+        raise HTTPException(status_code=400, detail="一期不允许禁用管理员账号")
 
     updated = UserRepository.update_status(user_id=user_id, status=payload.status)
     if not updated:

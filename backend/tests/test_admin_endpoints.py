@@ -297,14 +297,16 @@ class TestAdminEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    @patch("app.api.v1.endpoints.admin.UserRepository.update_status")
     @patch("app.api.v1.endpoints.admin.UserRepository.count_active_admins")
     @patch("app.api.v1.endpoints.admin.UserRepository.find_by_user_id")
-    def test_patch_admin_user_status_rejects_disabling_last_active_admin(
+    def test_patch_admin_user_status_rejects_disabling_other_admin(
         self,
         find_by_user_id: MagicMock,
         count_active_admins: MagicMock,
+        update_status: MagicMock,
     ) -> None:
-        """禁用最后一个启用中的管理员时应返回 400。"""
+        """禁用其他管理员账号时应返回 400。"""
         now = datetime.now()
         find_by_user_id.return_value = UserRecord(
             user_id="u_admin_002",
@@ -317,7 +319,8 @@ class TestAdminEndpoints(unittest.TestCase):
             last_login_at=None,
             created_by=None,
         )
-        count_active_admins.return_value = 1
+        count_active_admins.return_value = 2
+        update_status.return_value = True
         app = self._create_app()
         app.dependency_overrides[require_admin] = lambda: None
         app.dependency_overrides[get_current_user] = lambda: {
@@ -334,6 +337,7 @@ class TestAdminEndpoints(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "一期不允许禁用管理员账号")
 
     @patch("app.api.v1.endpoints.admin.InviteCodeRepository.disable")
     def test_patch_admin_invite_disable_returns_success(
