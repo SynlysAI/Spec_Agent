@@ -156,6 +156,35 @@ npm run dev
 ## 登录注册与权限说明
 
 - 系统支持管理员预生成邀请码，普通用户通过邀请码完成 `/auth/register` 注册。
+- 首次部署如需创建首个管理员账号，可在 `backend/` 目录执行：
+
+  ```bash
+  python scripts/create_admin_user.py --username admin
+  ```
+
+- 若需非交互方式创建管理员账号，可显式传入密码：
+
+  ```bash
+  python scripts/create_admin_user.py --username admin --password 'your-password'
+  ```
+
+- 若使用 Docker Compose 部署，可直接在 `backend` 容器中执行：
+
+  ```bash
+  docker compose --env-file docker/.env -f docker/docker-compose.yml exec backend \
+    python backend/scripts/create_admin_user.py --username admin
+  ```
+
+- 若使用完整编排（含基础设施）启动服务，可执行：
+
+  ```bash
+  docker compose --env-file docker/.env \
+    -f docker/docker-compose.yml \
+    -f docker/docker-compose.infra.yml \
+    exec backend \
+    python backend/scripts/create_admin_user.py --username admin
+  ```
+
 - 启用登录鉴权后，普通用户可访问工作台、任务提交、任务中心、问答对话和通用工具页面。
 - 普通用户不能访问实验管理、评测中心、数据采集等管理员能力入口。
 - 管理员除普通能力外，还可访问用户管理与邀请码管理页面，执行用户状态维护和邀请码创建、禁用操作。
