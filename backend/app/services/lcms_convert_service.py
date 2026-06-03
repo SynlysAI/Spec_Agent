@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
@@ -18,6 +19,14 @@ from app.schemas.lcms_convert import LcmsConvertLabelPeak, LcmsConvertResultData
 
 
 logger = get_logger("spec_agent.service.lcms_convert")
+
+
+@dataclass(frozen=True)
+class MsconvertRuntime:
+    """描述 LCMS 转换所使用的 msconvert 执行方式。"""
+
+    kind: str
+    command: str
 
 
 class LcmsConvertService:
@@ -39,9 +48,29 @@ class LcmsConvertService:
         return mzml_module
 
     @staticmethod
-    def find_msconvert() -> str:
-        """查找可用的 msconvert.exe。"""
-        candidate = shutil.which("msconvert")
+    def _normalize_msconvert_mode() -> str:
+        """返回归一化后的 msconvert 执行模式。"""
+        mode = str(settings.lcms_msconvert_mode or "auto").strip().lower()
+        if mode not in {"auto", "binary", "docker"}:
+            raise RuntimeError("LCMS_MSCONVERT_MODE 仅支持 auto、binary 或 docker。")
+        return mode
+
+    @staticmethod
+    def find_msconvert_binary() -> str | None:
+        """查找本机可执行的 msconvert 程序。"""
+        configured = str(settings.lcms_msconvert_path or "").strip()
+        if configured:
+            configured_path = Path(configured).expanduser()
+            if configured_path.exists():
+                return str(configured_path)
+
+            configured_candidate = shutil.which(configured)
+            if configured_candidate:
+                return configured_candidate
+
+            raise RuntimeError("LCMS_MSCONVERT_PATH 指定的 msconvert 不存在或不可执行。")
+
+        candidate = shutil.which("msconvert") or shutil.which("msconvert.exe")
         if candidate:
             return candidate
 
@@ -65,7 +94,82 @@ class LcmsConvertService:
             if matches:
                 return str(matches[-1])
 
-        raise RuntimeError("未找到 msconvert.exe，请先安装 ProteoWizard。")
+        return None
+
+    @staticmethod
+    def find_docker_binary() -> str | None:
+        """查找可用的 Docker 命令。"""
+        docker_bin = str(settings.lcms_msconvert_docker_bin or "docker").strip() or "docker"
+        return shutil.which(docker_bin)
+
+    @classmethod
+    def validate_docker_runtime(cls) -> None:
+        """校验 Docker 模式所需的基础配置。"""
+        if not str(settings.lcms_msconvert_docker_image or "").strip():
+            raise RuntimeError("LCMS_MSCONVERT_DOCKER_IMAGE 不能为空。")
+
+        shared_root = settings.lcms_msconvert_shared_root
+        if settings.app_env == "docker" and shared_root is None:
+            raise RuntimeError(
+                "当前后端运行在 Docker 容器内；启用 LCMS_MSCONVERT_MODE=docker 时，"
+                "需额外设置 LCMS_MSCONVERT_SHARED_ROOT 为宿主机与后端容器共享的绝对路径。"
+            )
+
+        if settings.app_env == "docker" and shared_root is not None and not shared_root.is_absolute():
+            raise RuntimeError("Docker 容器部署下，LCMS_MSCONVERT_SHARED_ROOT 必须为绝对路径。")
+
+    @classmethod
+    def resolve_msconvert_runtime(cls) -> MsconvertRuntime:
+        """解析当前应使用的 msconvert 执行方式。"""
+        mode = cls._normalize_msconvert_mode()
+
+        if mode in {"auto", "binary"}:
+            binary = cls.find_msconvert_binary()
+            if binary:
+                return MsconvertRuntime(kind="binary", command=binary)
+            if mode == "binary":
+                raise RuntimeError("未找到 msconvert，请先安装 ProteoWizard 或设置 LCMS_MSCONVERT_PATH。")
+
+        if mode in {"auto", "docker"}:
+            docker_bin = cls.find_docker_binary()
+            if docker_bin:
+                cls.validate_docker_runtime()
+                return MsconvertRuntime(kind="docker", command=docker_bin)
+            if mode == "docker":
+                raise RuntimeError(
+                    "未找到 Docker 命令，请先安装 Docker 或设置 LCMS_MSCONVERT_DOCKER_BIN。"
+                )
+
+        raise RuntimeError(
+            "未找到可用的 msconvert 执行方式。"
+            "请安装 ProteoWizard，或启用 Docker 并设置 LCMS_MSCONVERT_MODE=docker。"
+        )
+
+    @classmethod
+    def resolve_shared_temp_root(cls) -> Path | None:
+        """解析 LCMS 转换所使用的共享临时目录根路径。"""
+        shared_root = settings.lcms_msconvert_shared_root
+        if shared_root is None:
+            return None
+
+        resolved_root = shared_root.expanduser()
+        if not resolved_root.is_absolute():
+            resolved_root = (settings.project_root / resolved_root).resolve()
+        resolved_root.mkdir(parents=True, exist_ok=True)
+        return resolved_root
+
+    @classmethod
+    def create_temp_directory(cls) -> tempfile.TemporaryDirectory:
+        """创建本次 LCMS 转换所使用的临时工作目录。"""
+        shared_root = cls.resolve_shared_temp_root()
+        if shared_root is None:
+            return tempfile.TemporaryDirectory(prefix="spec_agent_lcms_convert_")
+        return tempfile.TemporaryDirectory(prefix="spec_agent_lcms_convert_", dir=str(shared_root))
+
+    @staticmethod
+    def format_command_for_log(command: list[str]) -> str:
+        """格式化命令参数，便于写入日志。"""
+        return subprocess.list2cmdline([str(item) for item in command])
 
     @staticmethod
     def is_ascii_only(path: Path) -> bool:
@@ -150,23 +254,121 @@ class LcmsConvertService:
         return unique_candidates[0]
 
     @classmethod
-    def convert_raw_to_mzml(cls, raw_dir: Path, msconvert: str, temp_root: Path, alias: str) -> Path:
-        """将单个 Waters 目录转换为临时 mzML 文件。"""
+    def build_msconvert_command(
+        cls,
+        runtime: MsconvertRuntime,
+        execution_raw: Path,
+        temp_root: Path,
+    ) -> list[str]:
+        """构建 msconvert 执行命令。
+
+        Args:
+            runtime: 当前解析出的 msconvert 执行方式。
+            execution_raw: 本次实际传给 msconvert 的原始数据目录。
+            temp_root: 当前转换任务的临时工作目录。
+
+        Returns:
+            可直接传给 subprocess.run 的命令参数列表。
+        """
+        if runtime.kind == "binary":
+            command = [
+                runtime.command,
+                str(execution_raw),
+                "--mzML",
+                "--outdir",
+                str(temp_root),
+            ]
+            logger.info(
+                "LCMS 本机 msconvert 路径映射: input=%s outdir=%s",
+                execution_raw,
+                temp_root,
+            )
+            return command
+
+        if runtime.kind == "docker":
+            docker_work_root = "/work"
+            docker_outdir = r"Z:\work"
+            try:
+                relative_input = execution_raw.resolve().relative_to(temp_root.resolve())
+            except ValueError as exc:
+                raise RuntimeError("Docker 模式下 msconvert 输入目录不在临时工作目录内。") from exc
+            docker_input = fr"Z:\work\{str(relative_input).replace('/', '\\')}"
+            command = [
+                runtime.command,
+                "run",
+                "--rm",
+                "-v",
+                f"{temp_root.resolve()}:{docker_work_root}",
+                settings.lcms_msconvert_docker_image,
+                "wine",
+                "msconvert",
+                docker_input,
+                "--mzML",
+                "--outdir",
+                docker_outdir,
+            ]
+            logger.info(
+                "LCMS Docker 路径映射: host_temp_root=%s container_work_root=%s wine_input=%s wine_outdir=%s",
+                temp_root.resolve(),
+                docker_work_root,
+                docker_input,
+                docker_outdir,
+            )
+            return command
+
+        raise RuntimeError(f"不支持的 msconvert 执行模式：{runtime.kind}")
+
+    @classmethod
+    def convert_raw_to_mzml(
+        cls,
+        raw_dir: Path,
+        runtime: MsconvertRuntime,
+        temp_root: Path,
+        alias: str,
+    ) -> Path:
+        """将单个 Waters 目录转换为临时 mzML 文件。
+
+        Args:
+            raw_dir: 识别出的 Waters 原始数据目录。
+            runtime: 当前解析出的 msconvert 执行方式。
+            temp_root: 当前转换任务的临时工作目录。
+            alias: 生成临时文件时使用的 ASCII 安全别名。
+
+        Returns:
+            转换完成后的 mzML 文件路径。
+        """
         execution_raw = raw_dir if cls.is_ascii_only(raw_dir) else cls.build_safe_ascii_copy(raw_dir, temp_root, alias)
         mzml_path = temp_root / f"{alias}.mzML"
+        logger.info(
+            "LCMS 开始执行 msconvert: runtime=%s raw_dir=%s execution_raw=%s temp_root=%s ascii_safe_copy=%s target_mzml=%s",
+            runtime.kind,
+            raw_dir,
+            execution_raw,
+            temp_root,
+            execution_raw != raw_dir,
+            mzml_path,
+        )
 
-        cmd = [
-            msconvert,
-            str(execution_raw),
-            "--mzML",
-            "--outdir",
-            str(temp_root),
-        ]
+        cmd = cls.build_msconvert_command(runtime=runtime, execution_raw=execution_raw, temp_root=temp_root)
         try:
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            logger.info("LCMS msconvert 执行命令: %s", cls.format_command_for_log(cmd))
+            completed = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            stdout = (completed.stdout or "").strip()
+            if stdout:
+                logger.info("LCMS msconvert 标准输出: %s", stdout)
         except subprocess.CalledProcessError as exc:
+            stdout = (exc.stdout or "").strip()
             stderr = (exc.stderr or exc.stdout or "").strip()
-            raise RuntimeError(f"msconvert 执行失败：{stderr or '未知错误'}") from exc
+            logger.error(
+                "LCMS msconvert 执行失败: runtime=%s command=%s stdout=%s stderr=%s",
+                runtime.kind,
+                cls.format_command_for_log(cmd),
+                stdout or "-",
+                stderr or "-",
+            )
+            raise RuntimeError(
+                f"msconvert 执行失败（{runtime.kind}）：{stderr or '未知错误'}"
+            ) from exc
 
         generated = temp_root / f"{execution_raw.stem}.mzML"
         if generated.exists() and generated != mzml_path:
@@ -176,6 +378,7 @@ class LcmsConvertService:
 
         if not mzml_path.exists():
             raise RuntimeError(f"未生成 mzML 文件：{mzml_path}")
+        logger.info("LCMS msconvert 输出文件已就绪: generated=%s final=%s", generated, mzml_path)
         return mzml_path
 
     @staticmethod
@@ -325,14 +528,30 @@ class LcmsConvertService:
         output_dir = self._build_output_dir(job_id)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.TemporaryDirectory(prefix="spec_agent_lcms_convert_") as temp_dir_name:
-            temp_root = Path(temp_dir_name)
+        runtime = self.resolve_msconvert_runtime()
+        logger.info(
+            "LCMS 数据转化任务开始: job_id=%s upload_name=%s output_dir=%s runtime_kind=%s runtime_command=%s",
+            job_id,
+            upload_name,
+            output_dir,
+            runtime.kind,
+            runtime.command,
+        )
+
+        with self.create_temp_directory() as temp_dir_name:
+            temp_root = Path(temp_dir_name).resolve()
             extracted_root = self.extract_zip_to_temp(zip_bytes=zip_bytes, temp_root=temp_root)
             waters_dir = self.locate_waters_directory(extracted_root=extracted_root)
-            msconvert = self.find_msconvert()
+            logger.info(
+                "LCMS 数据转化临时目录信息: job_id=%s temp_root=%s extracted_root=%s waters_dir=%s",
+                job_id,
+                temp_root,
+                extracted_root,
+                waters_dir,
+            )
             mzml_path = self.convert_raw_to_mzml(
                 raw_dir=waters_dir,
-                msconvert=msconvert,
+                runtime=runtime,
                 temp_root=temp_root,
                 alias="single_sample",
             )
@@ -348,10 +567,11 @@ class LcmsConvertService:
         self.save_csv(csv_path, apex_mzs, apex_intensities)
 
         logger.info(
-            "LCMS 数据转化完成: job_id=%s source_name=%s point_count=%s",
+            "LCMS 数据转化完成: job_id=%s source_name=%s point_count=%s csv_path=%s",
             job_id,
             source_name,
             len(apex_mzs),
+            csv_path,
         )
 
         return LcmsConvertResultData(

@@ -275,6 +275,15 @@ analysis/            # 算法分析层（独立于 app）
 | POST | `/tools/lcms-convert/run` | 上传 zip 并转化 |
 | GET | `/tools/lcms-convert/download/{job_id}` | 下载转化结果 CSV |
 
+#### LCMS 转换依赖说明
+
+- 默认 `LCMS_MSCONVERT_MODE=auto`，优先调用本机 `msconvert`，兼容现有 Windows + ProteoWizard 安装方式
+- Linux 宿主机直跑后端时，推荐设置 `LCMS_MSCONVERT_MODE=docker`，通过官方镜像 `proteowizard/pwiz-skyline-i-agree-to-the-vendor-licenses` 执行转换
+- 如需显式指定本机 `msconvert` 路径，可设置 `LCMS_MSCONVERT_PATH`
+- 如需指定 Docker 命令或镜像，可分别设置 `LCMS_MSCONVERT_DOCKER_BIN`、`LCMS_MSCONVERT_DOCKER_IMAGE`
+- 如果后端自身运行在 Docker 容器内，除了让容器具备 `docker` CLI 和 `/var/run/docker.sock` 访问能力外，还必须设置 `LCMS_MSCONVERT_SHARED_ROOT` 为宿主机与后端容器共享的同一路径，并将该路径同时挂载给后端容器；否则服务无法把临时 `.raw` 目录再挂载进 ProteoWizard 容器
+- `LCMS_MSCONVERT_SHARED_ROOT` 建议使用仅含 ASCII 的绝对路径，例如 `/tmp/spec-agent-lcms-convert`
+
 ### chemistry — 化学结构
 
 | 方法 | 路径 | 说明 |
@@ -415,5 +424,5 @@ python scripts/run_regression.py
 - `backend/config.py` 是兼容配置层，新代码应使用 `app.core.config.settings`
 - `backend/agents/`、根级 `backend/services/` 是历史兼容层，主实现在 `app/modules` 和 `app/services`
 - `backend/resources/` 和 `backend/analysis/` 部署时需随后端一起发布
-- LCMS Waters `.raw` 格式转化需安装 [ProteoWizard](http://proteowizard.sourceforge.net/)
+- LCMS Waters `.raw` 格式转化依赖 [ProteoWizard](http://proteowizard.sourceforge.net/)；Windows 可直接安装本机版，Linux 推荐走 Docker 模式
 - GPC/NMR/IR/Raman 任务已完全迁入本仓，运行时不依赖外部项目

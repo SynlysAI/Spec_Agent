@@ -68,6 +68,20 @@ class Settings:
         # NMRServer 外部服务配置
         self.nmr_server_base_url: str = os.getenv("NMR_SERVER_BASE_URL", "http://127.0.0.1:8080")
         self.lcms_infer_url: str = os.getenv("LCMS_INFER_URL", "http://127.0.0.1:9999/infer")
+        self.lcms_msconvert_mode: str = os.getenv("LCMS_MSCONVERT_MODE", "auto").strip().lower()
+        self.lcms_msconvert_path: str = os.getenv("LCMS_MSCONVERT_PATH", "").strip()
+        self.lcms_msconvert_docker_bin: str = (
+            os.getenv("LCMS_MSCONVERT_DOCKER_BIN", "docker").strip() or "docker"
+        )
+        self.lcms_msconvert_docker_image: str = (
+            os.getenv(
+                "LCMS_MSCONVERT_DOCKER_IMAGE",
+                "proteowizard/pwiz-skyline-i-agree-to-the-vendor-licenses",
+            ).strip()
+            or "proteowizard/pwiz-skyline-i-agree-to-the-vendor-licenses"
+        )
+        shared_root = os.getenv("LCMS_MSCONVERT_SHARED_ROOT", "").strip()
+        self.lcms_msconvert_shared_root: Path | None = Path(shared_root) if shared_root else None
         self.raman_capture_instrument_ip: str = os.getenv("RAMAN_CAPTURE_INSTRUMENT_IP", "47.113.220.254")
         self.raman_capture_callback_url: str = os.getenv(
             "RAMAN_CAPTURE_CALLBACK_URL",
