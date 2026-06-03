@@ -3,6 +3,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import SampleDownloadButton from '../components/SampleDownloadButton.vue'
+import TaskIntroCard from '../components/TaskIntroCard.vue'
 import { createLcmsTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const router = useRouter()
@@ -18,6 +19,11 @@ const form = reactive({
 
 const LCMS_SAMPLE_ASSET_PATH = '/example-spectra/lcms-demo.csv'
 const LCMS_SAMPLE_DOWNLOAD_NAME = 'lcms-demo.csv'
+const LCMS_INTRO_HIGHLIGHTS = [
+  '预测分子量结果',
+  '原始返回结果摘要',
+  '如带标注信息，可对照实际分子量',
+]
 
 /**
  * 处理 LCMS 文件选择（仅缓存，不立即上传）。
@@ -116,6 +122,11 @@ function goTaskDetail() {
       <h3 class="panel-title">LCMS 任务提交</h3>
     </div>
     <div class="panel-body">
+      <TaskIntroCard
+        title="用于根据 LCMS 质谱图预测样品分子量"
+        description="适合提交单个 LCMS 质谱图文件做分子量预测。当前页面聚焦快速判断样品分子量，不包含目录级数据转化流程。"
+        :highlights="LCMS_INTRO_HIGHLIGHTS"
+      />
       <el-form class="task-submit-form" label-width="180px">
         <el-form-item label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".txt,.csv">

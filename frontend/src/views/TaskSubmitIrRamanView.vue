@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import FormLabelTooltip from '../components/FormLabelTooltip.vue'
 import SampleDownloadButton from '../components/SampleDownloadButton.vue'
+import TaskIntroCard from '../components/TaskIntroCard.vue'
 import { createIrTask, createRamanTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const props = defineProps({
@@ -31,6 +32,21 @@ const sampleAssetPath = computed(() =>
 )
 const sampleDownloadName = computed(() =>
   props.spectype === 'raman' ? 'raman-demo.txt' : 'ir-demo.txt',
+)
+const introTitle = computed(() =>
+  props.spectype === 'raman'
+    ? '用于根据拉曼谱图识别官能团或候选分子结构'
+    : '用于根据红外谱图识别官能团或候选结构信息',
+)
+const introDescription = computed(() =>
+  props.spectype === 'raman'
+    ? '适合对单张 Raman 谱图做智能识别。你可以选择不同分析模式，在官能团解释和候选结构结果之间切换重点。'
+    : '适合对单张 IR 谱图做智能识别。你可以根据数据类型和分析范围选择更合适的模式，获得更贴近谱图特征的结果。',
+)
+const introHighlights = computed(() =>
+  props.spectype === 'raman'
+    ? ['官能团识别结果', '候选分子结构与评分', '分析范围与分析模式说明']
+    : ['官能团识别结果', '候选结构或检索结果', '分析范围与分析模式说明'],
 )
 
 const IR_RAMAN_TOOLTIP_TEXT = {
@@ -159,6 +175,11 @@ function goTaskDetail() {
       <h3 class="panel-title">{{ pageTitle }}</h3>
     </div>
     <div class="panel-body">
+      <TaskIntroCard
+        :title="introTitle"
+        :description="introDescription"
+        :highlights="introHighlights"
+      />
       <el-form class="task-submit-form" label-width="180px">
         <el-form-item label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".txt,.csv">

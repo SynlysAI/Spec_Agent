@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import FormLabelTooltip from '../components/FormLabelTooltip.vue'
 import SampleDownloadButton from '../components/SampleDownloadButton.vue'
+import TaskIntroCard from '../components/TaskIntroCard.vue'
 import { createNmrTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const router = useRouter()
@@ -72,6 +73,11 @@ const NMR_TOOLTIP_TEXT = {
 
 const NMR_SAMPLE_ASSET_PATH = '/example-spectra/nmr-demo.zip'
 const NMR_SAMPLE_DOWNLOAD_NAME = 'nmr-demo.zip'
+const NMR_INTRO_HIGHLIGHTS = [
+  '峰位置、峰类型与多重峰类型',
+  '积分结果与归一化结果',
+  '内标校正后的结构化峰表',
+]
 
 /**
  * 根据核种应用默认峰检测参数。
@@ -263,6 +269,11 @@ function goTaskDetail() {
       <h3 class="panel-title">NMR 任务提交</h3>
     </div>
     <div class="panel-body">
+      <TaskIntroCard
+        title="用于对 1H / 13C NMR 谱进行自动峰识别、积分与归一化分析"
+        description="适合提交单个 Bruker 数据目录进行自动分析。你可以通过峰检测、范围和内标参数，细化系统对谱图的处理方式。"
+        :highlights="NMR_INTRO_HIGHLIGHTS"
+      />
       <el-form class="task-submit-form" label-width="190px">
         <el-form-item label="上传 NMR 文件夹">
           <input

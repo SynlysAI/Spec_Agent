@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import FormLabelTooltip from '../components/FormLabelTooltip.vue'
 import SampleDownloadButton from '../components/SampleDownloadButton.vue'
+import TaskIntroCard from '../components/TaskIntroCard.vue'
 import { createGpcTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const router = useRouter()
@@ -27,6 +28,11 @@ const GPC_TOOLTIP_TEXT = {
 
 const GPC_SAMPLE_ASSET_PATH = '/example-spectra/gpc-demo.arw'
 const GPC_SAMPLE_DOWNLOAD_NAME = 'gpc-demo.arw'
+const GPC_INTRO_HIGHLIGHTS = [
+  'Mn / Mw / Mz / PDI 等关键分子量参数',
+  '样品曲线对应的分析结果与图像产物',
+  '如上传对比报告，可查看与报告结果的对照信息',
+]
 
 // 三色曲线文件（红/绿/白）
 const curveFiles = reactive({
@@ -188,6 +194,11 @@ function goTaskDetail() {
       <h3 class="panel-title">GPC 任务提交</h3>
     </div>
     <div class="panel-body">
+      <TaskIntroCard
+        title="用于解析 GPC 原始曲线，得到样品的分子量分布与关键分子量参数"
+        description="适合对单个样品的 GPC 原始曲线做自动分析。你可以补充校准文件、三色曲线或对比报告，让结果更完整。"
+        :highlights="GPC_INTRO_HIGHLIGHTS"
+      />
       <el-form class="task-submit-form" label-width="180px">
         <el-form-item label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".arw">
