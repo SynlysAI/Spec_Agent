@@ -181,8 +181,8 @@ analysis/            # 算法分析层（独立于 app）
 | 变量名 | 说明 | 默认值 |
 | --- | --- | --- |
 | `AUTH_ENABLED` | 启用登录鉴权 | `false` |
-| `AUTH_USERNAME` | 登录账号 | `admin` |
-| `AUTH_PASSWORD` | 登录密码 | `admin123456` |
+| `AUTH_USERNAME` | 预留鉴权兼容配置，非当前正式登录入口 | `admin` |
+| `AUTH_PASSWORD` | 预留鉴权兼容配置，非当前正式登录入口 | `admin123456` |
 | `AUTH_SECRET` | JWT 签名密钥（未配置时自动生成） | 空 |
 | `AUTH_TOKEN_EXPIRE_HOURS` | Token 有效期（小时） | `12` |
 
@@ -192,6 +192,19 @@ analysis/            # 算法分析层（独立于 app）
 - 登录成功后通过 `Authorization: Bearer <token>` 访问受保护接口。
 - `/auth/me` 可用于前端启动时恢复当前登录用户、角色与状态。
 - `/admin/*` 接口仅允许管理员角色访问。
+
+首次部署如需创建首个管理员账号，可执行：
+
+```bash
+python scripts/create_admin_user.py --username admin
+```
+
+- 若未传 `--password`，脚本会进入交互式输入并要求确认两次密码。
+- 非交互环境下可显式传入密码：
+
+```bash
+python scripts/create_admin_user.py --username admin --password 'your-password'
+```
 
 ### 前端
 
@@ -436,6 +449,7 @@ python scripts/run_regression.py
 
 | 脚本 | 用途 |
 | --- | --- |
+| `scripts/create_admin_user.py` | 创建管理员账号 |
 | `scripts/backfill_ir_raman_smiles.py` | 回填 IR/Raman SMILES 数据 |
 
 ---
