@@ -324,6 +324,27 @@ body {
   color: var(--app-text-secondary);
 }
 
+.task-submit-help {
+  margin-left: 10px;
+  color: #7a8ca8;
+  font-size: 12px;
+}
+
+.task-submit-inline-link {
+  margin-left: 10px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.task-submit-form .el-form-item {
+  align-items: center;
+}
+
+.task-submit-form .el-form-item__label,
+.task-submit-form .el-form-item__label-wrap {
+  align-items: center;
+}
+
 .el-table {
   color: var(--app-text-primary);
 }

@@ -2,6 +2,8 @@
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import FormLabelTooltip from '../components/FormLabelTooltip.vue'
+import SampleDownloadButton from '../components/SampleDownloadButton.vue'
 import { createIrTask, createRamanTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const props = defineProps({
@@ -19,7 +21,25 @@ const uploadedFilename = ref('')
 const lastTaskId = ref('')
 
 const pageTitle = computed(() => (props.spectype === 'raman' ? 'Raman 任务提交' : 'IR 任务提交'))
-const formatHint = computed(() => (props.spectype === 'raman' ? '支持格式：txt/csv（Raman）' : '支持格式：txt/csv（IR）'))
+const uploadHint = computed(() =>
+  props.spectype === 'raman'
+    ? '支持 .txt / .csv，文件至少包含两列数值，通常为位移与强度。'
+    : '支持 .txt / .csv，文件至少包含两列数值，通常为波数与强度。',
+)
+const sampleAssetPath = computed(() =>
+  props.spectype === 'raman' ? '/example-spectra/raman-demo.txt' : '/example-spectra/ir-demo.txt',
+)
+const sampleDownloadName = computed(() =>
+  props.spectype === 'raman' ? 'raman-demo.txt' : 'ir-demo.txt',
+)
+
+const IR_RAMAN_TOOLTIP_TEXT = {
+  mode: '分析模式。greedy_decode 为直接生成；beam_search 返回多组生成候选；retrieval 偏向库检索；function_groups 更适合输出官能团解释。',
+  k: '候选数量 K。仅在 beam_search 或 retrieval 模式下生效，值越大返回候选越多。',
+  range: '分析范围。只截取 x0 到 x1 区间参与分析，x0 必须小于 x1。',
+  device: '推理设备。auto 自动选择；cpu 更稳；cuda 需要可用 GPU，通常更快。',
+  transmittance: '透射率转吸光度。仅对 IR 有效，只有原始数据是透射率谱时才建议开启。',
+}
 
 const form = reactive({
   mode: 'function_groups',
@@ -139,17 +159,25 @@ function goTaskDetail() {
       <h3 class="panel-title">{{ pageTitle }}</h3>
     </div>
     <div class="panel-body">
-      <el-form label-width="180px">
+      <el-form class="task-submit-form" label-width="180px">
         <el-form-item label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".txt,.csv">
             <el-button type="primary" plain>选择文件</el-button>
           </el-upload>
+          <SampleDownloadButton
+            :asset-path="sampleAssetPath"
+            :download-name="sampleDownloadName"
+            button-text="下载范例谱图"
+          />
           <el-tag v-if="uploadedFilename" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
-          <div class="upload-help">{{ formatHint }}，提交任务时自动上传</div>
+          <div class="task-submit-help">{{ uploadHint }}</div>
         </el-form-item>
 
         <el-divider content-position="left">分析参数</el-divider>
-        <el-form-item label="分析模式">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="分析模式" :tooltip="IR_RAMAN_TOOLTIP_TEXT.mode" />
+          </template>
           <el-select v-model="form.mode" style="width: 280px">
             <el-option label="greedy_decode" value="greedy_decode" />
             <el-option label="beam_search" value="beam_search" />
@@ -157,22 +185,34 @@ function goTaskDetail() {
             <el-option label="function_groups" value="function_groups" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="form.mode === 'beam_search' || form.mode === 'retrieval'" label="候选数量 K">
+        <el-form-item v-if="form.mode === 'beam_search' || form.mode === 'retrieval'">
+          <template #label>
+            <FormLabelTooltip label="候选数量 K" :tooltip="IR_RAMAN_TOOLTIP_TEXT.k" />
+          </template>
           <el-input-number v-model="form.k" :min="1" :max="10" />
         </el-form-item>
-        <el-form-item label="分析范围 x0/x1">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="分析范围 x0/x1" :tooltip="IR_RAMAN_TOOLTIP_TEXT.range" />
+          </template>
           <el-input-number v-model="form.x0" :min="0" />
           <span style="margin: 0 8px">-</span>
           <el-input-number v-model="form.x1" :min="0" />
         </el-form-item>
-        <el-form-item label="推理设备">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="推理设备" :tooltip="IR_RAMAN_TOOLTIP_TEXT.device" />
+          </template>
           <el-radio-group v-model="form.device">
             <el-radio value="auto">auto</el-radio>
             <el-radio value="cpu">cpu</el-radio>
             <el-radio value="cuda">cuda</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="props.spectype === 'ir'" label="透射率转吸光度">
+        <el-form-item v-if="props.spectype === 'ir'">
+          <template #label>
+            <FormLabelTooltip label="透射率转吸光度" :tooltip="IR_RAMAN_TOOLTIP_TEXT.transmittance" />
+          </template>
           <el-switch v-model="form.transmittance" />
         </el-form-item>
         <el-form-item label="任务优先级">
@@ -201,12 +241,6 @@ function goTaskDetail() {
 </template>
 
 <style scoped>
-.upload-help {
-  margin-left: 10px;
-  color: #7a8ca8;
-  font-size: 12px;
-}
-
 :deep(.el-form-item__label) {
   white-space: nowrap;
 }

@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import SampleDownloadButton from '../components/SampleDownloadButton.vue'
 import { createLcmsTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const router = useRouter()
@@ -14,6 +15,9 @@ const lastTaskId = ref('')
 const form = reactive({
   priority: 5,
 })
+
+const LCMS_SAMPLE_ASSET_PATH = '/example-spectra/lcms-demo.csv'
+const LCMS_SAMPLE_DOWNLOAD_NAME = 'lcms-demo.csv'
 
 /**
  * 处理 LCMS 文件选择（仅缓存，不立即上传）。
@@ -112,13 +116,20 @@ function goTaskDetail() {
       <h3 class="panel-title">LCMS 任务提交</h3>
     </div>
     <div class="panel-body">
-      <el-form label-width="180px">
+      <el-form class="task-submit-form" label-width="180px">
         <el-form-item label="上传谱图文件">
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".txt,.csv">
             <el-button type="primary" plain>选择文件</el-button>
           </el-upload>
+          <SampleDownloadButton
+            :asset-path="LCMS_SAMPLE_ASSET_PATH"
+            :download-name="LCMS_SAMPLE_DOWNLOAD_NAME"
+            button-text="下载范例谱图"
+          />
           <el-tag v-if="uploadedFilename" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
-          <div class="upload-help">支持格式：txt/csv（LCMS），提交任务时自动上传</div>
+          <div class="task-submit-help">
+            支持 .txt / .csv 单个 LCMS 质谱图文件，内容应为 m/z 和 Intensity 两列数据。
+          </div>
         </el-form-item>
 
         <el-form-item label="任务优先级">
@@ -145,11 +156,3 @@ function goTaskDetail() {
     </div>
   </div>
 </template>
-
-<style scoped>
-.upload-help {
-  margin-left: 10px;
-  color: #7a8ca8;
-  font-size: 12px;
-}
-</style>

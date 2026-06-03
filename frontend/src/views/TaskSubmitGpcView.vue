@@ -2,6 +2,8 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import FormLabelTooltip from '../components/FormLabelTooltip.vue'
+import SampleDownloadButton from '../components/SampleDownloadButton.vue'
 import { createGpcTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const router = useRouter()
@@ -17,6 +19,14 @@ const form = reactive({
   manualEnd: null,
   priority: 5,
 })
+
+const GPC_TOOLTIP_TEXT = {
+  detectMode: '峰检测模式。自动检测由系统识别主峰范围；手动区间适合自动识别不稳定时，由你直接指定保留时间范围。',
+  manualInterval: '手动检测区间。填写主峰保留时间的起止范围，仅在手动区间模式下生效。',
+}
+
+const GPC_SAMPLE_ASSET_PATH = '/example-spectra/gpc-demo.arw'
+const GPC_SAMPLE_DOWNLOAD_NAME = 'gpc-demo.arw'
 
 // 三色曲线文件（红/绿/白）
 const curveFiles = reactive({
@@ -178,24 +188,43 @@ function goTaskDetail() {
       <h3 class="panel-title">GPC 任务提交</h3>
     </div>
     <div class="panel-body">
-      <el-form label-width="180px">
+      <el-form class="task-submit-form" label-width="180px">
         <el-form-item label="上传谱图文件">
-          <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".arw,.pdf,.json">
+          <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".arw">
             <el-button type="primary" plain>选择文件</el-button>
           </el-upload>
+          <SampleDownloadButton
+            :asset-path="GPC_SAMPLE_ASSET_PATH"
+            :download-name="GPC_SAMPLE_DOWNLOAD_NAME"
+            button-text="下载范例谱图"
+          />
           <el-tag v-if="uploadedFilename" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
-          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">提交任务时自动上传</div>
+          <div class="task-submit-help">
+            支持 .arw 原始曲线文件。校准文件和对比报告请在下方可选附件上传。
+          </div>
         </el-form-item>
 
         <el-divider content-position="left">峰检测参数</el-divider>
-        <el-form-item label="峰检测模式">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip
+              label="峰检测模式"
+              :tooltip="GPC_TOOLTIP_TEXT.detectMode"
+            />
+          </template>
           <el-radio-group v-model="form.detectMode">
             <el-radio value="auto">自动检测</el-radio>
             <el-radio value="manual">手动区间</el-radio>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item v-if="form.detectMode === 'manual'" label="手动检测区间">
+        <el-form-item v-if="form.detectMode === 'manual'">
+          <template #label>
+            <FormLabelTooltip
+              label="手动检测区间"
+              :tooltip="GPC_TOOLTIP_TEXT.manualInterval"
+            />
+          </template>
           <el-input-number v-model="form.manualStart" :precision="4" />
           <span style="margin: 0 8px">-</span>
           <el-input-number v-model="form.manualEnd" :precision="4" />
@@ -215,17 +244,19 @@ function goTaskDetail() {
               </el-tag>
             </div>
           </div>
-          <div style="color: #7a8ca8; font-size: 12px; margin-top: 4px">可选，传则三个颜色必须传完整（.arw）</div>
+          <div class="task-submit-help" style="margin-top: 4px; margin-left: 0">
+            可选，支持红/绿/白各 1 份 .arw。若提供则三个颜色必须传完整。
+          </div>
         </el-form-item>
 
         <el-form-item label="校准文件">
-          <el-upload :show-file-list="false" :before-upload="(file) => handleOptionalFile(file, calibrationFile)" accept=".json,.arw">
+          <el-upload :show-file-list="false" :before-upload="(file) => handleOptionalFile(file, calibrationFile)" accept=".json,.pdf">
             <el-button plain>选择文件</el-button>
           </el-upload>
           <el-tag v-if="calibrationFile.filename" closable @close="clearOptionalFile(calibrationFile)" style="margin-left: 10px">
             {{ calibrationFile.filename }}
           </el-tag>
-          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">可选，不传则使用默认校准文件</div>
+          <div class="task-submit-help">可选，支持 .json / .pdf，用于提供校准表或校准报告。</div>
         </el-form-item>
 
         <el-form-item label="对比报告PDF">
@@ -235,7 +266,7 @@ function goTaskDetail() {
           <el-tag v-if="comparisonPdf.filename" closable @close="clearOptionalFile(comparisonPdf)" style="margin-left: 10px">
             {{ comparisonPdf.filename }}
           </el-tag>
-          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">可选，不传则不进行对比报告分析</div>
+          <div class="task-submit-help">可选，支持 .pdf，用于和样品对应的 GPC 报告做结果对照。</div>
         </el-form-item>
 
         <el-form-item label="任务优先级">

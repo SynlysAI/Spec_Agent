@@ -3,6 +3,8 @@ import { reactive, ref, watch } from 'vue'
 import JSZip from 'jszip'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
+import FormLabelTooltip from '../components/FormLabelTooltip.vue'
+import SampleDownloadButton from '../components/SampleDownloadButton.vue'
 import { createNmrTask, getApiErrorMessage, uploadFile } from '../api/specAgentApi'
 
 const router = useRouter()
@@ -50,6 +52,26 @@ const form = reactive({
   internalStandardPrefer: ['solvent', 'tms'],
   priority: 5,
 })
+
+const NMR_TOOLTIP_TEXT = {
+  threshold: '峰检测阈值。值越高，越不容易把弱峰或噪声识别成有效峰。',
+  minDistance: '最小峰间距，单位 ppm。用于避免相邻很近的峰被重复识别。',
+  minProminence: '最小峰高阈值。要求峰相对周围基线足够明显，值越高越偏向保留显著峰。',
+  widthMultiplier: '峰宽倍率。用于放大或收缩积分和峰宽估计范围，值越大覆盖范围越宽。',
+  baselineDegree: '基线拟合阶数。用于扣除基线漂移，阶数越高对复杂基线的拟合更灵活。',
+  smoothWindow: '平滑窗口。用于降低噪声；窗口越大越平滑，但可能削弱窄峰细节。',
+  enableMultiplet: '多重峰聚合。开启后会把耦合导致的近邻细分峰按多重峰规则合并分析。',
+  maxCouplingHz: '耦合常数阈值。用于判断相近峰是否视为同一组多重峰，值越大合并更宽松。',
+  detectionRangeMode: '检测范围模式。全谱会扫描全部 ppm 区间，自定义范围只在指定 ppm 内找峰。',
+  detectionRange: '自定义检测范围。填写需要检测的 ppm 起止范围，适合只分析局部谱段。',
+  ppmOffsetMode: '位移校正方式。自动按内标/TMS 对齐；手动适合你已知整体 ppm 偏移量时使用。',
+  ppmOffsetManual: '手动校正值。用于整体平移谱图的 ppm 位置，正负方向按当前谱图坐标解释。',
+  integrationMethod: '积分方法。Voigt 拟合更适合峰形重叠场景；梯形积分更直观、速度更快。',
+  internalStandardPrefer: '内标优先级。系统自动寻找内标时，会按这里的顺序优先尝试溶剂峰或 TMS。',
+}
+
+const NMR_SAMPLE_ASSET_PATH = '/example-spectra/nmr-demo.zip'
+const NMR_SAMPLE_DOWNLOAD_NAME = 'nmr-demo.zip'
 
 /**
  * 根据核种应用默认峰检测参数。
@@ -241,7 +263,7 @@ function goTaskDetail() {
       <h3 class="panel-title">NMR 任务提交</h3>
     </div>
     <div class="panel-body">
-      <el-form label-width="190px">
+      <el-form class="task-submit-form" label-width="190px">
         <el-form-item label="上传 NMR 文件夹">
           <input
             ref="folderInputRef"
@@ -255,9 +277,14 @@ function goTaskDetail() {
           <el-button type="primary" plain @click="openFolderPicker">
             选择 Bruker 目录
           </el-button>
+          <SampleDownloadButton
+            :asset-path="NMR_SAMPLE_ASSET_PATH"
+            :download-name="NMR_SAMPLE_DOWNLOAD_NAME"
+            button-text="下载范例目录"
+          />
           <el-tag v-if="uploadedFilename" style="margin-left: 10px">{{ uploadedFilename }}</el-tag>
-          <div style="margin-left: 10px; color: #7a8ca8; font-size: 12px">
-            将自动打包为 zip，提交任务时上传
+          <div class="task-submit-help">
+            请选择单个 Bruker 数据目录。当前页面用于 1H / 13C NMR 自动分析。
           </div>
         </el-form-item>
 
@@ -268,54 +295,93 @@ function goTaskDetail() {
             <el-radio value="13C">碳谱（13C）</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="峰检测阈值">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="峰检测阈值" :tooltip="NMR_TOOLTIP_TEXT.threshold" />
+          </template>
           <el-input-number v-model="form.threshold" :precision="4" :step="0.005" />
         </el-form-item>
-        <el-form-item label="最小峰间距">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="最小峰间距" :tooltip="NMR_TOOLTIP_TEXT.minDistance" />
+          </template>
           <el-input-number v-model="form.minDistance" :precision="3" :step="0.1" />
         </el-form-item>
-        <el-form-item label="最小峰高阈值">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="最小峰高阈值" :tooltip="NMR_TOOLTIP_TEXT.minProminence" />
+          </template>
           <el-input-number v-model="form.minProminence" :precision="4" :step="0.005" />
         </el-form-item>
-        <el-form-item label="峰宽倍率">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="峰宽倍率" :tooltip="NMR_TOOLTIP_TEXT.widthMultiplier" />
+          </template>
           <el-input-number v-model="form.widthMultiplier" :precision="2" :step="0.1" />
         </el-form-item>
-        <el-form-item label="基线拟合阶数">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="基线拟合阶数" :tooltip="NMR_TOOLTIP_TEXT.baselineDegree" />
+          </template>
           <el-input-number v-model="form.baselineDegree" :min="1" :max="10" />
         </el-form-item>
-        <el-form-item label="平滑窗口">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="平滑窗口" :tooltip="NMR_TOOLTIP_TEXT.smoothWindow" />
+          </template>
           <el-input-number v-model="form.smoothWindow" :min="1" :max="99" />
         </el-form-item>
-        <el-form-item label="启用多重峰聚合">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="启用多重峰聚合" :tooltip="NMR_TOOLTIP_TEXT.enableMultiplet" />
+          </template>
           <el-switch v-model="form.enableMultiplet" />
         </el-form-item>
-        <el-form-item label="耦合常数阈值（Hz)">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="耦合常数阈值（Hz）" :tooltip="NMR_TOOLTIP_TEXT.maxCouplingHz" />
+          </template>
           <el-input-number v-model="form.maxCouplingHz" :precision="2" :step="1" :min="0.1" />
         </el-form-item>
 
-        <el-form-item label="检测范围模式（ppm）">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="检测范围模式（ppm）" :tooltip="NMR_TOOLTIP_TEXT.detectionRangeMode" />
+          </template>
           <el-radio-group v-model="form.detectionRangeMode">
             <el-radio value="full">全谱范围（ppm）</el-radio>
             <el-radio value="custom">自定义范围（ppm）</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="form.detectionRangeMode === 'custom'" label="自定义检测范围（ppm）">
+        <el-form-item v-if="form.detectionRangeMode === 'custom'">
+          <template #label>
+            <FormLabelTooltip label="自定义检测范围（ppm）" :tooltip="NMR_TOOLTIP_TEXT.detectionRange" />
+          </template>
           <el-input-number v-model="form.detectionRangeMin" :precision="3" />
           <span style="margin: 0 8px">-</span>
           <el-input-number v-model="form.detectionRangeMax" :precision="3" />
         </el-form-item>
 
         <el-divider content-position="left">积分与内标</el-divider>
-        <el-form-item label="位移校正方式">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="位移校正方式" :tooltip="NMR_TOOLTIP_TEXT.ppmOffsetMode" />
+          </template>
           <el-radio-group v-model="form.ppmOffsetMode">
             <el-radio value="auto">自动校正（按 TMS）</el-radio>
             <el-radio value="manual">手动位移校正</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="form.ppmOffsetMode === 'manual'" label="手动校正值（ppm）">
+        <el-form-item v-if="form.ppmOffsetMode === 'manual'">
+          <template #label>
+            <FormLabelTooltip label="手动校正值（ppm）" :tooltip="NMR_TOOLTIP_TEXT.ppmOffsetManual" />
+          </template>
           <el-input-number v-model="form.ppmOffsetManual" :precision="3" :step="0.01" />
         </el-form-item>
-        <el-form-item label="积分方法">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="积分方法" :tooltip="NMR_TOOLTIP_TEXT.integrationMethod" />
+          </template>
           <el-radio-group v-model="form.integrationMethod">
             <el-radio value="voigt">Voigt 拟合积分</el-radio>
             <el-radio value="trapezoid">梯形积分</el-radio>
@@ -324,7 +390,10 @@ function goTaskDetail() {
         <el-form-item label="内标策略">
           <el-input v-model="form.internalStandardPolicy" disabled />
         </el-form-item>
-        <el-form-item label="内标优先级">
+        <el-form-item>
+          <template #label>
+            <FormLabelTooltip label="内标优先级" :tooltip="NMR_TOOLTIP_TEXT.internalStandardPrefer" />
+          </template>
           <el-select v-model="form.internalStandardPrefer" multiple style="width: 320px">
             <el-option label="溶剂峰（solvent）" value="solvent" />
             <el-option label="TMS 峰（tms）" value="tms" />
