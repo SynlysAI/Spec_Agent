@@ -277,9 +277,9 @@ analysis/            # 算法分析层（独立于 app）
 
 #### LCMS 转换依赖说明
 
-- 默认 `LCMS_MSCONVERT_MODE=auto`，优先调用本机 `msconvert`，兼容现有 Windows + ProteoWizard 安装方式
+- 默认 `LCMS_MSCONVERT_MODE=auto`，优先读取 `LCMS_MSCONVERT_PATH`，未配置时再尝试从系统 PATH 中查找本机 `msconvert`
 - Linux 宿主机直跑后端时，推荐设置 `LCMS_MSCONVERT_MODE=docker`，通过官方镜像 `proteowizard/pwiz-skyline-i-agree-to-the-vendor-licenses` 执行转换
-- 如需显式指定本机 `msconvert` 路径，可设置 `LCMS_MSCONVERT_PATH`
+- Windows 环境建议显式设置 `LCMS_MSCONVERT_PATH`，不要依赖固定安装目录扫描
 - 如需指定 Docker 命令或镜像，可分别设置 `LCMS_MSCONVERT_DOCKER_BIN`、`LCMS_MSCONVERT_DOCKER_IMAGE`
 - 如果后端自身运行在 Docker 容器内，除了让容器具备 `docker` CLI 和 `/var/run/docker.sock` 访问能力外，还必须设置 `LCMS_MSCONVERT_SHARED_ROOT` 为宿主机与后端容器共享的同一路径，并将该路径同时挂载给后端容器；否则服务无法把临时 `.raw` 目录再挂载进 ProteoWizard 容器
 - `LCMS_MSCONVERT_SHARED_ROOT` 建议使用仅含 ASCII 的绝对路径，例如 `/tmp/spec-agent-lcms-convert`

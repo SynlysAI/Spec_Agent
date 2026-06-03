@@ -57,7 +57,10 @@ class LcmsConvertService:
 
     @staticmethod
     def find_msconvert_binary() -> str | None:
-        """查找本机可执行的 msconvert 程序。"""
+        """查找本机可执行的 msconvert 程序。
+
+        优先使用环境变量 `LCMS_MSCONVERT_PATH`，未配置时再尝试从 PATH 中查找。
+        """
         configured = str(settings.lcms_msconvert_path or "").strip()
         if configured:
             configured_path = Path(configured).expanduser()
@@ -73,26 +76,6 @@ class LcmsConvertService:
         candidate = shutil.which("msconvert") or shutil.which("msconvert.exe")
         if candidate:
             return candidate
-
-        common_paths = [
-            Path(r"C:\Program Files\ProteoWizard\msconvert.exe"),
-            Path(r"C:\Program Files (x86)\ProteoWizard\msconvert.exe"),
-            Path(r"D:\Program Files\ProteoWizard\msconvert.exe"),
-        ]
-        for path in common_paths:
-            if path.exists():
-                return str(path)
-
-        for base in [
-            Path(r"C:\Program Files\ProteoWizard"),
-            Path(r"C:\Program Files (x86)\ProteoWizard"),
-            Path(r"D:\Program Files\ProteoWizard"),
-        ]:
-            if not base.exists():
-                continue
-            matches = sorted(base.rglob("msconvert.exe"))
-            if matches:
-                return str(matches[-1])
 
         return None
 
