@@ -8,6 +8,7 @@ import { setAuthSession } from '../auth/authState'
 
 const route = useRoute()
 const router = useRouter()
+const BRAND_LOGO_SRC = '/brand/zhichu-mark.jpg'
 const submitting = ref(false)
 const formRef = ref(null)
 const form = reactive({
@@ -75,10 +76,10 @@ async function handleSubmit() {
     <div class="login-background"></div>
     <section class="login-panel">
       <div class="login-brand">
-        <div class="login-brand-mark">S</div>
+        <img :src="BRAND_LOGO_SRC" alt="智储图标" class="login-brand-mark" />
         <div>
           <div class="login-brand-title">Spec Agent</div>
-          <div class="login-brand-subtitle">本地部署登录入口</div>
+          <div class="login-brand-subtitle">智能表征谱解平台</div>
         </div>
       </div>
 
@@ -160,13 +161,8 @@ async function handleSubmit() {
   width: 48px;
   height: 48px;
   border-radius: 16px;
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-  font-size: 24px;
-  font-weight: 700;
-  background: linear-gradient(145deg, #155eef, #00a3ad);
-  box-shadow: 0 14px 28px rgba(21, 94, 239, 0.28);
+  object-fit: cover;
+  box-shadow: 0 14px 28px rgba(21, 94, 239, 0.18);
 }
 
 .login-brand-title {

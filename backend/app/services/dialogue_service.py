@@ -7,6 +7,7 @@ from typing import Any
 
 from app.infra.repositories import ResultRepository, TaskRepository
 from app.schemas.dialogue import DialogueReportItem
+from app.services.dialogue_model_service import dialogue_model_service
 
 ANALYSIS_TYPE_LABELS = {
     "none": "无",
@@ -26,6 +27,24 @@ ANALYSIS_TYPE_TO_TASK_KIND = {
 
 class DialogueService:
     """提供问答页面所需的数据检索与规则回答能力。"""
+
+    @staticmethod
+    def list_models() -> list[dict[str, str]]:
+        """列出问答模型选项。
+
+        Returns:
+            问答模型列表。
+        """
+        return dialogue_model_service.list_models()
+
+    @staticmethod
+    def get_default_model_key() -> str:
+        """获取默认问答模型键。
+
+        Returns:
+            默认模型键。
+        """
+        return dialogue_model_service.get_default_model_key()
 
     @staticmethod
     def list_analysis_types() -> list[dict[str, Any]]:
@@ -94,6 +113,7 @@ class DialogueService:
 
     @staticmethod
     def generate_answer(
+        model_key: str,
         question: str,
         analysis_type: str,
         report_id: str | None = None,
@@ -103,6 +123,7 @@ class DialogueService:
         """按规则生成问答回复。
 
         Args:
+            model_key: 问答模型键。
             question: 用户问题。
             analysis_type: 分析类型。
             report_id: 报告 ID。
@@ -118,6 +139,7 @@ class DialogueService:
 
         used_excerpt = DialogueService._extract_relevant_excerpt(report_text=report_text, question=question)
         llm_answer = DialogueService._generate_answer_with_llm(
+            model_key=model_key,
             question=question,
             analysis_type=analysis_type,
             report_text=report_text,
@@ -182,15 +204,17 @@ class DialogueService:
 
     @staticmethod
     def _generate_answer_with_llm(
+        model_key: str,
         question: str,
         analysis_type: str,
         report_text: str,
         history: list[dict[str, str]],
         system_prompt: str | None,
     ) -> str:
-        """使用 LLM 生成问答结果，失败时返回空字符串。
+        """使用指定问答模型生成回复。
 
         Args:
+            model_key: 问答模型键。
             question: 用户问题。
             analysis_type: 分析类型编码。
             report_text: 报告全文。
@@ -198,45 +222,26 @@ class DialogueService:
             system_prompt: 用户自定义提示词。
 
         Returns:
-            LLM 回答文本，失败时返回空字符串。
+            LLM 回答文本。
         """
-        try:
-            from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-            from app.modules.common.llm_service import create_llm_client
+        merged_system_prompt = DialogueService._build_llm_system_prompt(
+            analysis_type=analysis_type,
+            report_text=report_text,
+            user_prompt=system_prompt,
+        )
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": merged_system_prompt}
+        ]
 
-            llm_client = create_llm_client()
-
-            merged_system_prompt = DialogueService._build_llm_system_prompt(
-                analysis_type=analysis_type,
-                report_text=report_text,
-                user_prompt=system_prompt,
-            )
-            messages: list = [SystemMessage(content=merged_system_prompt)]
-
-            for item in history[-8:]:
-                role = str(item.get("role", "")).lower()
-                content = str(item.get("content", "")).strip()
-                if not content:
-                    continue
-                if role == "assistant":
-                    messages.append(AIMessage(content=content))
-                else:
-                    messages.append(HumanMessage(content=content))
-            messages.append(HumanMessage(content=question))
-
-            response = llm_client.invoke(messages)
-            content = getattr(response, "content", "")
-            if isinstance(content, list):
-                text_parts: list[str] = []
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text_parts.append(str(block.get("text", "")))
-                    else:
-                        text_parts.append(str(block))
-                return "\n".join([item for item in text_parts if item]).strip()
-            return str(content).strip()
-        except Exception:
-            return ""
+        for item in history[-8:]:
+            role = str(item.get("role", "")).lower()
+            content = str(item.get("content", "")).strip()
+            if not content:
+                continue
+            normalized_role = "assistant" if role == "assistant" else "user"
+            messages.append({"role": normalized_role, "content": content})
+        messages.append({"role": "user", "content": question})
+        return dialogue_model_service.chat(model_key=model_key, messages=messages)
 
     @staticmethod
     def _build_llm_system_prompt(analysis_type: str, report_text: str, user_prompt: str | None) -> str:

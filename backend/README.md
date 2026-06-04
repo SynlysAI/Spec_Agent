@@ -154,17 +154,20 @@ analysis/            # 算法分析层（独立于 app）
 | `RAMAN_CAPTURE_SUBMIT_PORT` | 拉曼提交端口 | `7001` |
 | `RAMAN_CAPTURE_RESULT_PORT` | 拉曼结果端口 | `7002` |
 
-### LLM
+### 问答模型
 
 | 变量名 | 说明 | 默认值 |
 | --- | --- | --- |
-| `LLM_MODEL` | 模型名称 | `deepseek-chat` |
-| `LLM_API_KEY` | API Key | 空 |
-| `LLM_BASE_URL` | API 地址 | `https://api.agicto.cn/v1` |
-| `LLM_TEMPERATURE` | 生成温度 | `0.7` |
-| `LLM_MAX_TOKENS` | 最大 token | `8192` |
-| `LLM_TIMEOUT` | 超时（秒） | `60` |
-| `LLM_MAX_RETRIES` | 最大重试 | `2` |
+| `DIALOGUE_MODEL_DEFAULT_KEY` | 问答默认模型键 | `deepseek_v4_flash_w8a8_mtp` |
+| `DIALOGUE_LLM_API_KEY` | 问答模型共享 API Key | 空 |
+| `DIALOGUE_LLM_TEMPERATURE` | 问答生成温度 | `0.3` |
+| `DIALOGUE_LLM_MAX_TOKENS` | 问答最大 token | `4096` |
+| `DIALOGUE_LLM_TIMEOUT` | 问答超时（秒） | `60` |
+| `DIALOGUE_LLM_MAX_RETRIES` | 问答最大重试次数 | `1` |
+| `DIALOGUE_MODEL_QWEN_35B_A3B_BASE_URL` | Qwen3.6-35B-A3B 接口地址 | 空 |
+| `DIALOGUE_MODEL_DEEPSEEK_V4_FLASH_W8A8_MTP_BASE_URL` | DeepSeek-V4-Flash-w8a8-mtp 接口地址 | 空 |
+| `DIALOGUE_MODEL_QWEN_35B_A3B_64K_BASE_URL` | Qwen3.6-35B-A3B-64k 接口地址 | 空 |
+| `DIALOGUE_MODEL_GLM_5_1_W8A8_A3_BASE_URL` | GLM-5.1-w8a8-A3 接口地址 | 空 |
 
 ### 路径
 

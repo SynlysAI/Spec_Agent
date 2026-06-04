@@ -72,8 +72,6 @@ python agents/langraph_gpc_agent.py <input_path> --detect-mode auto --report-pat
 - `--calibration-file <path>`（`.json` 或 `.pdf`）
 - 对比用 PDF（可选）：
 - `--comparison-pdf <path>`
-- LLM 解读（可选）：
-- `--enable-llm`
 - 写入报告：
 - `--report-path <path.md>`
 

@@ -29,6 +29,8 @@ const isAuthPage = computed(() => route.path === '/login' || route.path === '/re
 const authBootstrapping = ref(true)
 const AUTH_EXPIRED_EVENT_NAME = 'spec-agent-auth-expired'
 const APP_VERSION = '1.2.9'
+const BRAND_LOGO_SRC = '/brand/zhichu-mark.jpg'
+const BRAND_PARTNER_TEXT = '智储大装置｜嘉庚实验室｜厦门大学｜苏州实验室｜浦江实验室'
 const canAccessAdminFeatures = computed(() => !authState.authEnabled || authState.role === 'admin')
 const currentUserDisplayName = computed(() => {
   if (!authState.authEnabled) {
@@ -150,12 +152,15 @@ function formatCurrentDate() {
 
 /**
  * 将当前页面跳转到登录页。
+ *
+ * Returns:
+ *   Promise<void>
  */
-function redirectToLogin() {
+async function redirectToLogin() {
   if (isAuthPublicRoute.value) {
     return
   }
-  router.replace({
+  await router.replace({
     path: '/login',
     query: { redirect: route.fullPath },
   })
@@ -194,7 +199,7 @@ async function recoverAuthBootstrap(error) {
     setAuthEnabled(statusData.auth_enabled)
     if (!statusData.auth_enabled) {
       if (isAuthPublicRoute.value) {
-        router.replace('/dashboard')
+        await router.replace('/dashboard')
       }
       return
     }
@@ -202,7 +207,7 @@ async function recoverAuthBootstrap(error) {
       return
     }
     clearAuthSession()
-    redirectToLogin()
+    await redirectToLogin()
     if (!isAuthenticationError(error)) {
       ElMessage.error(`鉴权状态初始化失败：${getApiErrorMessage(error)}`)
     }
@@ -210,7 +215,7 @@ async function recoverAuthBootstrap(error) {
     clearAuthSession()
     setAuthEnabled(true)
     ElMessage.error(`鉴权状态初始化失败：${getApiErrorMessage(statusError)}`)
-    redirectToLogin()
+    await redirectToLogin()
   }
 }
 
@@ -226,7 +231,7 @@ async function initializeAuthState() {
     setAuthEnabled(data.auth_enabled)
     if (!data.auth_enabled) {
       if (isAuthPublicRoute.value) {
-        router.replace('/dashboard')
+        await router.replace('/dashboard')
       }
       return
     }
@@ -235,7 +240,7 @@ async function initializeAuthState() {
       return
     }
     clearAuthSession()
-    redirectToLogin()
+    await redirectToLogin()
   } catch (error) {
     await recoverAuthBootstrap(error)
   } finally {
@@ -270,6 +275,7 @@ onBeforeUnmount(() => {
 <template>
   <div v-if="authBootstrapping" class="app-loading-shell">
     <div class="app-loading-card">
+      <img :src="BRAND_LOGO_SRC" alt="智储图标" class="app-loading-logo" />
       <div class="app-loading-title">Spec Agent</div>
       <div class="app-loading-text">正在初始化访问控制...</div>
     </div>
@@ -278,7 +284,7 @@ onBeforeUnmount(() => {
   <el-container v-else class="app-shell">
     <el-aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }" :width="sidebarCollapsed ? '66px' : '220px'">
       <div class="brand">
-        <div class="brand-logo">S</div>
+        <img class="brand-logo" :src="BRAND_LOGO_SRC" alt="智储图标" />
         <div v-if="!sidebarCollapsed" class="brand-text">
           <div class="brand-title">Spec Agent</div>
           <div class="brand-subtitle">谱图智能分析平台</div>
@@ -359,8 +365,20 @@ onBeforeUnmount(() => {
         </el-menu>
       </div>
       <div class="sidebar-version" :class="{ collapsed: sidebarCollapsed }">
-        <span class="sidebar-version-label">版本</span>
-        <span class="sidebar-version-value">{{ APP_VERSION }}</span>
+        <template v-if="sidebarCollapsed">
+          <img :src="BRAND_LOGO_SRC" alt="智储图标" class="sidebar-version-logo" />
+          <span class="sidebar-version-mini">{{ APP_VERSION }}</span>
+        </template>
+        <template v-else>
+          <div class="sidebar-version-top">
+            <span class="sidebar-version-label">版本</span>
+            <span class="sidebar-version-badge">v{{ APP_VERSION }}</span>
+          </div>
+          <div class="sidebar-meta-inline">
+            <span class="sidebar-meta-inline-label">合作单位</span>
+            <span class="sidebar-meta-partners">{{ BRAND_PARTNER_TEXT }}</span>
+          </div>
+        </template>
       </div>
     </el-aside>
     <el-container>

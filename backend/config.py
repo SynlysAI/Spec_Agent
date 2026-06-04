@@ -134,7 +134,6 @@ def _build_global_config() -> dict[str, object]:
         "data_storage": _build_data_storage_config(),
         "paths": _build_paths_config(),
         "services": _build_services_config(),
-        "llm": settings.llm_config.copy(),
         "resources": _build_resources_config(),
     }
 

@@ -97,14 +97,32 @@ class Settings:
         self.raman_capture_submit_port: int = int(os.getenv("RAMAN_CAPTURE_SUBMIT_PORT", "7001"))
         self.raman_capture_result_port: int = int(os.getenv("RAMAN_CAPTURE_RESULT_PORT", "7002"))
 
-        # LLM 配置
-        self.llm_model: str = os.getenv("LLM_MODEL", "deepseek-chat")
-        self.llm_api_key: str = os.getenv("LLM_API_KEY", "")
-        self.llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.agicto.cn/v1")
-        self.llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
-        self.llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
-        self.llm_timeout: int = int(os.getenv("LLM_TIMEOUT", "60"))
-        self.llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
+        # 问答模型配置
+        self.dialogue_model_default_key: str = os.getenv(
+            "DIALOGUE_MODEL_DEFAULT_KEY",
+            "deepseek_v4_flash_w8a8_mtp",
+        ).strip() or "deepseek_v4_flash_w8a8_mtp"
+        self.dialogue_llm_api_key: str = os.getenv("DIALOGUE_LLM_API_KEY", "").strip()
+        self.dialogue_llm_temperature: float = float(os.getenv("DIALOGUE_LLM_TEMPERATURE", "0.3"))
+        self.dialogue_llm_max_tokens: int = int(os.getenv("DIALOGUE_LLM_MAX_TOKENS", "4096"))
+        self.dialogue_llm_timeout: int = int(os.getenv("DIALOGUE_LLM_TIMEOUT", "60"))
+        self.dialogue_llm_max_retries: int = int(os.getenv("DIALOGUE_LLM_MAX_RETRIES", "1"))
+        self.dialogue_model_qwen_35b_a3b_base_url: str = os.getenv(
+            "DIALOGUE_MODEL_QWEN_35B_A3B_BASE_URL",
+            "",
+        ).strip()
+        self.dialogue_model_deepseek_v4_flash_w8a8_mtp_base_url: str = os.getenv(
+            "DIALOGUE_MODEL_DEEPSEEK_V4_FLASH_W8A8_MTP_BASE_URL",
+            "",
+        ).strip()
+        self.dialogue_model_qwen_35b_a3b_64k_base_url: str = os.getenv(
+            "DIALOGUE_MODEL_QWEN_35B_A3B_64K_BASE_URL",
+            "",
+        ).strip()
+        self.dialogue_model_glm_5_1_w8a8_a3_base_url: str = os.getenv(
+            "DIALOGUE_MODEL_GLM_5_1_W8A8_A3_BASE_URL",
+            "",
+        ).strip()
 
         # GPC 兼容配置
         self.spectrum_files_root: Path = Path(
@@ -190,16 +208,45 @@ class Settings:
         )
 
     @property
-    def llm_config(self) -> dict[str, object]:
-        """返回统一 LLM 配置。"""
+    def dialogue_model_catalog(self) -> list[dict[str, object]]:
+        """返回问答页面支持的模型目录。"""
+        return [
+            {
+                "model_key": "qwen_35b_a3b",
+                "label": "Qwen3.6-35B-A3B",
+                "model": "Qwen3.6-35B-A3B",
+                "base_url": self.dialogue_model_qwen_35b_a3b_base_url,
+                "supports_thinking_toggle": True,
+            },
+            {
+                "model_key": "deepseek_v4_flash_w8a8_mtp",
+                "label": "DeepSeek-V4-Flash-w8a8-mtp",
+                "model": "DeepSeek-V4-Flash-w8a8-mtp",
+                "base_url": self.dialogue_model_deepseek_v4_flash_w8a8_mtp_base_url,
+                "supports_thinking_toggle": True,
+            },
+            {
+                "model_key": "qwen_35b_a3b_64k",
+                "label": "Qwen3.6-35B-A3B-64k",
+                "model": "Qwen3.6-35B-A3B",
+                "base_url": self.dialogue_model_qwen_35b_a3b_64k_base_url,
+                "supports_thinking_toggle": True,
+            },
+            {
+                "model_key": "glm_5_1_w8a8_a3",
+                "label": "GLM-5.1-w8a8-A3",
+                "model": "GLM-5.1-w8a8-A3",
+                "base_url": self.dialogue_model_glm_5_1_w8a8_a3_base_url,
+                "supports_thinking_toggle": False,
+            },
+        ]
+
+    @property
+    def dialogue_model_map(self) -> dict[str, dict[str, object]]:
+        """返回按模型键索引的问答模型配置。"""
         return {
-            "model": self.llm_model,
-            "api_key": self.llm_api_key,
-            "base_url": self.llm_base_url,
-            "temperature": self.llm_temperature,
-            "max_tokens": self.llm_max_tokens,
-            "timeout": self.llm_timeout,
-            "max_retries": self.llm_max_retries,
+            str(item["model_key"]): item
+            for item in self.dialogue_model_catalog
         }
 
 

@@ -149,7 +149,7 @@ def sanitize_gpc_structured_data(structured_data: dict[str, Any]) -> dict[str, A
                 "mw_end": _to_basic(roi.get("mw_end")),
             }
         safe_results.append(_to_basic(safe_row))
-    return {"analysis_results": safe_results, "llm_insights": _to_basic(structured_data.get("llm_insights", []))}
+    return {"analysis_results": safe_results}
 
 
 def sanitize_nmr_structured_data(structured_data: dict[str, Any]) -> dict[str, Any]:
@@ -335,7 +335,6 @@ class GpcTaskExecutor(BaseTaskExecutor):
             calibration_file_path=calibration_file_path,
             comparison_report_pdf_path=comparison_report_pdf_path,
             source_file_name=source_file_name,
-            enable_llm=False,
             output_dir=str(output_dir),
         )
         text_report = str(result.get("text_report", ""))

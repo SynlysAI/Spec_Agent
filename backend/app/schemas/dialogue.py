@@ -36,6 +36,20 @@ class DialogueReportListData(BaseModel):
     items: list[DialogueReportItem] = Field(default_factory=list, description="报告列表。")
 
 
+class DialogueModelItem(BaseModel):
+    """问答模型条目。"""
+
+    model_key: str = Field(description="问答模型键。")
+    label: str = Field(description="问答模型显示名称。")
+
+
+class DialogueModelListData(BaseModel):
+    """问答模型列表响应数据。"""
+
+    default_model_key: str = Field(description="默认问答模型键。")
+    items: list[DialogueModelItem] = Field(default_factory=list, description="问答模型列表。")
+
+
 class DialogueMessage(BaseModel):
     """问答消息对象。"""
 
@@ -46,6 +60,7 @@ class DialogueMessage(BaseModel):
 class DialogueChatRequest(BaseModel):
     """问答请求参数。"""
 
+    model_key: str = Field(default="deepseek_v4_flash_w8a8_mtp", description="问答模型键。")
     analysis_type: str = Field(default="none", description="分析类型。")
     report_id: str | None = Field(default=None, description="关联报告 ID。")
     question: str = Field(min_length=1, description="用户问题。")

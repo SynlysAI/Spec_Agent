@@ -1,10 +1,9 @@
 import argparse
 import glob
-import operator
 import os
 import re
 import traceback
-from typing import Annotated, Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 
 import pandas as pd
 from langgraph.graph import StateGraph, END
@@ -17,7 +16,6 @@ from analysis.gpc.utils.gpc_analyzer import GPCAnalyzer
 from analysis.gpc.utils.gpc_plotter import GPCDataPlotter
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.modules.common.llm_service import create_llm_client
 
 logger = get_logger("spec_agent.modules.gpc.workflow")
 
@@ -72,7 +70,6 @@ class GPCState(TypedDict, total=False):
 
     # 统一的分析结果变量，存储所有节点的结果
     analysis_results: NotRequired[List[Dict[str, Any]]]
-    llm_insights: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
 
     errors: NotRequired[List[str]]
 
@@ -87,8 +84,7 @@ class GPCState(TypedDict, total=False):
 
 
 class GPCPathWorkflow:
-    def __init__(self, llm_client=None, output_dir=None):
-        self.llm_client = llm_client
+    def __init__(self, output_dir=None):
         self.output_dir = output_dir or str(settings.outputs_root / "gpc_results")
         self.three_color_dir = str(settings.gpc_three_color_dir)
         # 实例变量，避免重复创建
@@ -378,34 +374,6 @@ class GPCPathWorkflow:
 
         return {"analysis_results": analysis_results}
 
-    # --- 节点 3: LLM 专家解读 ---
-    def node_expert_insight(self, state: GPCState) -> Dict[str, Any]:
-        if not self.llm_client or not state["analysis_results"]:
-            return {}
-
-        logger.info("LLM 正在生成数据解读报告...")
-        new_insights = []
-
-        # 只取最新的分析结果进行解读（如果需要的话）
-        for res in state["analysis_results"]:
-            # 提取关键分子量数据
-            data = res.get("data", {})
-            mp = data.get("molecular_parameters", {})
-            prompt = (
-                f"你是一个专业的GPC谱图分析师。请分析以下GPC数据：\n"
-                f"文件名: {os.path.basename(res.get('curve_file', 'unknown'))}\n"
-                f"Mn: {mp.get('mn')}, Mw: {mp.get('mw')}, PDI: {mp.get('pdi')}\n"
-                f"请根据上述GPC报告数据，进行详细分析并提供改进建议。"
-            )
-
-            response = self.llm_client.invoke([("user", prompt)])
-            new_insights.append({
-                "file": os.path.basename(res.get('curve_file')),
-                "content": response.content
-            })
-
-        return {"llm_insights": new_insights}
-
     # --- 节点 7: 保存报告 ---
     def node_save_report(self, state: GPCState) -> Dict[str, Any]:
         if state.get("errors") or not state.get("analysis_results"):
@@ -538,7 +506,6 @@ class GPCPathWorkflow:
         workflow.add_node("plot_results", self.node_plot_results)
         workflow.add_node("pdf_extraction", self.node_pdf_data_extraction)
         workflow.add_node("save_report", self.node_save_report)
-        workflow.add_node("interpreter", self.node_expert_insight)
 
         workflow.set_entry_point("scanner")
 
@@ -550,7 +517,6 @@ class GPCPathWorkflow:
         workflow.add_edge("plot_results", "pdf_extraction")
         workflow.add_edge("pdf_extraction", "save_report")
         workflow.add_edge("save_report", END)
-        # workflow.add_edge("interpreter", END)
 
         return workflow.compile()
 
@@ -606,11 +572,9 @@ def run_gpc_analysis(
     calibration_file_path: Optional[str] = None,
     comparison_report_pdf_path: Optional[str] = None,
     source_file_name: Optional[str] = None,
-    enable_llm: bool = False,
     output_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
-    llm_client = create_llm_client() if enable_llm else None
-    app = GPCPathWorkflow(llm_client=llm_client, output_dir=output_dir).build()
+    app = GPCPathWorkflow(output_dir=output_dir).build()
     state: Dict[str, Any] = {
         "input_path": input_path,
         "detect_mode": detect_mode,
@@ -632,7 +596,6 @@ def run_gpc_analysis(
     return {
         "structured_data": {
             "analysis_results": analysis_results,
-            "llm_insights": final_state.get("llm_insights") or [],
         },
         "text_report": text_report,
         "errors": final_state.get("errors") or [],
@@ -662,7 +625,6 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument("--white-arw", type=str, default=None, help="三色白光 .arw 路径")
     parser.add_argument("--calibration-file", type=str, default=None, help="校准文件路径（json/pdf）")
     parser.add_argument("--comparison-pdf", type=str, default=None, help="对比报告 PDF 路径")
-    parser.add_argument("--enable-llm", action="store_true", help="启用 LLM 解读")
     parser.add_argument("--report-path", type=str, default=None, help="报告输出路径（md）")
     return parser
 
@@ -678,7 +640,6 @@ if __name__ == "__main__":
     #     white_arw = None
     #     calibration_file = None
     #     comparison_pdf = None
-    #     enable_llm = False
     #     report_path = None
     #
     # args = Args()
@@ -696,7 +657,6 @@ if __name__ == "__main__":
         three_color_arw_paths=three_color_arw_paths,
         calibration_file_path=args.calibration_file,
         comparison_report_pdf_path=args.comparison_pdf,
-        enable_llm=args.enable_llm,
     )
 
     if args.report_path:

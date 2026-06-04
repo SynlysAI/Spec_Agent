@@ -164,7 +164,6 @@ def run_gpc_analysis(
         three_color_arw_paths=three_color_arw_paths,
         calibration_file_path=calibration_file_path,
         comparison_report_pdf_path=comparison_report_pdf_path,
-        enable_llm=False,
     )
     # 为 Streamlit 前端提供向后兼容的快捷键 analysis_results
     out["analysis_results"] = out.get("structured_data", {}).get("analysis_results", [])

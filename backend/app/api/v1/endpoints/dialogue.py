@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.schemas.common import ApiResponse
 from app.schemas.dialogue import (
@@ -10,8 +10,11 @@ from app.schemas.dialogue import (
     DialogueAnalysisTypeItem,
     DialogueChatData,
     DialogueChatRequest,
+    DialogueModelItem,
+    DialogueModelListData,
     DialogueReportListData,
 )
+from app.services.dialogue_model_service import DialogueModelUnavailableError
 from app.services.dialogue_service import dialogue_service
 
 router = APIRouter(prefix="/dialogue", tags=["dialogue"])
@@ -22,6 +25,17 @@ def list_analysis_types() -> ApiResponse[DialogueAnalysisTypeData]:
     """查询问答支持的分析类型列表。"""
     items = [DialogueAnalysisTypeItem(**item) for item in dialogue_service.list_analysis_types()]
     return ApiResponse(code=0, message="ok", data=DialogueAnalysisTypeData(items=items))
+
+
+@router.get("/models", response_model=ApiResponse[DialogueModelListData])
+def list_models() -> ApiResponse[DialogueModelListData]:
+    """查询问答可选模型列表。"""
+    items = [DialogueModelItem(**item) for item in dialogue_service.list_models()]
+    data = DialogueModelListData(
+        default_model_key=dialogue_service.get_default_model_key(),
+        items=items,
+    )
+    return ApiResponse(code=0, message="ok", data=data)
 
 
 @router.get("/reports", response_model=ApiResponse[DialogueReportListData])
@@ -44,13 +58,20 @@ def chat(payload: DialogueChatRequest) -> ApiResponse[DialogueChatData]:
         payload: 问答请求参数。
     """
     history = [item.model_dump() for item in payload.history]
-    answer, used_excerpt = dialogue_service.generate_answer(
-        question=payload.question,
-        analysis_type=payload.analysis_type,
-        report_id=payload.report_id,
-        history=history,
-        system_prompt=payload.system_prompt,
-    )
+    try:
+        answer, used_excerpt = dialogue_service.generate_answer(
+            model_key=payload.model_key,
+            question=payload.question,
+            analysis_type=payload.analysis_type,
+            report_id=payload.report_id,
+            history=history,
+            system_prompt=payload.system_prompt,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DialogueModelUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="该模型暂不可用") from exc
+
     data = DialogueChatData(
         answer=answer,
         report_id=payload.report_id,

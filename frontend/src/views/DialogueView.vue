@@ -5,19 +5,23 @@ import { Loading } from '@element-plus/icons-vue'
 import {
   dialogueChat,
   getApiErrorMessage,
+  listDialogueModels,
   listDialogueAnalysisTypes,
   listDialogueReports,
 } from '../api/specAgentApi'
 
+const loadingModels = ref(false)
 const loadingTypes = ref(false)
 const loadingReports = ref(false)
 const sending = ref(false)
+const dialogueModels = ref([])
 const analysisTypes = ref([])
 const reports = ref([])
 const messages = ref([])
 const chatScrollerRef = ref(null)
 
 const form = reactive({
+  modelKey: '',
   analysisType: 'none',
   reportId: '',
   systemPrompt: '你是一个专业的谱图分析助手，请基于报告内容回答用户问题，先给结论，再给依据。',
@@ -31,10 +35,18 @@ const form = reactive({
  *   Promise<void>
  */
 async function initPage() {
+  loadingModels.value = true
   loadingTypes.value = true
   try {
-    const data = await listDialogueAnalysisTypes()
-    analysisTypes.value = data.items || []
+    const [modelData, typeData] = await Promise.all([
+      listDialogueModels(),
+      listDialogueAnalysisTypes(),
+    ])
+    dialogueModels.value = modelData.items || []
+    if (!dialogueModels.value.some((item) => item.model_key === form.modelKey)) {
+      form.modelKey = modelData.default_model_key || dialogueModels.value[0]?.model_key || ''
+    }
+    analysisTypes.value = typeData.items || []
     if (!analysisTypes.value.some((item) => item.analysis_type === form.analysisType) && analysisTypes.value.length > 0) {
       form.analysisType = analysisTypes.value[0].analysis_type
     }
@@ -42,6 +54,7 @@ async function initPage() {
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error))
   } finally {
+    loadingModels.value = false
     loadingTypes.value = false
   }
 }
@@ -79,6 +92,10 @@ async function loadReports() {
  *   Promise<void>
  */
 async function sendMessage() {
+  if (!form.modelKey) {
+    ElMessage.warning('请先选择问答模型')
+    return
+  }
   const question = form.question.trim()
   if (!question) {
     ElMessage.warning('请输入问题')
@@ -98,6 +115,7 @@ async function sendMessage() {
   sending.value = true
   try {
     const data = await dialogueChat({
+      model_key: form.modelKey,
       analysis_type: form.analysisType,
       report_id: form.reportId || null,
       question,
@@ -109,11 +127,16 @@ async function sendMessage() {
       content: data.answer || '',
     })
   } catch (error) {
-    ElMessage.error(getApiErrorMessage(error))
-    messages.value.push({
-      role: 'assistant',
-      content: '对话服务调用失败，请稍后重试。',
-    })
+    const errorMessage = getApiErrorMessage(error)
+    if (errorMessage.includes('该模型暂不可用')) {
+      ElMessage.error('该模型暂不可用')
+    } else {
+      ElMessage.error(errorMessage)
+      messages.value.push({
+        role: 'assistant',
+        content: '对话服务调用失败，请稍后重试。',
+      })
+    }
   } finally {
     sending.value = false
     await scrollToBottom()
@@ -170,6 +193,21 @@ onMounted(async () => {
       </div>
       <div class="panel-body">
         <el-form label-width="110px">
+          <el-form-item label="问答模型">
+            <el-select
+              v-model="form.modelKey"
+              style="width: 100%"
+              :loading="loadingModels"
+              placeholder="请选择问答模型"
+            >
+              <el-option
+                v-for="item in dialogueModels"
+                :key="item.model_key"
+                :label="item.label"
+                :value="item.model_key"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="基础 Prompt">
             <el-input
               v-model="form.systemPrompt"
@@ -259,6 +297,7 @@ onMounted(async () => {
             @keydown.enter="handleEnterSend"
           />
           <div class="chat-actions">
+            <div class="dialogue-power-note">当前问答模型由昇腾提供算力支持</div>
             <el-button type="primary" :loading="sending" @click="sendMessage">发送</el-button>
           </div>
         </div>
@@ -284,6 +323,11 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.dialogue-power-note {
+  color: #4a5a74;
+  font-size: 12px;
 }
 
 .chat-scroll {
@@ -334,7 +378,8 @@ onMounted(async () => {
 .chat-actions {
   margin-top: 8px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
 }
 
 @media (max-width: 1080px) {

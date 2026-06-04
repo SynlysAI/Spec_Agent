@@ -18,7 +18,6 @@ const form = reactive({
   detectMode: 'auto',
   manualStart: null,
   manualEnd: null,
-  priority: 5,
 })
 
 const GPC_TOOLTIP_TEXT = {
@@ -161,10 +160,6 @@ async function submitTask() {
         comparison_report_pdf_file_id: comparisonPdfFileId,
         source_file_name: uploadedFilename.value || null,
       },
-      options: {
-        priority: Number(form.priority || 5),
-        callback_url: null,
-      },
     }
 
     const data = await createGpcTask(payload)
@@ -278,10 +273,6 @@ function goTaskDetail() {
             {{ comparisonPdf.filename }}
           </el-tag>
           <div class="task-submit-help">可选，支持 .pdf，用于和样品对应的 GPC 报告做结果对照。</div>
-        </el-form-item>
-
-        <el-form-item label="任务优先级">
-          <el-input-number v-model="form.priority" :min="1" :max="10" />
         </el-form-item>
 
         <el-form-item>

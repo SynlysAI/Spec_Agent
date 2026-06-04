@@ -641,6 +641,17 @@ export async function uploadFile(file, bizType, options = {}) {
 }
 
 /**
+ * 查询问答模型列表。
+ *
+ * Returns:
+ *   问答模型列表数据。
+ */
+export async function listDialogueModels(options = {}) {
+  const response = await apiClient.get('/dialogue/models', buildRequestConfig(options))
+  return unwrapResponse(response)
+}
+
+/**
  * 查询问答分析类型列表。
  *
  * Returns:
