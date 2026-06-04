@@ -52,6 +52,40 @@ const currentUserRoleLabel = computed(() => {
 })
 const currentUserAvatarText = computed(() => currentUserDisplayName.value.slice(0, 1) || 'S')
 const isAuthPublicRoute = computed(() => AUTH_PUBLIC_PATHS.has(route.path))
+const HEADER_SECTION_ROUTE_MAP = {
+  任务提交: '/tasks/submit/gpc',
+  任务中心: '/tasks/center',
+  工具服务: '/tools/nmrserver',
+  实验管理: '/experiments/collect',
+  系统管理: '/admin/users',
+}
+const currentBreadcrumbItems = computed(() => {
+  const section = String(route.meta.section || '').trim()
+  const title = String(route.meta.title || '').trim()
+
+  if (section && title) {
+    return [
+      {
+        label: section,
+        path: HEADER_SECTION_ROUTE_MAP[section] || '',
+        isCurrent: false,
+      },
+      {
+        label: title,
+        path: '',
+        isCurrent: true,
+      },
+    ]
+  }
+  const fallbackLabel = title || section || '开放平台'
+  return [
+    {
+      label: fallbackLabel,
+      path: '',
+      isCurrent: true,
+    },
+  ]
+})
 
 /**
  * 解析接口文档地址。
@@ -106,6 +140,19 @@ function handleMenuSelect(index) {
     return
   }
   router.push(index)
+}
+
+/**
+ * 处理头部面包屑跳转。
+ *
+ * Args:
+ *   path: 目标路由路径。
+ */
+function handleBreadcrumbNavigate(path) {
+  if (!path || path === route.path) {
+    return
+  }
+  router.push(path)
 }
 
 /**
@@ -388,7 +435,22 @@ onBeforeUnmount(() => {
             <el-icon v-if="sidebarCollapsed"><Expand /></el-icon>
             <el-icon v-else><Fold /></el-icon>
           </el-button>
-          <span>开放平台</span>
+          <el-breadcrumb separator=">" class="header-breadcrumb">
+            <el-breadcrumb-item
+              v-for="item in currentBreadcrumbItems"
+              :key="`${item.label}-${item.path || 'current'}`"
+            >
+              <button
+                v-if="item.path && !item.isCurrent"
+                type="button"
+                class="header-breadcrumb-link"
+                @click="handleBreadcrumbNavigate(item.path)"
+              >
+                {{ item.label }}
+              </button>
+              <span v-else class="header-breadcrumb-current">{{ item.label }}</span>
+            </el-breadcrumb-item>
+          </el-breadcrumb>
         </div>
         <div class="header-right">
           <span class="header-date">{{ currentDate }}</span>
