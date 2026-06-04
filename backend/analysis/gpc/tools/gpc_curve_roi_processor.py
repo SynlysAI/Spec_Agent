@@ -336,19 +336,20 @@ class GPCCurveROIProcessor:
                     calibration_func = default_calibration_func
                     full_calib_name = "默认校准曲线"  # 默认校准曲线名称
             
+            # 3. 寻找溶剂峰区域（无三色曲线时使用默认截断时间）
             # 3. 寻找溶剂峰区域
             solvent_output_path = os.path.join(output_dir, f"{curve_name}_solvent_peak_detection.png") if visualize and output_dir else None
             solvent_start, solvent_end = self.find_solvent_peak_region(curves, solvent_output_path, curve_name, full_calib_name)
-            
+
             # 4. 寻找分子量感兴趣区域
             mw_output_path = os.path.join(output_dir, f"{curve_name}_mw_roi_detection.png") if visualize and output_dir else None
             mw_start, mw_end = self.find_mw_roi_region(curves[0], calibration_func, mw_output_path, curve_name, full_calib_name)
-            
+
             # 5. 结合两个分析结果，确定最终ROI
             # ROI = 分子量感兴趣区域 - 溶剂峰区域
             roi_start = mw_start
             roi_end = min(mw_end, solvent_start)  # 剔除溶剂峰区域
-            
+
             logger.info(f"最终ROI计算结果:")
             logger.info(f"  溶剂峰区域: {solvent_start:.2f} - {solvent_end:.2f} 分钟")
             logger.info(f"  分子量感兴趣区域: {mw_start:.2f} - {mw_end:.2f} 分钟")

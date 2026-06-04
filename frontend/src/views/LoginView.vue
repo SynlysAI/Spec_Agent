@@ -85,7 +85,6 @@ async function handleSubmit() {
 
       <div class="login-heading">
         <h1>账号登录</h1>
-        <p>启用本地鉴权后，登录成功才可访问现有谱图分析与工具能力。</p>
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="login-form">

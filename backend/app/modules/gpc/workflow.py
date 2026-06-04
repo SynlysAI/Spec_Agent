@@ -186,6 +186,13 @@ class GPCPathWorkflow:
                         visualize=False,
                         output_dir=None,
                     )
+                    full_calib_name = roi_result["full_calib_name"]
+                    calibration_func = roi_result.get("calibration_func")
+                    if calibration_func is None:
+                        calibration_func = self.roi_processor.calibration.get_calibration_curve(
+                            full_calib_name
+                        )
+                    roi_start, roi_end = roi_result['roi_start'], roi_result['roi_end']
                 else:
                     effective_three_dir = self.three_color_dir
                     candidate_names: list[str] = []
@@ -206,35 +213,64 @@ class GPCPathWorkflow:
                         )
                         if three_color_curve_name:
                             break
-                    if not three_color_curve_name:
-                        logger.warning("无法根据文件名匹配三色曲线，候选名: %s", candidate_names)
-                        raise ValueError(
-                            f"无法根据文件名匹配三色曲线，候选名: {candidate_names}"
+
+                    # 获取校准曲线函数
+                    if cal_file:
+                        calibration_func = self.roi_processor.calibration.get_calibration_curve_from_file(cal_file)
+                        full_calib_name = os.path.splitext(os.path.basename(cal_file))[0]
+                    else:
+                        # 尝试查找匹配的校准曲线
+                        try:
+                            from config import GLOBAL_CONFIG
+                            json_dir = GLOBAL_CONFIG["data_storage"]["calibration_curves"]
+                            json_files = [f for f in os.listdir(json_dir) if f.endswith(".json")]
+                            matched_curve = None
+                            for json_file in json_files:
+                                if actual_curve_name in json_file:
+                                    matched_curve = os.path.splitext(json_file)[0]
+                                    break
+                            if matched_curve:
+                                calibration_func = self.roi_processor.calibration.get_calibration_curve(matched_curve)
+                                full_calib_name = matched_curve
+                            else:
+                                calibration_func = lambda t: -0.2 * t + 9.0
+                                full_calib_name = "默认校准曲线"
+                        except Exception:
+                            calibration_func = lambda t: -0.2 * t + 9.0
+                            full_calib_name = "默认校准曲线"
+
+                    if three_color_curve_name:
+                        # 有三色曲线：完整ROI检测
+                        roi_result = self.roi_processor.calculate_roi(
+                            three_color_curve_name,
+                            effective_three_dir,
+                            calibration_file_path=cal_file,
+                            return_details=True,
+                            visualize=False,
+                            output_dir=None,
                         )
-                    roi_result = self.roi_processor.calculate_roi(
-                        three_color_curve_name,
-                        effective_three_dir,
-                        calibration_file_path=cal_file,
-                        return_details=True,
-                        visualize=False,
-                        output_dir=None,
-                    )
-                full_calib_name = roi_result["full_calib_name"]
-                calibration_func = roi_result.get("calibration_func")
-                if calibration_func is None:
-                    calibration_func = self.roi_processor.calibration.get_calibration_curve(
-                        full_calib_name
-                    )
+                        roi_start, roi_end = roi_result['roi_start'], roi_result['roi_end']
+                    else:
+                        # 无三色曲线：只按分子量阈值过滤
+                        logger.info("无三色曲线，仅按分子量阈值过滤，候选名: %s", candidate_names)
+                        mw_start, mw_end = self.roi_processor.find_mw_roi_region(
+                            data["actual_curve"], calibration_func
+                        )
+                        roi_start, roi_end = mw_start, mw_end
+                        roi_result = {
+                            "roi_start": roi_start,
+                            "roi_end": roi_end,
+                            "mw_start": mw_start,
+                            "mw_end": mw_end,
+                        }
 
                 # 提取 ROI 范围内的数据
-                actual_curve = data["actual_curve"]  # 直接使用存储的 DataFrame
-                roi_start, roi_end = roi_result['roi_start'], roi_result['roi_end']
-                roi_data = actual_curve[(actual_curve['retention_time'] >= roi_start) & 
+                actual_curve = data["actual_curve"]
+                roi_data = actual_curve[(actual_curve['retention_time'] >= roi_start) &
                                       (actual_curve['retention_time'] <= roi_end)].copy()
 
-                # 直接在原字典中添加新的字段
                 data["roi_result"] = roi_result
-                data["roi_data"] = roi_data  # 直接存储原始 DataFrame
+                data["roi_data"] = roi_data
                 data["calibration_func"] = calibration_func
                 logger.info("ROI 识别完成: %s", simple_name)
             except Exception as e:
