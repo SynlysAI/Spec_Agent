@@ -64,7 +64,6 @@ const form = reactive({
   x1: 4000,
   transmittance: false,
   device: 'auto',
-  priority: 5,
 })
 
 /**
@@ -136,10 +135,6 @@ async function submitTask() {
       x1: Number(form.x1),
       transmittance: props.spectype === 'ir' ? Boolean(form.transmittance) : false,
       device: form.device,
-    },
-    options: {
-      priority: Number(form.priority || 5),
-      callback_url: null,
     },
   }
 
@@ -236,10 +231,6 @@ function goTaskDetail() {
           </template>
           <el-switch v-model="form.transmittance" />
         </el-form-item>
-        <el-form-item label="任务优先级">
-          <el-input-number v-model="form.priority" :min="1" :max="10" />
-        </el-form-item>
-
         <el-form-item>
           <el-button type="primary" :loading="submitting" @click="submitTask">提交任务</el-button>
         </el-form-item>

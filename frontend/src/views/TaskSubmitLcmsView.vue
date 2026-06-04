@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import SampleDownloadButton from '../components/SampleDownloadButton.vue'
@@ -12,10 +12,6 @@ const selectedUploadFile = ref(null)
 const uploadedFileId = ref('')
 const uploadedFilename = ref('')
 const lastTaskId = ref('')
-
-const form = reactive({
-  priority: 5,
-})
 
 const LCMS_SAMPLE_ASSET_PATH = '/example-spectra/lcms-demo.csv'
 const LCMS_SAMPLE_DOWNLOAD_NAME = 'lcms-demo.csv'
@@ -87,10 +83,6 @@ async function submitTask() {
     params: {
       source_file_name: uploadedFilename.value || null,
     },
-    options: {
-      priority: Number(form.priority || 5),
-      callback_url: null,
-    },
   }
 
   submitting.value = true
@@ -141,10 +133,6 @@ function goTaskDetail() {
           <div class="task-submit-help">
             支持 .txt / .csv 单个 LCMS 质谱图文件，内容应为 m/z 和 Intensity 两列数据。
           </div>
-        </el-form-item>
-
-        <el-form-item label="任务优先级">
-          <el-input-number v-model="form.priority" :min="1" :max="10" />
         </el-form-item>
 
         <el-form-item>

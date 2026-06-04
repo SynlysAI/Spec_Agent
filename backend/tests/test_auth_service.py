@@ -626,7 +626,6 @@ class TestOwnershipEndpoints(unittest.TestCase):
             json={
                 "input": {"input_type": "file_id", "file_id": "f_001"},
                 "params": {"detect_mode": "auto"},
-                "options": {"priority": 5},
             },
         )
 

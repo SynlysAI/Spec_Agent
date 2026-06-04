@@ -96,7 +96,6 @@ async function submitTask() {
           calibration_file_path: null,
           comparison_report_pdf_path: null,
         },
-        options: { priority: 5, callback_url: null },
       }
       const data = await createGpcTask(payload)
       ElMessage.success(`GPC 任务已创建：${data.task_id}`)
@@ -119,7 +118,6 @@ async function submitTask() {
           internal_standard_policy: 'auto',
           internal_standard_prefer: ['solvent', 'tms'],
         },
-        options: { priority: 5, callback_url: null },
       }
       const data = await createNmrTask(payload)
       ElMessage.success(`NMR 任务已创建：${data.task_id}`)

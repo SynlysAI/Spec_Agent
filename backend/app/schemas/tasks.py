@@ -41,19 +41,6 @@ class TaskInput(BaseModel):
         return self
 
 
-class TaskOptions(BaseModel):
-    """任务可选参数模型。
-
-    函数名称: TaskOptions
-    参数说明:
-    - priority: 任务优先级，数值越小优先级越高。
-    - callback_url: 回调地址。
-    """
-
-    priority: int = Field(default=5, ge=1, le=10, description="任务优先级")
-    callback_url: Optional[str] = Field(default=None, description="回调地址")
-
-
 class GpcTaskParams(BaseModel):
     """GPC 任务参数模型。
 
@@ -132,12 +119,10 @@ class CreateGpcTaskRequest(BaseModel):
     参数说明:
     - input: 输入配置。
     - params: GPC 参数。
-    - options: 可选参数。
     """
 
     input: TaskInput
     params: GpcTaskParams = Field(default_factory=GpcTaskParams)
-    options: TaskOptions = Field(default_factory=TaskOptions)
 
 
 class CreateNmrTaskRequest(BaseModel):
@@ -147,12 +132,10 @@ class CreateNmrTaskRequest(BaseModel):
     参数说明:
     - input: 输入配置。
     - params: NMR 参数。
-    - options: 可选参数。
     """
 
     input: TaskInput
     params: NmrTaskParams = Field(default_factory=NmrTaskParams)
-    options: TaskOptions = Field(default_factory=TaskOptions)
 
 
 class IrRamanTaskParams(BaseModel):
@@ -200,12 +183,10 @@ class CreateIrRamanTaskRequest(BaseModel):
     参数说明:
     - input: 输入配置。
     - params: IR/Raman 参数。
-    - options: 可选参数。
     """
 
     input: TaskInput
     params: IrRamanTaskParams = Field(default_factory=IrRamanTaskParams)
-    options: TaskOptions = Field(default_factory=TaskOptions)
 
 
 class LcmsTaskParams(BaseModel):
@@ -220,12 +201,10 @@ class CreateLcmsTaskRequest(BaseModel):
     Args:
         input: 输入配置。
         params: LCMS 参数。
-        options: 可选参数。
     """
 
     input: TaskInput
     params: LcmsTaskParams = Field(default_factory=LcmsTaskParams)
-    options: TaskOptions = Field(default_factory=TaskOptions)
 
 
 class CreateTaskData(BaseModel):

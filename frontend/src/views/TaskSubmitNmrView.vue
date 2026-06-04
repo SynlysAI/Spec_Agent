@@ -51,7 +51,6 @@ const form = reactive({
   integrationMethod: 'voigt',
   internalStandardPolicy: 'auto',
   internalStandardPrefer: ['solvent', 'tms'],
-  priority: 5,
 })
 
 const NMR_TOOLTIP_TEXT = {
@@ -234,10 +233,6 @@ async function submitTask() {
       internal_standard_policy: form.internalStandardPolicy,
       internal_standard_prefer: form.internalStandardPrefer,
     },
-    options: {
-      priority: Number(form.priority || 5),
-      callback_url: null,
-    },
   }
 
   submitting.value = true
@@ -409,10 +404,6 @@ function goTaskDetail() {
             <el-option label="溶剂峰（solvent）" value="solvent" />
             <el-option label="TMS 峰（tms）" value="tms" />
           </el-select>
-        </el-form-item>
-
-        <el-form-item label="任务优先级">
-          <el-input-number v-model="form.priority" :min="1" :max="10" />
         </el-form-item>
 
         <el-form-item>
