@@ -41,7 +41,7 @@ const sampleCards = computed(() => {
     { title: 'NMR', value: typeCounts.nmr ?? 0 },
     { title: 'GPC', value: typeCounts.gpc ?? 0 },
     { title: 'IR', value: typeCounts.ir ?? 0 },
-    { title: 'RAMAN', value: typeCounts.raman ?? 0 },
+    { title: 'Raman', value: typeCounts.raman ?? 0 },
     { title: 'LCMS', value: typeCounts.lcms ?? 0 },
   ]
 })
@@ -131,7 +131,7 @@ async function loadDashboard() {
       { label: 'GPC', value: gpc.total, route: '/tasks/submit/gpc' },
       { label: 'NMR', value: nmr.total, route: '/tasks/submit/nmr' },
       { label: 'IR', value: ir.total, route: '/tasks/submit/ir' },
-      { label: 'RAMAN', value: raman.total, route: '/tasks/submit/raman' },
+      { label: 'Raman', value: raman.total, route: '/tasks/submit/raman' },
       { label: 'LCMS', value: lcms.total, route: '/tasks/submit/lcms' },
     ]
 

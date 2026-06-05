@@ -360,7 +360,12 @@ class GPCPathWorkflow:
 
                 # 绘制并保存图表
                 gpc_plotter.plot_gpc_machine_curve()
-                gpc_plotter.plot_roi_result(actual_curve, data["roi_result"], actual_curve_name=actual_curve_name)
+
+                # 有三色曲线时才绘制ROI结果图
+                roi_result = data.get("roi_result", {})
+                if "solvent_start" in roi_result:
+                    gpc_plotter.plot_roi_result(actual_curve, roi_result, actual_curve_name=actual_curve_name)
+
                 gpc_plotter.plot_peak_detect_process(peak_index=0, detect_mode=detect_mode, manual_interval=manual_interval)
                 gpc_plotter.plot_with_cumulative(peak_index=0)
                 gpc_plotter.plot_gpc_result(peak_index=0)
