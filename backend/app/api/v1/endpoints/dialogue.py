@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import get_current_user
 from app.schemas.common import ApiResponse
 from app.schemas.dialogue import (
     DialogueAnalysisTypeData,
@@ -21,9 +22,15 @@ router = APIRouter(prefix="/dialogue", tags=["dialogue"])
 
 
 @router.get("/analysis-types", response_model=ApiResponse[DialogueAnalysisTypeData])
-def list_analysis_types() -> ApiResponse[DialogueAnalysisTypeData]:
-    """查询问答支持的分析类型列表。"""
-    items = [DialogueAnalysisTypeItem(**item) for item in dialogue_service.list_analysis_types()]
+def list_analysis_types(
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[DialogueAnalysisTypeData]:
+    """查询问答支持的分析类型列表。
+
+    Args:
+        current_user: 当前登录用户上下文。
+    """
+    items = [DialogueAnalysisTypeItem(**item) for item in dialogue_service.list_analysis_types(current_user=current_user)]
     return ApiResponse(code=0, message="ok", data=DialogueAnalysisTypeData(items=items))
 
 
@@ -39,23 +46,36 @@ def list_models() -> ApiResponse[DialogueModelListData]:
 
 
 @router.get("/reports", response_model=ApiResponse[DialogueReportListData])
-def list_reports(analysis_type: str, limit: int = 20) -> ApiResponse[DialogueReportListData]:
+def list_reports(
+    analysis_type: str,
+    limit: int = 20,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[DialogueReportListData]:
     """按分析类型查询历史报告列表。
 
     Args:
         analysis_type: 分析类型编码。
         limit: 返回上限。
+        current_user: 当前登录用户上下文。
     """
-    items = dialogue_service.list_reports(analysis_type=analysis_type, limit=limit)
+    items = dialogue_service.list_reports(
+        analysis_type=analysis_type,
+        limit=limit,
+        current_user=current_user,
+    )
     return ApiResponse(code=0, message="ok", data=DialogueReportListData(analysis_type=analysis_type, items=items))
 
 
 @router.post("/chat", response_model=ApiResponse[DialogueChatData])
-def chat(payload: DialogueChatRequest) -> ApiResponse[DialogueChatData]:
+def chat(
+    payload: DialogueChatRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> ApiResponse[DialogueChatData]:
     """执行问答请求。
 
     Args:
         payload: 问答请求参数。
+        current_user: 当前登录用户上下文。
     """
     history = [item.model_dump() for item in payload.history]
     try:
@@ -66,6 +86,7 @@ def chat(payload: DialogueChatRequest) -> ApiResponse[DialogueChatData]:
             report_id=payload.report_id,
             history=history,
             system_prompt=payload.system_prompt,
+            current_user=current_user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
