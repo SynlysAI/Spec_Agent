@@ -17,6 +17,8 @@ class AdminUserListItem(BaseModel):
 
     user_id: str = Field(description="用户 ID")
     username: str = Field(description="用户名")
+    real_name: str | None = Field(default=None, description="姓名")
+    organization: str | None = Field(default=None, description="单位")
     role: UserRole = Field(description="角色")
     status: UserStatus = Field(description="状态")
 

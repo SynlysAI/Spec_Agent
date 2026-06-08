@@ -87,13 +87,21 @@ class AuthService:
         return hmac.compare_digest(legacy_hash, password_hash)
 
     @staticmethod
-    def register(invite_code: str, username: str, password: str) -> UserRecord:
+    def register(
+        invite_code: str,
+        username: str,
+        password: str,
+        real_name: str | None = None,
+        organization: str | None = None,
+    ) -> UserRecord:
         """基于邀请码注册用户。
 
         Args:
             invite_code: 邀请码。
             username: 用户名。
             password: 明文密码。
+            real_name: 用户姓名。
+            organization: 用户单位。
 
         Returns:
             新创建的用户记录。
@@ -117,6 +125,8 @@ class AuthService:
         user_record = UserRecord(
             user_id=f"u_{uuid4().hex[:12]}",
             username=username,
+            real_name=real_name,
+            organization=organization,
             password_hash=AuthService.hash_password(password),
             role=invite.role,
             status="active",

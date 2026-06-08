@@ -20,6 +20,8 @@ class RegisterRequest(BaseModel):
 
     invite_code: str = Field(description="邀请码")
     username: str = Field(description="注册用户名")
+    real_name: str | None = Field(default=None, description="姓名")
+    organization: str | None = Field(default=None, description="单位")
     password: str = Field(description="登录密码")
 
 

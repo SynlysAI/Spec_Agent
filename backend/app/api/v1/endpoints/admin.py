@@ -42,6 +42,8 @@ def list_users() -> ApiResponse[AdminUserListData]:
         AdminUserListItem(
             user_id=user.user_id,
             username=user.username,
+            real_name=user.real_name,
+            organization=user.organization,
             role=user.role,
             status=user.status,
         )

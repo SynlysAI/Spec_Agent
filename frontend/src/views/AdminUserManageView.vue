@@ -189,6 +189,16 @@ onMounted(fetchAdminUsers)
     <div class="panel-body">
       <el-table v-loading="loading" :data="tableData" empty-text="暂无用户数据">
         <el-table-column prop="username" label="用户名" min-width="180" />
+        <el-table-column label="姓名" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.real_name || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="单位" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.organization || '-' }}
+          </template>
+        </el-table-column>
         <el-table-column label="角色" min-width="120">
           <template #default="{ row }">
             <el-tag effect="plain" :type="row.role === 'admin' ? 'warning' : 'info'">

@@ -92,11 +92,19 @@ def register(payload: RegisterRequest) -> ApiResponse[CurrentUserData]:
     if not settings.auth_enabled:
         logger.warning("注册失败：当前服务未启用登录校验")
         raise HTTPException(status_code=400, detail="当前服务未启用登录校验")
+    invite_code = payload.invite_code.strip()
+    username = payload.username.strip()
+    if not invite_code:
+        raise HTTPException(status_code=400, detail="邀请码不能为空")
+    if not username:
+        raise HTTPException(status_code=400, detail="用户名不能为空")
     try:
         user = auth_service.register(
-            invite_code=payload.invite_code.strip(),
-            username=payload.username.strip(),
+            invite_code=invite_code,
+            username=username,
             password=payload.password,
+            real_name=(payload.real_name.strip() or None) if payload.real_name else None,
+            organization=(payload.organization.strip() or None) if payload.organization else None,
         )
     except ValueError as exc:
         logger.warning("注册失败：%s，用户名=%s", str(exc), payload.username)

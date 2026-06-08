@@ -11,6 +11,8 @@ const submitting = ref(false)
 const formRef = ref(null)
 const form = reactive({
   inviteCode: '',
+  realName: '',
+  organization: '',
   username: '',
   password: '',
   confirmPassword: '',
@@ -36,11 +38,29 @@ function validateConfirmPassword(_rule, value, callback) {
   callback()
 }
 
+/**
+ * 校验文本输入在去除首尾空格后仍然非空。
+ *
+ * Args:
+ *   _rule: Element Plus 校验规则对象。
+ *   value: 当前字段值。
+ *   callback: 校验完成回调。
+ */
+function validateRequiredTrimmedText(_rule, value, callback) {
+  if (!String(value || '').trim()) {
+    callback(new Error('该项不能为空'))
+    return
+  }
+  callback()
+}
+
 const rules = {
-  inviteCode: [{ required: true, message: '请输入邀请码', trigger: 'blur' }],
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  inviteCode: [{ required: true, validator: validateRequiredTrimmedText, trigger: 'blur' }],
+  realName: [{ required: true, validator: validateRequiredTrimmedText, trigger: 'blur' }],
+  organization: [{ required: true, validator: validateRequiredTrimmedText, trigger: 'blur' }],
+  username: [{ required: true, validator: validateRequiredTrimmedText, trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }],
+  confirmPassword: [{ required: true, validator: validateConfirmPassword, trigger: 'blur' }],
 }
 
 /**
@@ -59,6 +79,8 @@ async function handleSubmit() {
   try {
     await registerWithInviteCode({
       invite_code: form.inviteCode.trim(),
+      real_name: form.realName.trim(),
+      organization: form.organization.trim(),
       username: form.username.trim(),
       password: form.password,
     })
@@ -92,6 +114,12 @@ async function handleSubmit() {
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="register-form">
         <el-form-item label="邀请码" prop="inviteCode">
           <el-input v-model="form.inviteCode" placeholder="请输入邀请码" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="姓名" prop="realName">
+          <el-input v-model="form.realName" placeholder="请输入姓名" autocomplete="name" />
+        </el-form-item>
+        <el-form-item label="单位" prop="organization">
+          <el-input v-model="form.organization" placeholder="请输入单位名称" autocomplete="organization" />
         </el-form-item>
         <el-form-item label="用户名" prop="username">
           <el-input v-model="form.username" placeholder="请输入注册用户名" autocomplete="username" />

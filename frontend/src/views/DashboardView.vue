@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authState } from '../auth/authState'
+import { SYSTEM_NOTICES } from '../config/systemNotices'
 import {
   getApiErrorMessage,
   getLabCollectRuns,
@@ -27,6 +28,7 @@ const taskSummary = ref({
 const taskTypeItems = ref([])
 const systemDynamics = ref([])
 const canAccessAdminFeatures = computed(() => !authState.authEnabled || authState.role === 'admin')
+const systemNotices = SYSTEM_NOTICES
 
 const molecularCards = computed(() => [
   { title: '去重 SMILES', value: molecularStats.value?.unique_smiles_count ?? 0, featured: true },
@@ -285,6 +287,19 @@ onMounted(loadDashboard)
     </div>
 
     <div class="dashboard-side">
+      <section v-if="systemNotices.length" class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">系统公告</h3>
+        </div>
+        <div class="panel-body">
+          <div v-for="notice in systemNotices" :key="notice.id" class="dynamic-item">
+            <div class="dynamic-title">{{ notice.updatedAt || '--' }}</div>
+            <div class="dynamic-value">{{ notice.title }}</div>
+            <div class="dynamic-hint">{{ notice.content }}</div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel">
         <div class="panel-header">
           <h3 class="panel-title">系统动态</h3>

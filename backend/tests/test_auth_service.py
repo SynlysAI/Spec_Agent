@@ -830,6 +830,8 @@ class TestAuthEndpoints(unittest.TestCase):
             invite_code="ABC12345",
             username="alice",
             password="Password123!",
+            real_name=None,
+            organization=None,
         )
 
 

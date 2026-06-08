@@ -18,6 +18,8 @@ class UserRecord(BaseModel):
 
     user_id: str
     username: str
+    real_name: str | None = None
+    organization: str | None = None
     password_hash: str
     role: UserRole
     status: UserStatus
