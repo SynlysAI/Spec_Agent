@@ -29,7 +29,7 @@ const isAuthPage = computed(() => route.path === '/login' || route.path === '/re
 const authBootstrapping = ref(true)
 const AUTH_EXPIRED_EVENT_NAME = 'spec-agent-auth-expired'
 const APP_VERSION = '1.2.9'
-const BRAND_LOGO_SRC = '/brand/zhichu-mark.jpg'
+const BRAND_LOGO_SRC = '/brand/JG-logo.png'
 const BRAND_PARTNER_TEXT = '智储大装置｜嘉庚实验室｜厦门大学｜苏州实验室｜浦江实验室'
 const canAccessAdminFeatures = computed(() => !authState.authEnabled || authState.role === 'admin')
 const currentUserDisplayName = computed(() => {

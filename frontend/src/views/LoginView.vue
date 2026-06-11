@@ -8,7 +8,7 @@ import { setAuthSession } from '../auth/authState'
 
 const route = useRoute()
 const router = useRouter()
-const BRAND_LOGO_SRC = '/brand/zhichu-mark.jpg'
+const BRAND_LOGO_SRC = '/brand/JG-logo.png'
 const submitting = ref(false)
 const formRef = ref(null)
 const form = reactive({
