@@ -13,7 +13,7 @@ from app.core.config import settings
 
 @lru_cache(maxsize=1)
 def get_mongo_client() -> MongoClient:
-    """获取 MongoDB 客户端单例。
+    """获取业务 MongoDB 客户端单例。
 
     函数名称: get_mongo_client
     参数说明:
@@ -30,6 +30,21 @@ def get_database() -> Database:
     - 无。
     """
     return get_mongo_client()[settings.mongodb_database]
+
+
+@lru_cache(maxsize=1)
+def _get_auth_client() -> MongoClient:
+    """获取统一认证（AI4MS）MongoDB 客户端单例。
+
+    优先使用 AUTH_MONGODB_URI，未配置时回退到业务 MongoDB 连接。
+    """
+    uri = settings.auth_mongodb_uri or settings.mongodb_uri
+    return MongoClient(uri, serverSelectionTimeoutMS=5000)
+
+
+def _get_auth_database() -> Database:
+    """获取统一认证（AI4MS）数据库对象。"""
+    return _get_auth_client()[settings.auth_database]
 
 
 def get_tasks_collection() -> Collection:
@@ -63,23 +78,23 @@ def get_files_collection() -> Collection:
 
 
 def get_users_collection() -> Collection:
-    """获取 users 集合。
+    """获取统一认证（AI4MS）users 集合。
 
     函数名称: get_users_collection
     参数说明:
     - 无。
     """
-    return get_database()["users"]
+    return _get_auth_database()["users"]
 
 
 def get_invite_codes_collection() -> Collection:
-    """获取 invite_codes 集合。
+    """获取统一认证（AI4MS）invite_codes 集合。
 
     函数名称: get_invite_codes_collection
     参数说明:
     - 无。
     """
-    return get_database()["invite_codes"]
+    return _get_auth_database()["invite_codes"]
 
 
 def get_acceptance_runs_collection() -> Collection:

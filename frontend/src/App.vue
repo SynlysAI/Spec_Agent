@@ -18,7 +18,7 @@ import {
 } from '@element-plus/icons-vue'
 
 import { getAuthStatus, getApiErrorMessage, getCurrentUser } from './api/specAgentApi'
-import { authState, clearAuthSession, setAuthEnabled, setAuthSession } from './auth/authState'
+import { acceptPortalToken, authState, clearAuthSession, setAuthEnabled, setAuthSession } from './auth/authState'
 
 const route = useRoute()
 const router = useRouter()
@@ -311,6 +311,7 @@ function handleAuthExpired() {
 
 onMounted(() => {
   window.addEventListener(AUTH_EXPIRED_EVENT_NAME, handleAuthExpired)
+  acceptPortalToken()
   initializeAuthState()
 })
 

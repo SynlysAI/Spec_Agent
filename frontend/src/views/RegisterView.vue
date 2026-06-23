@@ -2,12 +2,15 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Hide, View } from '@element-plus/icons-vue'
 
 import { getApiErrorMessage, registerWithInviteCode } from '../api/specAgentApi'
 
 const router = useRouter()
 const BRAND_LOGO_SRC = '/brand/JG-logo.png'
 const submitting = ref(false)
+const passwordVisible = ref(false)
+const confirmPasswordVisible = ref(false)
 const formRef = ref(null)
 const form = reactive({
   inviteCode: '',
@@ -64,6 +67,19 @@ const rules = {
 }
 
 /**
+ * 触发表单字段的失焦校验。
+ *
+ * Args:
+ *   prop: 需要校验的字段名。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function validateField(prop) {
+  await formRef.value?.validateField(prop).catch(() => undefined)
+}
+
+/**
  * 提交注册表单。
  *
  * Returns:
@@ -113,35 +129,87 @@ async function handleSubmit() {
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="register-form">
         <el-form-item label="邀请码" prop="inviteCode">
-          <el-input v-model="form.inviteCode" placeholder="请输入邀请码" autocomplete="off" />
+          <input
+            v-model="form.inviteCode"
+            class="register-native-input"
+            placeholder="请输入邀请码"
+            autocomplete="off"
+            @blur="validateField('inviteCode')"
+          />
         </el-form-item>
         <el-form-item label="姓名" prop="realName">
-          <el-input v-model="form.realName" placeholder="请输入姓名" autocomplete="name" />
+          <input
+            v-model="form.realName"
+            class="register-native-input"
+            placeholder="请输入姓名"
+            autocomplete="name"
+            @blur="validateField('realName')"
+          />
         </el-form-item>
         <el-form-item label="单位" prop="organization">
-          <el-input v-model="form.organization" placeholder="请输入单位名称" autocomplete="organization" />
+          <input
+            v-model="form.organization"
+            class="register-native-input"
+            placeholder="请输入单位名称"
+            autocomplete="organization"
+            @blur="validateField('organization')"
+          />
         </el-form-item>
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" placeholder="请输入注册用户名" autocomplete="username" />
+          <input
+            v-model="form.username"
+            class="register-native-input"
+            placeholder="请输入注册用户名"
+            autocomplete="username"
+            @blur="validateField('username')"
+          />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="form.password"
-            type="password"
-            show-password
-            placeholder="请输入密码"
-            autocomplete="new-password"
-          />
+          <div class="register-password-field">
+            <input
+              v-model="form.password"
+              class="register-native-input register-native-input-password"
+              :type="passwordVisible ? 'text' : 'password'"
+              placeholder="请输入密码"
+              autocomplete="new-password"
+              @blur="validateField('password')"
+            />
+            <button
+              type="button"
+              class="register-password-toggle"
+              :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
+              @click="passwordVisible = !passwordVisible"
+            >
+              <el-icon>
+                <View v-if="passwordVisible" />
+                <Hide v-else />
+              </el-icon>
+            </button>
+          </div>
         </el-form-item>
         <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input
-            v-model="form.confirmPassword"
-            type="password"
-            show-password
-            placeholder="请再次输入密码"
-            autocomplete="new-password"
-            @keyup.enter="handleSubmit"
-          />
+          <div class="register-password-field">
+            <input
+              v-model="form.confirmPassword"
+              class="register-native-input register-native-input-password"
+              :type="confirmPasswordVisible ? 'text' : 'password'"
+              placeholder="请再次输入密码"
+              autocomplete="new-password"
+              @blur="validateField('confirmPassword')"
+              @keyup.enter="handleSubmit"
+            />
+            <button
+              type="button"
+              class="register-password-toggle"
+              :aria-label="confirmPasswordVisible ? '隐藏密码' : '显示密码'"
+              @click="confirmPasswordVisible = !confirmPasswordVisible"
+            >
+              <el-icon>
+                <View v-if="confirmPasswordVisible" />
+                <Hide v-else />
+              </el-icon>
+            </button>
+          </div>
         </el-form-item>
         <el-button type="primary" class="register-submit" :loading="submitting" @click="handleSubmit">
           注册账号
@@ -237,6 +305,65 @@ async function handleSubmit() {
 
 .register-form {
   margin-top: 24px;
+}
+
+.register-native-input {
+  width: 100%;
+  height: 32px;
+  padding: 1px 11px;
+  color: var(--app-text-primary);
+  font: inherit;
+  font-weight: 500;
+  line-height: 30px;
+  border: none;
+  border-radius: 4px;
+  outline: none;
+  background: var(--el-fill-color-blank, #ffffff);
+  box-shadow: 0 0 0 1px var(--app-border-soft) inset;
+  transition: box-shadow 0.2s ease;
+}
+
+.register-native-input:hover {
+  box-shadow: 0 0 0 1px var(--el-border-color-hover, #c0c4cc) inset;
+}
+
+.register-native-input:focus {
+  box-shadow: 0 0 0 1px var(--el-color-primary, #409eff) inset;
+}
+
+.register-native-input::placeholder {
+  color: var(--app-text-muted);
+  font-weight: 400;
+}
+
+.register-password-field {
+  position: relative;
+  width: 100%;
+}
+
+.register-native-input-password {
+  padding-right: 40px;
+}
+
+.register-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--el-text-color-placeholder, #a8abb2);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.register-password-toggle:hover {
+  color: var(--el-text-color-regular, #606266);
 }
 
 .register-submit {

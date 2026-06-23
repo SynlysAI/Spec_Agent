@@ -64,6 +64,10 @@ class Settings:
         self.mongodb_password: str = os.getenv("MONGODB_PASSWORD", "")
         self.mongodb_database: str = os.getenv("MONGODB_DATABASE", "spec_agent")
 
+        # 统一认证（AI4MS）数据库配置
+        self.auth_mongodb_uri: str = os.getenv("AUTH_MONGODB_URI", "")
+        self.auth_database: str = os.getenv("AUTH_MONGODB_DATABASE", "ai4ms")
+
         # RabbitMQ 配置
         self.rabbitmq_host: str = os.getenv("RABBITMQ_HOST", "127.0.0.1")
         self.rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))

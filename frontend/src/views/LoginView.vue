@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Hide, View } from '@element-plus/icons-vue'
 
 import { getApiErrorMessage, loginWithPassword } from '../api/specAgentApi'
 import { setAuthSession } from '../auth/authState'
@@ -10,6 +11,7 @@ const route = useRoute()
 const router = useRouter()
 const BRAND_LOGO_SRC = '/brand/JG-logo.png'
 const submitting = ref(false)
+const passwordVisible = ref(false)
 const formRef = ref(null)
 const form = reactive({
   username: '',
@@ -32,6 +34,19 @@ function resolveRedirectPath() {
     return '/dashboard'
   }
   return redirect
+}
+
+/**
+ * 触发表单字段的失焦校验。
+ *
+ * Args:
+ *   prop: 需要校验的字段名。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function validateField(prop) {
+  await formRef.value?.validateField(prop).catch(() => undefined)
 }
 
 /**
@@ -89,17 +104,37 @@ async function handleSubmit() {
 
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="login-form">
         <el-form-item label="账号" prop="username">
-          <el-input v-model="form.username" placeholder="请输入本地配置的登录账号" autocomplete="username" />
+          <input
+            v-model="form.username"
+            class="login-native-input"
+            placeholder="请输入本地配置的登录账号"
+            autocomplete="username"
+            @blur="validateField('username')"
+          />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="form.password"
-            type="password"
-            show-password
-            placeholder="请输入本地配置的登录密码"
-            autocomplete="current-password"
-            @keyup.enter="handleSubmit"
-          />
+          <div class="login-password-field">
+            <input
+              v-model="form.password"
+              class="login-native-input login-native-input-password"
+              :type="passwordVisible ? 'text' : 'password'"
+              placeholder="请输入本地配置的登录密码"
+              autocomplete="current-password"
+              @blur="validateField('password')"
+              @keyup.enter="handleSubmit"
+            />
+            <button
+              type="button"
+              class="login-password-toggle"
+              :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
+              @click="passwordVisible = !passwordVisible"
+            >
+              <el-icon>
+                <View v-if="passwordVisible" />
+                <Hide v-else />
+              </el-icon>
+            </button>
+          </div>
         </el-form-item>
         <el-button type="primary" class="login-submit" :loading="submitting" @click="handleSubmit">
           登录并进入系统
@@ -195,6 +230,65 @@ async function handleSubmit() {
 
 .login-form {
   margin-top: 24px;
+}
+
+.login-native-input {
+  width: 100%;
+  height: 32px;
+  padding: 1px 11px;
+  color: var(--app-text-primary);
+  font: inherit;
+  font-weight: 500;
+  line-height: 30px;
+  border: none;
+  border-radius: 4px;
+  outline: none;
+  background: var(--el-fill-color-blank, #ffffff);
+  box-shadow: 0 0 0 1px var(--app-border-soft) inset;
+  transition: box-shadow 0.2s ease;
+}
+
+.login-native-input:hover {
+  box-shadow: 0 0 0 1px var(--el-border-color-hover, #c0c4cc) inset;
+}
+
+.login-native-input:focus {
+  box-shadow: 0 0 0 1px var(--el-color-primary, #409eff) inset;
+}
+
+.login-native-input::placeholder {
+  color: var(--app-text-muted);
+  font-weight: 400;
+}
+
+.login-password-field {
+  position: relative;
+  width: 100%;
+}
+
+.login-native-input-password {
+  padding-right: 40px;
+}
+
+.login-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--el-text-color-placeholder, #a8abb2);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.login-password-toggle:hover {
+  color: var(--el-text-color-regular, #606266);
 }
 
 .login-submit {

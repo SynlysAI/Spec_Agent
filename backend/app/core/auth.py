@@ -42,20 +42,19 @@ def _build_auth_secret() -> str:
 
 
 def _sign_payload(payload_segment: str) -> str:
-    """对令牌负载进行签名。
+    """对令牌负载进行签名（hex digest，与 AI4MS 兼容）。
 
     Args:
         payload_segment: Base64 编码后的负载段。
 
     Returns:
-        URL 安全的签名字符串。
+        HMAC-SHA256 十六进制签名字符串。
     """
-    signature = hmac.new(
+    return hmac.new(
         _build_auth_secret().encode("utf-8"),
         payload_segment.encode("utf-8"),
         digestmod=hashlib.sha256,
-    ).digest()
-    return _urlsafe_b64encode(signature)
+    ).hexdigest()
 
 
 def _parse_authorization_token(authorization: str | None) -> str:

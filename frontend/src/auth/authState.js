@@ -79,6 +79,58 @@ export function clearAuthSession() {
 }
 
 /**
+ * 接收 AI4MS 门户通过 URL hash 传递的统一登录 token。
+ *
+ * AI4MS 跳转子平台时会将 token 写入 URL hash：
+ *   https://specagent.example.com/#token=xxx
+ * 本函数在应用初始化时被调用，提取 token 并写入会话存储，
+ * 同时清理 URL 中的 token 避免泄露。
+ *
+ * Returns:
+ *   是否成功接收了门户 token。
+ */
+export function acceptPortalToken() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  const hash = window.location.hash || ''
+  const params = new URLSearchParams(hash.replace(/^#/, ''))
+  const token = params.get('token')
+  if (!token) {
+    return false
+  }
+
+  const pendingExpiresAt = Math.floor(Date.now() / 1000) + 12 * 3600
+  authState.authenticated = true
+  authState.userId = '__portal__'
+  authState.username = '__portal__'
+  authState.role = 'user'
+  authState.status = 'active'
+  authState.tokenType = 'Bearer'
+  authState.accessToken = token
+  authState.expiresAt = pendingExpiresAt
+
+  setStoredAuthSession({
+    userId: '__portal__',
+    username: '__portal__',
+    role: 'user',
+    status: 'active',
+    tokenType: 'Bearer',
+    accessToken: token,
+    expiresAt: pendingExpiresAt,
+  })
+
+  params.delete('token')
+  const remaining = params.toString()
+  const newUrl =
+    window.location.pathname +
+    window.location.search +
+    (remaining ? `#${remaining}` : '')
+  window.history.replaceState(null, '', newUrl)
+  return true
+}
+
+/**
  * 获取可用于请求头的 Authorization 值。
  *
  * Returns:
