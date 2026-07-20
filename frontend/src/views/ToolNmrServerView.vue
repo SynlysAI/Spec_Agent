@@ -23,6 +23,17 @@ const reverseItems = ref([])
 const searchItems = ref([])
 const protectedImageUrlMap = ref({})
 
+const modelProviderLogos = [
+  {
+    name: '北京科学智能研究院',
+    src: '/brand/北京科学智能研究院.jpg',
+  },
+  {
+    name: '深势科技',
+    src: '/brand/深势科技.jpg',
+  },
+]
+
 const forwardForm = reactive({
   smiles_input: '',
 })
@@ -334,6 +345,18 @@ onBeforeUnmount(() => {
   <div class="panel">
     <div class="panel-header">
       <h3 class="panel-title">核磁预测服务（NMRServer）</h3>
+      <div class="provider-source" aria-label="模型服务来源">
+        <span class="provider-text">模型服务来自北京科学智能研究院及深势科技</span>
+        <span class="provider-logos">
+          <img
+            v-for="logo in modelProviderLogos"
+            :key="logo.name"
+            :src="logo.src"
+            :alt="logo.name"
+            class="provider-logo"
+          />
+        </span>
+      </div>
     </div>
     <div class="panel-body">
       <el-tabs v-model="activeMainTab">
@@ -664,6 +687,43 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.provider-source {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  color: #60789f;
+  font-size: 13px;
+}
+
+.provider-text {
+  white-space: nowrap;
+}
+
+.provider-logos {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.provider-logo {
+  width: 104px;
+  height: 42px;
+  object-fit: contain;
+  border: 1px solid #e2eaf6;
+  border-radius: 6px;
+  background: #fff;
+}
+
 .desc-block {
   margin-bottom: 14px;
 }
@@ -801,6 +861,23 @@ onBeforeUnmount(() => {
 @media (max-width: 1200px) {
   .result-list {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .provider-source {
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-direction: column;
+  }
+
+  .provider-text {
+    white-space: normal;
   }
 }
 </style>
