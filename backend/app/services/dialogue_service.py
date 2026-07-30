@@ -173,25 +173,74 @@ class DialogueService:
         if llm_answer:
             return llm_answer, used_excerpt
 
-        context_line = f"分析类型：{ANALYSIS_TYPE_LABELS.get(analysis_type, analysis_type)}"
-        history_line = ""
-        if history:
-            history_line = f"，已参考最近 {min(len(history), 6)} 条会话上下文"
+        return DialogueService._build_fallback_answer(
+            analysis_type=analysis_type,
+            used_excerpt=used_excerpt,
+            history=history,
+        ), used_excerpt
 
-        if used_excerpt:
-            answer = (
-                f"基于已选报告的检索结果，先给你结论：\n\n"
-                f"{used_excerpt}\n\n"
-                f"如需我继续，可按你关心的方向追问（例如峰位、峰面积、模型参数或误差项）。\n"
-                f"（{context_line}{history_line}）"
+    @staticmethod
+    def generate_answer_stream(
+        model_key: str,
+        question: str,
+        analysis_type: str,
+        report_id: str | None = None,
+        history: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        current_user: dict[str, str] | None = None,
+    ):
+        """流式生成问答回复。
+
+        与 generate_answer 一致的报告检索与上下文构建逻辑；
+        LLM 输出通过 chat_stream 逐段 yield；
+        LLM 未产出任何文本时回退到规则兜底（一次性 yield）。
+
+        Args:
+            model_key: 问答模型键。
+            question: 用户问题。
+            analysis_type: 分析类型。
+            report_id: 报告 ID。
+            history: 最近历史消息。
+            system_prompt: 用户自定义系统提示词。
+            current_user: 当前登录用户上下文。
+
+        Yields:
+            回复文本片段（str）。
+        """
+        report_text = ""
+        if report_id:
+            report_record = DialogueService._get_accessible_report(
+                report_id=report_id,
+                analysis_type=analysis_type,
+                current_user=current_user,
             )
-        else:
-            answer = (
-                "当前未检索到可直接引用的报告片段。"
-                "你可以先在右侧选择一份历史报告，再提问具体问题（例如“总结结论”“异常点在哪里”“参数是否合理”）。\n"
-                f"（{context_line}{history_line}）"
-            )
-        return answer, used_excerpt
+            if not report_record:
+                raise ValueError("所选报告不存在或无权访问")
+            report_text = str(report_record.text_report or "").strip()
+
+        used_excerpt = DialogueService._extract_relevant_excerpt(report_text=report_text, question=question)
+        messages = DialogueService._assemble_llm_messages(
+            question=question,
+            analysis_type=analysis_type,
+            report_text=report_text,
+            history=history or [],
+            system_prompt=system_prompt,
+        )
+
+        produced = False
+        for chunk in dialogue_model_service.chat_stream(model_key=model_key, messages=messages):
+            if chunk:
+                produced = True
+                yield chunk
+
+        if produced:
+            return
+
+        yield DialogueService._build_fallback_answer(
+            analysis_type=analysis_type,
+            used_excerpt=used_excerpt,
+            history=history,
+        )
 
     @staticmethod
     def _build_report_task_query(task_type: str, current_user: dict[str, str] | None) -> dict[str, Any]:
@@ -320,6 +369,35 @@ class DialogueService:
         Returns:
             LLM 回答文本。
         """
+        messages = DialogueService._assemble_llm_messages(
+            question=question,
+            analysis_type=analysis_type,
+            report_text=report_text,
+            history=history,
+            system_prompt=system_prompt,
+        )
+        return dialogue_model_service.chat(model_key=model_key, messages=messages)
+
+    @staticmethod
+    def _assemble_llm_messages(
+        question: str,
+        analysis_type: str,
+        report_text: str,
+        history: list[dict[str, str]],
+        system_prompt: str | None,
+    ) -> list[dict[str, str]]:
+        """组装发送给 LLM 的完整消息列表（system + history + question）。
+
+        Args:
+            question: 用户问题。
+            analysis_type: 分析类型编码。
+            report_text: 报告全文。
+            history: 历史消息列表。
+            system_prompt: 用户输入的基础提示词。
+
+        Returns:
+            OpenAI 兼容消息列表。
+        """
         merged_system_prompt = DialogueService._build_llm_system_prompt(
             analysis_type=analysis_type,
             report_text=report_text,
@@ -328,7 +406,6 @@ class DialogueService:
         messages: list[dict[str, str]] = [
             {"role": "system", "content": merged_system_prompt}
         ]
-
         for item in history[-8:]:
             role = str(item.get("role", "")).lower()
             content = str(item.get("content", "")).strip()
@@ -337,7 +414,41 @@ class DialogueService:
             normalized_role = "assistant" if role == "assistant" else "user"
             messages.append({"role": normalized_role, "content": content})
         messages.append({"role": "user", "content": question})
-        return dialogue_model_service.chat(model_key=model_key, messages=messages)
+        return messages
+
+    @staticmethod
+    def _build_fallback_answer(
+        analysis_type: str,
+        used_excerpt: str,
+        history: list[dict[str, str]] | None,
+    ) -> str:
+        """LLM 不可用或未产出时构建规则兜底回答。
+
+        Args:
+            analysis_type: 分析类型编码。
+            used_excerpt: 从报告中检索到的片段。
+            history: 历史消息列表。
+
+        Returns:
+            兜底回复文本。
+        """
+        context_line = f"分析类型：{ANALYSIS_TYPE_LABELS.get(analysis_type, analysis_type)}"
+        history_line = ""
+        if history:
+            history_line = f"，已参考最近 {min(len(history), 6)} 条会话上下文"
+
+        if used_excerpt:
+            return (
+                f"基于已选报告的检索结果，先给你结论：\n\n"
+                f"{used_excerpt}\n\n"
+                f"如需我继续，可按你关心的方向追问（例如峰位、峰面积、模型参数或误差项）。\n"
+                f"（{context_line}{history_line}）"
+            )
+        return (
+            "当前未检索到可直接引用的报告片段。"
+            "你可以先在右侧选择一份历史报告，再提问具体问题（例如“总结结论”“异常点在哪里”“参数是否合理”）。\n"
+            f"（{context_line}{history_line}）"
+        )
 
     @staticmethod
     def _build_llm_system_prompt(analysis_type: str, report_text: str, user_prompt: str | None) -> str:

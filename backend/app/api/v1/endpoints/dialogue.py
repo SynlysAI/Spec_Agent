@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.core.auth import get_current_user
 from app.schemas.common import ApiResponse
@@ -19,6 +23,7 @@ from app.services.dialogue_model_service import DialogueModelUnavailableError
 from app.services.dialogue_service import dialogue_service
 
 router = APIRouter(prefix="/dialogue", tags=["dialogue"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/analysis-types", response_model=ApiResponse[DialogueAnalysisTypeData])
@@ -99,3 +104,49 @@ def chat(
         used_excerpt=used_excerpt,
     )
     return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.post("/chat/stream")
+def chat_stream(
+    payload: DialogueChatRequest,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> StreamingResponse:
+    """流式问答接口 — 以 SSE 形式逐段返回模型回复。
+
+    Args:
+        payload: 问答请求参数（与 /chat 相同）。
+        current_user: 当前登录用户上下文。
+
+    Returns:
+        SSE 流式响应，事件 type 含 chunk（文本片段）、done（结束）、error（异常）。
+    """
+    history = [item.model_dump() for item in payload.history]
+
+    def _event_stream():
+        full_text = ""
+        try:
+            for chunk in dialogue_service.generate_answer_stream(
+                model_key=payload.model_key,
+                question=payload.question,
+                analysis_type=payload.analysis_type,
+                report_id=payload.report_id,
+                history=history,
+                system_prompt=payload.system_prompt,
+                current_user=current_user,
+            ):
+                full_text += chunk
+                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk}, ensure_ascii=False)}\n\n"
+        except ValueError as exc:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
+            return
+        except DialogueModelUnavailableError:
+            yield f"data: {json.dumps({'type': 'error', 'message': '该模型暂不可用'}, ensure_ascii=False)}\n\n"
+            return
+        except Exception as exc:
+            logger.exception("流式问答生成失败")
+            yield f"data: {json.dumps({'type': 'error', 'message': f'问答服务异常: {exc}'}, ensure_ascii=False)}\n\n"
+            return
+
+        yield f"data: {json.dumps({'type': 'done', 'full_text': full_text}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(_event_stream(), media_type="text/event-stream")

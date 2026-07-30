@@ -3,12 +3,13 @@ import { nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import {
-  dialogueChat,
+  dialogueChatStream,
   getApiErrorMessage,
   listDialogueModels,
   listDialogueAnalysisTypes,
   listDialogueReports,
 } from '../api/specAgentApi'
+import MessageContent from '../components/MessageContent.vue'
 
 const loadingModels = ref(false)
 const loadingTypes = ref(false)
@@ -19,6 +20,7 @@ const analysisTypes = ref([])
 const reports = ref([])
 const messages = ref([])
 const chatScrollerRef = ref(null)
+const abortControllerRef = ref(null)
 
 const form = reactive({
   modelKey: '',
@@ -86,7 +88,7 @@ async function loadReports() {
 }
 
 /**
- * 发送问答消息。
+ * 发送问答消息（流式）。
  *
  * Returns:
  *   Promise<void>
@@ -101,10 +103,13 @@ async function sendMessage() {
     ElMessage.warning('请输入问题')
     return
   }
-  const historyPayload = messages.value.slice(-12).map((item) => ({
-    role: item.role,
-    content: item.content,
-  }))
+  const historyPayload = messages.value
+    .filter((item) => !item.streaming && item.content)
+    .slice(-12)
+    .map((item) => ({
+      role: item.role,
+      content: item.content,
+    }))
   messages.value.push({
     role: 'user',
     content: question,
@@ -113,34 +118,55 @@ async function sendMessage() {
   await scrollToBottom()
 
   sending.value = true
-  try {
-    const data = await dialogueChat({
+  const assistantMsg = reactive({
+    role: 'assistant',
+    content: '',
+    streaming: true,
+  })
+  messages.value.push(assistantMsg)
+  await scrollToBottom()
+
+  const controller = new AbortController()
+  abortControllerRef.value = controller
+
+  await dialogueChatStream(
+    {
       model_key: form.modelKey,
       analysis_type: form.analysisType,
       report_id: form.reportId || null,
       question,
       history: historyPayload,
       system_prompt: form.systemPrompt,
-    })
-    messages.value.push({
-      role: 'assistant',
-      content: data.answer || '',
-    })
-  } catch (error) {
-    const errorMessage = getApiErrorMessage(error)
-    if (errorMessage.includes('该模型暂不可用')) {
-      ElMessage.error('该模型暂不可用')
-    } else {
-      ElMessage.error(errorMessage)
-      messages.value.push({
-        role: 'assistant',
-        content: '对话服务调用失败，请稍后重试。',
-      })
-    }
-  } finally {
-    sending.value = false
-    await scrollToBottom()
-  }
+    },
+    {
+      signal: controller.signal,
+      onChunk: (_chunk, fullText) => {
+        assistantMsg.content = fullText
+        scrollToBottom()
+      },
+      onDone: (fullText) => {
+        assistantMsg.content = fullText
+        assistantMsg.streaming = false
+        sending.value = false
+        abortControllerRef.value = null
+        scrollToBottom()
+      },
+      onError: (errorMessage) => {
+        if (errorMessage.includes('该模型暂不可用')) {
+          ElMessage.error('该模型暂不可用')
+          messages.value = messages.value.filter((item) => item !== assistantMsg)
+        } else if (!assistantMsg.content) {
+          assistantMsg.content = `对话服务调用失败：${errorMessage}`
+        } else {
+          assistantMsg.content = `${assistantMsg.content}\n\n[错误] ${errorMessage}`
+        }
+        assistantMsg.streaming = false
+        sending.value = false
+        abortControllerRef.value = null
+        scrollToBottom()
+      },
+    },
+  )
 }
 
 /**
@@ -163,6 +189,11 @@ function handleEnterSend(event) {
  * 清空当前会话消息。
  */
 function clearMessages() {
+  if (abortControllerRef.value) {
+    abortControllerRef.value.abort()
+    abortControllerRef.value = null
+  }
+  sending.value = false
   messages.value = []
 }
 
@@ -277,13 +308,15 @@ onMounted(async () => {
             :class="item.role"
           >
             <div class="chat-role">{{ item.role === 'user' ? '你' : '助手' }}</div>
-            <div class="chat-content">{{ item.content }}</div>
-          </div>
-          <div v-if="sending" class="chat-item assistant thinking">
-            <div class="chat-role">助手</div>
-            <div class="chat-content thinking-content">
-              <el-icon class="is-loading"><Loading /></el-icon>
-              <span>正在思考中，请稍候...</span>
+            <div class="chat-content">
+              <template v-if="item.role === 'user'">{{ item.content }}</template>
+              <template v-else-if="item.content">
+                <MessageContent :content="item.content" />
+              </template>
+              <div v-else class="thinking-content">
+                <el-icon class="is-loading"><Loading /></el-icon>
+                <span>正在思考中，请稍候...</span>
+              </div>
             </div>
           </div>
         </div>
@@ -358,11 +391,11 @@ onMounted(async () => {
   padding: 10px 12px;
   border-radius: 10px;
   line-height: 1.55;
-  white-space: pre-wrap;
 }
 
 .chat-item.user .chat-content {
   background: #e8f2ff;
+  white-space: pre-wrap;
 }
 
 .chat-item.assistant .chat-content {
@@ -390,5 +423,122 @@ onMounted(async () => {
   .chat-scroll {
     height: 420px;
   }
+}
+</style>
+
+<style>
+.chat-markdown {
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown p {
+  margin: 0 0 8px;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.chat-markdown h1 { font-size: 18px; }
+.chat-markdown h2 { font-size: 16px; }
+.chat-markdown h3 { font-size: 15px; }
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 { font-size: 14px; }
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+
+.chat-markdown li {
+  margin: 2px 0;
+}
+
+.chat-markdown a {
+  color: #1677ff;
+  text-decoration: underline;
+}
+
+.chat-markdown blockquote {
+  margin: 6px 0;
+  padding: 4px 12px;
+  border-left: 3px solid #cbd5e1;
+  color: #64748b;
+}
+
+.chat-markdown code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(135, 150, 170, 0.18);
+  font-family: "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.chat-markdown pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #f6f8fa;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.chat-markdown pre code {
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+}
+
+.chat-markdown table {
+  width: 100%;
+  max-width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+  font-size: 13px;
+  display: block;
+  overflow-x: auto;
+}
+
+.chat-markdown th,
+.chat-markdown td {
+  padding: 6px 10px;
+  border: 1px solid #d9e2ec;
+  text-align: left;
+}
+
+.chat-markdown th {
+  background: rgba(31, 94, 255, 0.06);
+  font-weight: 600;
+}
+
+.chat-markdown img {
+  max-width: 100%;
+}
+
+.chat-markdown hr {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid #e4ebf3;
 }
 </style>

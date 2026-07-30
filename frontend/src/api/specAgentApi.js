@@ -694,6 +694,76 @@ export async function dialogueChat(payload, options = {}) {
 }
 
 /**
+ * 流式问答对话，通过 SSE 逐段接收模型回复。
+ *
+ * Args:
+ *   payload: 问答请求参数（同 dialogueChat）。
+ *   options: 流式回调与中断控制。
+ *     options.onChunk: 每段文本到达时的回调，参数为 (chunk, fullText)。
+ *     options.onDone: 流式结束回调，参数为完整文本。
+ *     options.onError: 异常回调，参数为错误消息。
+ *     options.signal: AbortSignal，用于中断请求。
+ */
+export async function dialogueChatStream(payload, options = {}) {
+  const { onChunk, onDone, onError, signal } = options
+  try {
+    const headers = { 'Content-Type': 'application/json' }
+    const authorization = getAuthorizationHeader()
+    if (authorization) {
+      headers.Authorization = authorization
+    }
+    const response = await fetch(`${resolvedBaseUrl}/dialogue/chat/stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal,
+    })
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      throw new Error(`${response.status} ${response.statusText}${errText ? ': ' + errText : ''}`)
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let fullText = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop()
+
+      for (const part of parts) {
+        if (!part.startsWith('data: ')) continue
+        try {
+          const data = JSON.parse(part.slice(6))
+          if (data.type === 'chunk') {
+            fullText += data.text
+            onChunk?.(data.text, fullText)
+          } else if (data.type === 'error') {
+            onError?.(data.message || '问答服务异常')
+            return
+          } else if (data.type === 'done') {
+            onDone?.(data.full_text || fullText)
+            return
+          }
+        } catch {
+          // 忽略不完整的 JSON 片段
+        }
+      }
+    }
+    onDone?.(fullText)
+  } catch (err) {
+    if (err.name === 'AbortError') return
+    onError?.(err.message || '请求失败')
+  }
+}
+
+/**
  * 查询验收配置摘要。
  *
  * Returns:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import requests
@@ -112,6 +113,85 @@ class DialogueModelService:
                     raise DialogueModelUnavailableError("该模型暂不可用") from exc
 
         raise DialogueModelUnavailableError("该模型暂不可用")
+
+    @staticmethod
+    def chat_stream(model_key: str, messages: list[dict[str, str]]):
+        """流式调用指定问答模型，逐段 yield 文本 delta。
+
+        Args:
+            model_key: 问答模型键。
+            messages: OpenAI 兼容消息列表。
+
+        Yields:
+            模型生成的文本片段。
+
+        Raises:
+            ValueError: 模型键非法。
+            DialogueModelUnavailableError: 模型接口不可用或返回异常。
+        """
+        model_config = DialogueModelService._get_model_config(model_key=model_key)
+        api_key = settings.dialogue_llm_api_key
+        base_url = str(model_config.get("base_url") or "").rstrip("/")
+        if not api_key or not base_url:
+            logger.error(
+                "问答模型配置缺失，无法调用: model_key=%s base_url=%s api_key_configured=%s",
+                model_key,
+                base_url,
+                bool(api_key),
+            )
+            raise DialogueModelUnavailableError("该模型暂不可用")
+
+        payload = DialogueModelService._build_payload(model_config=model_config, messages=messages)
+        payload["stream"] = True
+        request_url = f"{base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            response = requests.post(
+                request_url,
+                headers=headers,
+                json=payload,
+                timeout=settings.dialogue_llm_timeout,
+                stream=True,
+            )
+        except requests.RequestException as exc:
+            logger.error(
+                "问答模型流式请求失败: model_key=%s url=%s error=%s",
+                model_key,
+                request_url,
+                exc,
+            )
+            raise DialogueModelUnavailableError("该模型暂不可用") from exc
+
+        if response.status_code >= 400:
+            logger.error(
+                "问答模型流式 HTTP 响应异常: model_key=%s status=%s url=%s",
+                model_key,
+                response.status_code,
+                request_url,
+            )
+            raise DialogueModelUnavailableError("该模型暂不可用")
+
+        for raw_line in response.iter_lines(decode_unicode=True):
+            if not raw_line or not raw_line.startswith("data: "):
+                continue
+            data_text = raw_line[len("data: "):]
+            if data_text == "[DONE]":
+                break
+            try:
+                data = json.loads(data_text)
+            except ValueError:
+                continue
+            choices = data.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta", {}) or {}
+            content_delta = delta.get("content")
+            if content_delta:
+                yield content_delta
 
     @staticmethod
     def _get_model_config(model_key: str) -> dict[str, object]:
