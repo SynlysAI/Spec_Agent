@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
@@ -146,6 +147,88 @@ class ObjectStorageService:
         if not downloaded:
             raise ValueError(f"MinIO 前缀下未找到文件: {self.build_uri(ref)}")
         return downloaded
+
+    def sync_spectrum_file(self, *, local_root: Path, local_path: Path, spectrum_type: str) -> ObjectStorageRef:
+        """将单个谱图文件同步到对象存储。
+
+        Args:
+            local_root: 采集配置中的本地类型根目录。
+            local_path: 待同步文件路径。
+            spectrum_type: 谱图类型。
+
+        Returns:
+            已同步文件对应的对象存储引用。
+        """
+        ref = self.build_spectrum_object_ref(
+            local_root=local_root,
+            local_path=local_path,
+            spectrum_type=spectrum_type,
+        )
+        client = self._create_minio_client()
+        content_type, _ = mimetypes.guess_type(str(local_path))
+        client.fput_object(
+            ref.bucket,
+            ref.object_key,
+            str(local_path),
+            content_type=content_type or "application/octet-stream",
+        )
+        return ref
+
+    def sync_spectrum_files(
+        self,
+        *,
+        local_root: Path,
+        local_files: list[Path],
+        spectrum_type: str,
+    ) -> list[ObjectStorageRef]:
+        """将一组谱图文件同步到对象存储。
+
+        Args:
+            local_root: 采集配置中的本地类型根目录。
+            local_files: 待同步的文件列表。
+            spectrum_type: 谱图类型。
+
+        Returns:
+            已同步文件对应的对象存储引用列表。
+        """
+        refs: list[ObjectStorageRef] = []
+        for local_file in local_files:
+            if not local_file.exists() or not local_file.is_file():
+                continue
+            refs.append(
+                self.sync_spectrum_file(
+                    local_root=local_root,
+                    local_path=local_file,
+                    spectrum_type=spectrum_type,
+                )
+            )
+        return refs
+
+    def build_spectrum_object_ref(
+        self,
+        *,
+        local_root: Path,
+        local_path: Path,
+        spectrum_type: str,
+    ) -> ObjectStorageRef:
+        """按采集目录结构构建对象存储引用。
+
+        Args:
+            local_root: 采集配置中的本地类型根目录。
+            local_path: 本地文件或目录路径。
+            spectrum_type: 谱图类型。
+
+        Returns:
+            对象存储引用。
+        """
+        try:
+            relative_path = local_path.relative_to(local_root).as_posix().strip("/")
+        except ValueError as exc:
+            logger.warning("本地路径不在采集根目录下: local_root=%s, local_path=%s", local_root, local_path)
+            raise ValueError(f"本地路径不在采集根目录下: {local_path}") from exc
+        object_key = f"{spectrum_type}/spectrum/{relative_path}" if relative_path else f"{spectrum_type}/spectrum"
+        object_key = self._apply_object_prefix(object_key)
+        return ObjectStorageRef(bucket=settings.minio_bucket, object_key=object_key)
 
     def to_record_fields(self, raw_path: str | Path | None) -> dict[str, str]:
         """生成可写入数据库的对象存储字段。

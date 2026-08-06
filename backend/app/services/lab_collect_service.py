@@ -539,6 +539,12 @@ class LabCollectService:
                 shutil.copy2(candidate.remote_path, local_sample_path)
             local_files = [local_sample_path]
 
+        self._sync_sample_to_minio(
+            candidate=candidate,
+            local_sample_path=local_sample_path,
+            local_files=local_files,
+        )
+
         file_records, analysis_input, sample_meta, total_size = self._build_sample_files_and_meta(
             sample_id=sample_id,
             sample_key=sample_key,
@@ -587,6 +593,51 @@ class LabCollectService:
             action="updated" if existed else "imported",
             sample_id=sample_id,
         )
+
+    def _sync_sample_to_minio(
+        self,
+        *,
+        candidate: CollectCandidate,
+        local_sample_path: Path,
+        local_files: list[Path],
+    ) -> None:
+        """将样本同步到 MinIO 对象存储。
+
+        Args:
+            candidate: 当前待采集样本候选。
+            local_sample_path: 本地样本路径。
+            local_files: 本地样本文件列表。
+        """
+        if not settings.minio_endpoint or not settings.minio_bucket:
+            logger.warning("MinIO 未配置，跳过对象同步: %s", local_sample_path)
+            return
+        if not settings.minio_access_key or not settings.minio_secret_key:
+            logger.warning("MinIO 凭证未配置，跳过对象同步: %s", local_sample_path)
+            return
+
+        try:
+            uploaded_refs = object_storage_service.sync_spectrum_files(
+                local_root=candidate.local_root,
+                local_files=local_files,
+                spectrum_type=candidate.spectrum_type,
+            )
+            if candidate.spectrum_type == "nmr" and local_sample_path.is_dir():
+                logger.info(
+                    "NMR 样本已同步至 MinIO: sample=%s, files=%d, bucket=%s",
+                    candidate.sample_name,
+                    len(uploaded_refs),
+                    settings.minio_bucket,
+                )
+            else:
+                logger.info(
+                    "样本已同步至 MinIO: sample=%s, files=%d, bucket=%s",
+                    candidate.sample_name,
+                    len(uploaded_refs),
+                    settings.minio_bucket,
+                )
+        except Exception as exc:
+            logger.error("样本同步 MinIO 失败: sample=%s, path=%s, error=%s", candidate.sample_name, local_sample_path, exc)
+            raise ValueError(f"样本同步 MinIO 失败: {exc}") from exc
 
     def _mark_molecular_statistics_stale(self) -> None:
         """将分子资产统计缓存标记为过期。"""
