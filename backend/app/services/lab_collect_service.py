@@ -41,6 +41,7 @@ from app.schemas.lab_collect import (
     SpectrumSampleRecord,
     SpectrumSampleSummaryData,
 )
+from app.services.object_storage_service import object_storage_service
 
 
 TYPE_INPUT_KIND = {
@@ -538,6 +539,12 @@ class LabCollectService:
                 shutil.copy2(candidate.remote_path, local_sample_path)
             local_files = [local_sample_path]
 
+        self._sync_sample_to_minio(
+            candidate=candidate,
+            local_sample_path=local_sample_path,
+            local_files=local_files,
+        )
+
         file_records, analysis_input, sample_meta, total_size = self._build_sample_files_and_meta(
             sample_id=sample_id,
             sample_key=sample_key,
@@ -564,6 +571,7 @@ class LabCollectService:
             storage={
                 "local_root": str(candidate.local_root),
                 "local_sample_path": str(local_sample_path),
+                **object_storage_service.to_record_fields(local_sample_path),
             },
             analysis_input=analysis_input,
             collect_status="SUCCESS",
@@ -585,6 +593,51 @@ class LabCollectService:
             action="updated" if existed else "imported",
             sample_id=sample_id,
         )
+
+    def _sync_sample_to_minio(
+        self,
+        *,
+        candidate: CollectCandidate,
+        local_sample_path: Path,
+        local_files: list[Path],
+    ) -> None:
+        """将样本同步到 MinIO 对象存储。
+
+        Args:
+            candidate: 当前待采集样本候选。
+            local_sample_path: 本地样本路径。
+            local_files: 本地样本文件列表。
+        """
+        if not settings.minio_endpoint or not settings.minio_bucket:
+            logger.warning("MinIO 未配置，跳过对象同步: %s", local_sample_path)
+            return
+        if not settings.minio_access_key or not settings.minio_secret_key:
+            logger.warning("MinIO 凭证未配置，跳过对象同步: %s", local_sample_path)
+            return
+
+        try:
+            uploaded_refs = object_storage_service.sync_spectrum_files(
+                local_root=candidate.local_root,
+                local_files=local_files,
+                spectrum_type=candidate.spectrum_type,
+            )
+            if candidate.spectrum_type == "nmr" and local_sample_path.is_dir():
+                logger.info(
+                    "NMR 样本已同步至 MinIO: sample=%s, files=%d, bucket=%s",
+                    candidate.sample_name,
+                    len(uploaded_refs),
+                    settings.minio_bucket,
+                )
+            else:
+                logger.info(
+                    "样本已同步至 MinIO: sample=%s, files=%d, bucket=%s",
+                    candidate.sample_name,
+                    len(uploaded_refs),
+                    settings.minio_bucket,
+                )
+        except Exception as exc:
+            logger.error("样本同步 MinIO 失败: sample=%s, path=%s, error=%s", candidate.sample_name, local_sample_path, exc)
+            raise ValueError(f"样本同步 MinIO 失败: {exc}") from exc
 
     def _mark_molecular_statistics_stale(self) -> None:
         """将分子资产统计缓存标记为过期。"""
@@ -658,6 +711,7 @@ class LabCollectService:
                     relative_path=relative_path,
                     remote_path=str(remote_file_path),
                     local_path=str(local_file),
+                    **object_storage_service.to_record_fields(local_file),
                     file_size=int(local_file.stat().st_size),
                     sha256=None,
                     modified_at=datetime.fromtimestamp(local_file.stat().st_mtime),
@@ -675,8 +729,10 @@ class LabCollectService:
                 "input_kind": "folder",
                 "remote_sample_dir": str(candidate.remote_path),
                 "local_sample_dir": str(local_sample_path),
+                **object_storage_service.to_record_fields(local_sample_path),
                 "primary_arw_name": gpc_primary_arw.name,
                 "primary_arw_path": str(gpc_primary_arw),
+                "primary_arw_object_uri": object_storage_service.build_uri_for_path(gpc_primary_arw),
                 "validation_pdf_name": gpc_validation_pdf.name if gpc_validation_pdf else None,
                 "validation_pdf_path": str(gpc_validation_pdf) if gpc_validation_pdf else None,
             }
@@ -687,6 +743,7 @@ class LabCollectService:
                 "input_kind": "folder",
                 "remote_sample_dir": str(candidate.remote_path),
                 "local_sample_dir": str(local_sample_path),
+                **object_storage_service.to_record_fields(local_sample_path),
                 "has_fid": any(path.name.lower() == "fid" for path in local_files),
                 "has_pdata": any("pdata" in path.parts for path in local_files),
                 "experiment_dir_names": dir_names,
@@ -697,6 +754,7 @@ class LabCollectService:
                 "input_kind": "file",
                 "remote_file_path": str(candidate.remote_path),
                 "local_file_path": str(primary_input_path),
+                **object_storage_service.to_record_fields(primary_input_path),
                 "file_format": suffix,
             }
             if transform_meta:
@@ -705,6 +763,7 @@ class LabCollectService:
         analysis_input = {
             "input_type": TYPE_INPUT_KIND[candidate.spectrum_type],
             "input_path": primary_input_path,
+            **object_storage_service.to_record_fields(primary_input_path),
         }
         return file_records, analysis_input, sample_meta, total_size
 
