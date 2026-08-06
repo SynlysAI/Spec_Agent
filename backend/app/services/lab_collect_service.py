@@ -41,6 +41,7 @@ from app.schemas.lab_collect import (
     SpectrumSampleRecord,
     SpectrumSampleSummaryData,
 )
+from app.services.object_storage_service import object_storage_service
 
 
 TYPE_INPUT_KIND = {
@@ -564,6 +565,7 @@ class LabCollectService:
             storage={
                 "local_root": str(candidate.local_root),
                 "local_sample_path": str(local_sample_path),
+                **object_storage_service.to_record_fields(local_sample_path),
             },
             analysis_input=analysis_input,
             collect_status="SUCCESS",
@@ -658,6 +660,7 @@ class LabCollectService:
                     relative_path=relative_path,
                     remote_path=str(remote_file_path),
                     local_path=str(local_file),
+                    **object_storage_service.to_record_fields(local_file),
                     file_size=int(local_file.stat().st_size),
                     sha256=None,
                     modified_at=datetime.fromtimestamp(local_file.stat().st_mtime),
@@ -675,8 +678,10 @@ class LabCollectService:
                 "input_kind": "folder",
                 "remote_sample_dir": str(candidate.remote_path),
                 "local_sample_dir": str(local_sample_path),
+                **object_storage_service.to_record_fields(local_sample_path),
                 "primary_arw_name": gpc_primary_arw.name,
                 "primary_arw_path": str(gpc_primary_arw),
+                "primary_arw_object_uri": object_storage_service.build_uri_for_path(gpc_primary_arw),
                 "validation_pdf_name": gpc_validation_pdf.name if gpc_validation_pdf else None,
                 "validation_pdf_path": str(gpc_validation_pdf) if gpc_validation_pdf else None,
             }
@@ -687,6 +692,7 @@ class LabCollectService:
                 "input_kind": "folder",
                 "remote_sample_dir": str(candidate.remote_path),
                 "local_sample_dir": str(local_sample_path),
+                **object_storage_service.to_record_fields(local_sample_path),
                 "has_fid": any(path.name.lower() == "fid" for path in local_files),
                 "has_pdata": any("pdata" in path.parts for path in local_files),
                 "experiment_dir_names": dir_names,
@@ -697,6 +703,7 @@ class LabCollectService:
                 "input_kind": "file",
                 "remote_file_path": str(candidate.remote_path),
                 "local_file_path": str(primary_input_path),
+                **object_storage_service.to_record_fields(primary_input_path),
                 "file_format": suffix,
             }
             if transform_meta:
@@ -705,6 +712,7 @@ class LabCollectService:
         analysis_input = {
             "input_type": TYPE_INPUT_KIND[candidate.spectrum_type],
             "input_path": primary_input_path,
+            **object_storage_service.to_record_fields(primary_input_path),
         }
         return file_records, analysis_input, sample_meta, total_size
 

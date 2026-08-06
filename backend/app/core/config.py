@@ -132,6 +132,28 @@ class Settings:
         self.spectrum_files_root: Path = Path(
             os.getenv("SPECTRUM_FILES_ROOT", str(self.project_root / "sample_data"))
         )
+        raw_minio_endpoint = os.getenv("MINIO_ENDPOINT", "10.26.15.93:9000").strip()
+        self.minio_endpoint: str = raw_minio_endpoint.removeprefix("http://").removeprefix("https://").rstrip("/")
+        self.minio_public_base_url: str = os.getenv(
+            "MINIO_PUBLIC_BASE_URL",
+            f"http://{self.minio_endpoint}" if self.minio_endpoint else "",
+        ).strip().rstrip("/")
+        self.minio_access_key: str = os.getenv("MINIO_ACCESS_KEY", "").strip()
+        self.minio_secret_key: str = os.getenv("MINIO_SECRET_KEY", "").strip()
+        self.minio_secure: bool = os.getenv("MINIO_SECURE", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.minio_bucket: str = os.getenv("MINIO_BUCKET", "spectrum-data").strip()
+        self.spectrum_files_object_prefix: str = os.getenv("SPECTRUM_FILES_OBJECT_PREFIX", "").strip().strip("/")
+        legacy_roots = os.getenv("SPECTRUM_FILES_LEGACY_ROOTS", "E:/spectrum_files;E:\\spectrum_files")
+        self.spectrum_files_legacy_roots: list[str] = [
+            item.strip()
+            for item in legacy_roots.split(";")
+            if item.strip()
+        ]
         self.analysis_results_root: Path = Path(os.getenv("ANALYSIS_RESULTS_PATH", str(self.outputs_root)))
         self.calibration_curves_root: Path = Path(
             os.getenv(

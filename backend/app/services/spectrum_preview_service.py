@@ -14,6 +14,7 @@ from app.core.logging import get_logger
 from app.infra.mongo import get_files_collection
 from app.services.task_executors import _safe_extractall
 from app.modules.nmr.service import get_nmr_sample_data
+from app.services.object_storage_service import ObjectStorageRef, object_storage_service
 
 logger = get_logger("spec_agent.services.spectrum_preview")
 
@@ -140,6 +141,115 @@ class SpectrumPreviewService:
             np.asarray(curve_df["intensity"].astype(float), dtype=np.float64),
         )
 
+    @staticmethod
+    def _source_name_from_value(value: str) -> str:
+        """从路径、URL 或对象 URI 中提取来源名称。
+
+        Args:
+            value: 路径、URL 或对象 URI。
+
+        Returns:
+            末级文件名或目录名。
+        """
+        normalized = str(value or "").replace("\\", "/").rstrip("/")
+        if not normalized:
+            return "unknown"
+        return normalized.split("/")[-1] or "unknown"
+
+    @staticmethod
+    def _infer_spectrum_type(source_name: str, spectype: str, is_dir_like: bool = False) -> str:
+        """根据来源名称和显式类型推断谱图类型。
+
+        Args:
+            source_name: 文件名或目录名。
+            spectype: 调用方传入的谱图类型。
+            is_dir_like: 是否按目录类输入处理。
+
+        Returns:
+            归一化后的谱图类型。
+        """
+        inferred = (spectype or "auto").lower()
+        if inferred != "auto":
+            return inferred
+
+        suffix = Path(source_name).suffix.lower()
+        if is_dir_like:
+            return "nmr"
+        if suffix == ".arw":
+            return "gpc"
+        if suffix == ".zip":
+            return "nmr"
+        if suffix in {".txt", ".csv"}:
+            return "lcms"
+        return "ir"
+
+    def _preview_from_object_ref(
+        self,
+        *,
+        ref: ObjectStorageRef,
+        source_name: str,
+        spectype: str,
+        max_points: int,
+        is_dir_like: bool = False,
+    ) -> dict:
+        """从对象存储生成谱图预览。
+
+        Args:
+            ref: 对象存储引用。
+            source_name: 来源名称。
+            spectype: 指定谱图类型。
+            max_points: 最大展示点数。
+            is_dir_like: 是否按目录前缀处理。
+
+        Returns:
+            统一预览数据字典。
+        """
+        inferred = self._infer_spectrum_type(
+            source_name=source_name,
+            spectype=spectype,
+            is_dir_like=is_dir_like,
+        )
+        suffix = Path(source_name).suffix.lower()
+
+        if inferred == "nmr" and (is_dir_like or suffix != ".zip"):
+            with tempfile.TemporaryDirectory(prefix="nmr_object_preview_") as temp_dir:
+                object_storage_service.download_prefix_to_dir(ref=ref, target_dir=Path(temp_dir))
+                x_values, y_values = self._preview_nmr_folder(temp_dir)
+        elif inferred == "nmr" and suffix == ".zip":
+            payload = self.preview_from_bytes(
+                file_bytes=object_storage_service.read_bytes(ref),
+                filename=source_name,
+                spectype=inferred,
+                max_points=max_points,
+            )
+            return payload
+        elif inferred == "gpc":
+            if is_dir_like:
+                with tempfile.TemporaryDirectory(prefix="gpc_object_preview_") as temp_dir:
+                    object_storage_service.download_prefix_to_dir(ref=ref, target_dir=Path(temp_dir))
+                    arw_files = sorted(Path(temp_dir).rglob("*.arw"))
+                    if not arw_files:
+                        logger.warning("GPC MinIO 前缀中未找到可预览的 .arw 文件: %s", object_storage_service.build_uri(ref))
+                        raise ValueError("GPC MinIO 前缀中未找到可预览的 .arw 文件")
+                    source_name = arw_files[0].name
+                    x_values, y_values = self._preview_gpc_arw(str(arw_files[0]))
+            else:
+                with tempfile.TemporaryDirectory(prefix="gpc_object_preview_") as temp_dir:
+                    arw_path = Path(temp_dir) / source_name
+                    arw_path.write_bytes(object_storage_service.read_bytes(ref))
+                    x_values, y_values = self._preview_gpc_arw(str(arw_path))
+        else:
+            content = self._decode_text_bytes(object_storage_service.read_bytes(ref))
+            x_values, y_values = self._parse_two_column_text(content)
+
+        return self._build_preview_payload(
+            spectype=inferred,
+            source_name=source_name,
+            x_values=x_values,
+            y_values=y_values,
+            max_points=max_points,
+        )
+
     def _resolve_source_path(self, file_id: str | None, input_path: str | None) -> tuple[str, str]:
         """解析预览输入路径来源。
 
@@ -155,10 +265,13 @@ class SpectrumPreviewService:
             if not file_doc:
                 logger.warning("file_id 不存在: %s", file_id)
                 raise ValueError("file_id 不存在")
+            object_uri = str(file_doc.get("object_uri") or "").strip()
+            if object_uri:
+                return object_uri, str(file_doc.get("file_name") or file_id)
             storage_path = str(file_doc.get("storage_path", "")).replace("\\", "/")
             return str(settings.project_root / storage_path), str(file_doc.get("file_name") or file_id)
         if input_path:
-            return str(input_path), Path(str(input_path)).name
+            return str(input_path), self._source_name_from_value(str(input_path))
         logger.warning("file_id 与 input_path 同时为空")
         raise ValueError("file_id 与 input_path 不能同时为空")
 
@@ -243,21 +356,31 @@ class SpectrumPreviewService:
         path_str, source_name = self._resolve_source_path(file_id=file_id, input_path=input_path)
         source_path = Path(path_str)
         if not source_path.exists():
+            object_ref = object_storage_service.resolve_reference(path_str)
+            if object_ref:
+                normalized_type = str(spectype or "auto").strip().lower()
+                is_dir_like = (
+                    path_str.rstrip().endswith(("/", "\\"))
+                    or (
+                        not Path(source_name).suffix
+                        and normalized_type in {"nmr", "gpc", "auto"}
+                    )
+                )
+                return self._preview_from_object_ref(
+                    ref=object_ref,
+                    source_name=source_name,
+                    spectype=spectype,
+                    max_points=max_points,
+                    is_dir_like=is_dir_like,
+                )
             logger.warning("输入路径不存在: %s", source_path)
             raise ValueError(f"输入路径不存在: {source_path}")
 
-        inferred = (spectype or "auto").lower()
-        if inferred == "auto":
-            if source_path.is_dir():
-                inferred = "nmr"
-            elif source_path.suffix.lower() == ".arw":
-                inferred = "gpc"
-            elif source_path.suffix.lower() == ".zip":
-                inferred = "nmr"
-            elif source_path.suffix.lower() in {".txt", ".csv"}:
-                inferred = "lcms"
-            else:
-                inferred = "ir"
+        inferred = self._infer_spectrum_type(
+            source_name=source_path.name,
+            spectype=spectype,
+            is_dir_like=source_path.is_dir(),
+        )
 
         if inferred == "nmr":
             if source_path.is_file() and source_path.suffix.lower() == ".zip":

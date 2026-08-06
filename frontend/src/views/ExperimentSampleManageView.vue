@@ -68,6 +68,19 @@ function toRows(source) {
 }
 
 /**
+ * 获取样本分析输入的首选路径。
+ *
+ * Args:
+ *   analysisInput: 样本分析输入对象。
+ *
+ * Returns:
+ *   优先用于展示和预览的路径。
+ */
+function resolveAnalysisInputPath(analysisInput) {
+  return analysisInput?.object_uri || analysisInput?.storage_uri || analysisInput?.input_path || ''
+}
+
+/**
  * 查询样本列表。
  *
  * Returns:
@@ -145,13 +158,14 @@ async function openDetail(sampleId) {
 async function loadPreview() {
   const analysisInput = activeDetail.value?.sample?.analysis_input || {}
   const spectrumType = activeDetail.value?.sample?.spectrum_type
-  if (!analysisInput?.input_path || !spectrumType) {
+  const previewInputPath = resolveAnalysisInputPath(analysisInput)
+  if (!previewInputPath || !spectrumType) {
     previewData.value = null
     return
   }
   const formData = new FormData()
   formData.append('spectype', spectrumType)
-  formData.append('input_path', analysisInput.input_path)
+  formData.append('input_path', previewInputPath)
   formData.append('max_points', '4096')
   previewLoading.value = true
   try {
@@ -269,7 +283,7 @@ onMounted(fetchSamples)
         <el-table-column prop="latest_run_id" label="最近批次" min-width="180" />
         <el-table-column label="分析入口" min-width="260">
           <template #default="scope">
-            {{ scope.row.analysis_input?.input_path || '-' }}
+            {{ resolveAnalysisInputPath(scope.row.analysis_input) || '-' }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
@@ -311,7 +325,9 @@ onMounted(fetchSamples)
           <el-descriptions-item label="日期">{{ activeDetail.sample.source_date }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ activeDetail.sample.collect_status }}</el-descriptions-item>
           <el-descriptions-item label="分析输入类型">{{ activeDetail.sample.analysis_input?.input_type || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="分析输入路径">{{ activeDetail.sample.analysis_input?.input_path || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="分析输入路径">
+            {{ resolveAnalysisInputPath(activeDetail.sample.analysis_input) || '-' }}
+          </el-descriptions-item>
         </el-descriptions>
 
         <div class="detail-block">
@@ -362,6 +378,7 @@ onMounted(fetchSamples)
             <el-table-column prop="role" label="角色" width="150" />
             <el-table-column prop="file_ext" label="后缀" width="80" />
             <el-table-column prop="relative_path" label="相对路径" min-width="220" />
+            <el-table-column prop="object_uri" label="对象路径" min-width="260" />
             <el-table-column prop="is_primary_input" label="主输入" width="90">
               <template #default="scope">
                 {{ scope.row.is_primary_input ? '是' : '否' }}
