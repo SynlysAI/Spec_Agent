@@ -60,7 +60,7 @@ class DialogueMessage(BaseModel):
 class DialogueChatRequest(BaseModel):
     """问答请求参数。"""
 
-    model_key: str = Field(default="deepseek_v4_flash_w8a8_mtp", description="问答模型键。")
+    model_key: str = Field(default="deepseek-v4-flash", description="问答模型键。")
     analysis_type: str = Field(default="none", description="分析类型。")
     report_id: str | None = Field(default=None, description="关联报告 ID。")
     question: str = Field(min_length=1, description="用户问题。")
