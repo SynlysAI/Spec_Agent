@@ -165,9 +165,8 @@ analysis/            # 算法分析层（独立于 app）
 | `DIALOGUE_LLM_TIMEOUT` | 问答超时（秒） | `60` |
 | `DIALOGUE_LLM_MAX_RETRIES` | 问答最大重试次数 | `1` |
 | `DIALOGUE_MODEL_QWEN_35B_A3B_BASE_URL` | Qwen3.6-35B-A3B 接口地址 | 空 |
-| `DIALOGUE_MODEL_DEEPSEEK_V4_FLASH_W8A8_MTP_BASE_URL` | DeepSeek-V4-Flash-w8a8-mtp 接口地址 | 空 |
-| `DIALOGUE_MODEL_QWEN_35B_A3B_64K_BASE_URL` | Qwen3.6-35B-A3B-64k 接口地址 | 空 |
-| `DIALOGUE_MODEL_GLM_5_1_W8A8_A3_BASE_URL` | GLM-5.1-w8a8-A3 接口地址 | 空 |
+| `DIALOGUE_MODEL_DEEPSEEK_V4_FLASH_W8A8_MTP_BASE_URL` | DeepSeek-V4-Flash 接口地址 | 空 |
+| `DIALOGUE_MODEL_GLM_5_1_W8A8_A3_BASE_URL` | GLM-5.2 接口地址 | 空 |
 
 ### 路径
 

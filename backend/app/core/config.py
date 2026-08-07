@@ -119,10 +119,6 @@ class Settings:
             "DIALOGUE_MODEL_DEEPSEEK_V4_FLASH_W8A8_MTP_BASE_URL",
             "",
         ).strip()
-        self.dialogue_model_qwen_35b_a3b_64k_base_url: str = os.getenv(
-            "DIALOGUE_MODEL_QWEN_35B_A3B_64K_BASE_URL",
-            "",
-        ).strip()
         self.dialogue_model_glm_5_1_w8a8_a3_base_url: str = os.getenv(
             "DIALOGUE_MODEL_GLM_5_1_W8A8_A3_BASE_URL",
             "",
@@ -246,22 +242,15 @@ class Settings:
             },
             {
                 "model_key": "deepseek_v4_flash_w8a8_mtp",
-                "label": "DeepSeek-V4-Flash-w8a8-mtp",
-                "model": "DeepSeek-V4-Flash-w8a8-mtp",
+                "label": "DeepSeek-V4-Flash",
+                "model": "deepseek-v4-flash",
                 "base_url": self.dialogue_model_deepseek_v4_flash_w8a8_mtp_base_url,
                 "supports_thinking_toggle": True,
             },
             {
-                "model_key": "qwen_35b_a3b_64k",
-                "label": "Qwen3.6-35B-A3B-64k",
-                "model": "Qwen3.6-35B-A3B",
-                "base_url": self.dialogue_model_qwen_35b_a3b_64k_base_url,
-                "supports_thinking_toggle": True,
-            },
-            {
                 "model_key": "glm_5_1_w8a8_a3",
-                "label": "GLM-5.1-w8a8-A3",
-                "model": "GLM-5.1-w8a8-A3",
+                "label": "GLM-5.2",
+                "model": "glm-52",
                 "base_url": self.dialogue_model_glm_5_1_w8a8_a3_base_url,
                 "supports_thinking_toggle": False,
             },
