@@ -158,7 +158,7 @@ analysis/            # 算法分析层（独立于 app）
 
 | 变量名 | 说明 | 默认值 |
 | --- | --- | --- |
-| `DIALOGUE_MODEL_DEFAULT_KEY` | 问答默认模型键 | `deepseek_v4_flash_w8a8_mtp` |
+| `DIALOGUE_MODEL_DEFAULT_KEY` | 问答默认模型键 | `deepseek-v4-flash` |
 | `DIALOGUE_LLM_API_KEY` | 问答模型共享 API Key | 空 |
 | `DIALOGUE_LLM_TEMPERATURE` | 问答生成温度 | `0.3` |
 | `DIALOGUE_LLM_MAX_TOKENS` | 问答最大 token | `4096` |

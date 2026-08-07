@@ -104,8 +104,8 @@ class Settings:
         # 问答模型配置
         self.dialogue_model_default_key: str = os.getenv(
             "DIALOGUE_MODEL_DEFAULT_KEY",
-            "deepseek_v4_flash_w8a8_mtp",
-        ).strip() or "deepseek_v4_flash_w8a8_mtp"
+            "deepseek-v4-flash",
+        ).strip() or "deepseek-v4-flash"
         self.dialogue_llm_api_key: str = os.getenv("DIALOGUE_LLM_API_KEY", "").strip()
         self.dialogue_llm_temperature: float = float(os.getenv("DIALOGUE_LLM_TEMPERATURE", "0.3"))
         self.dialogue_llm_max_tokens: int = int(os.getenv("DIALOGUE_LLM_MAX_TOKENS", "4096"))
@@ -241,7 +241,7 @@ class Settings:
                 "supports_thinking_toggle": True,
             },
             {
-                "model_key": "deepseek_v4_flash_w8a8_mtp",
+                "model_key": "deepseek-v4-flash",
                 "label": "DeepSeek-V4-Flash",
                 "model": "deepseek-v4-flash",
                 "base_url": self.dialogue_model_deepseek_v4_flash_w8a8_mtp_base_url,
