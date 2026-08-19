@@ -624,6 +624,32 @@ export async function getTaskArtifacts(taskId, options = {}) {
   return unwrapResponse(response)
 }
 
+/**
+ * 构建任务文本报告下载地址。
+ *
+ * Args:
+ *   taskId: 任务 ID。
+ *
+ * Returns:
+ *   可直接下载的绝对 URL。
+ */
+export function buildTaskReportUrl(taskId) {
+  return buildAbsoluteApiUrl(`/tasks/${encodeURIComponent(taskId)}/report`)
+}
+
+/**
+ * 下载任务文本报告（Markdown 格式）。
+ *
+ * Args:
+ *   taskId: 任务 ID。
+ *
+ * Returns:
+ *   包含 Blob 与文件名的下载结果对象。
+ */
+export async function downloadTaskReport(taskId, options = {}) {
+  return fetchProtectedFileBlob(buildTaskReportUrl(taskId), options)
+}
+
 export async function uploadFile(file, bizType, options = {}) {
   const formData = new FormData()
   formData.append('file', file)

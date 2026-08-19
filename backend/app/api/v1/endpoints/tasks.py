@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 
 from app.core.auth import get_current_user
 from app.core.logging import get_logger
@@ -270,3 +271,40 @@ def get_task_artifacts(
         logger.warning("查询任务产物失败, task_id 不存在或无权限: %s", task_id)
         raise HTTPException(status_code=404, detail="任务不存在")
     return ApiResponse(code=0, message="ok", data=data)
+
+
+@router.get("/{task_id}/report")
+def download_task_report(
+    task_id: str,
+    current_user: dict[str, str] | None = Depends(get_current_user),
+) -> Response:
+    """下载任务的文本报告（Markdown 格式）。
+
+    Args:
+        task_id: 任务 ID。
+        current_user: 当前登录用户上下文。
+
+    Returns:
+        Markdown 报告文件下载响应。
+    """
+    payload = task_service.get_task_result(task_id, current_user=current_user)
+    if not payload:
+        logger.warning("下载任务报告失败, task_id 不存在或无权限: %s", task_id)
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if payload.status != "SUCCESS":
+        logger.warning("下载任务报告失败, 任务未成功结束: task_id=%s status=%s", task_id, payload.status)
+        raise HTTPException(status_code=400, detail="任务尚未成功，无法下载报告")
+
+    text_report = (payload.result or {}).get("text_report") or ""
+    if not text_report:
+        logger.warning("下载任务报告失败, 文本报告为空: task_id=%s", task_id)
+        raise HTTPException(status_code=404, detail="该任务无文本报告")
+
+    filename = f"{task_id}_report.md"
+    return Response(
+        content=text_report,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+        },
+    )
