@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import SpectrumPreviewChart from '../components/SpectrumPreviewChart.vue'
+import MessageContent from '../components/MessageContent.vue'
 import {
   buildAbsoluteApiUrl,
   fetchProtectedImageBlob,
@@ -14,6 +15,7 @@ import {
   getTaskStatus,
   isRequestCanceled,
   previewSpectrum,
+  downloadTaskReport,
 } from '../api/specAgentApi'
 
 const route = useRoute()
@@ -569,6 +571,33 @@ function isSuccess() {
 }
 
 /**
+ * 下载当前任务的文本报告。
+ *
+ * Returns:
+ *   Promise<void>
+ */
+async function downloadReport() {
+  const textReport = resultData.value?.result?.text_report
+  if (!textReport) {
+    ElMessage.warning('该任务无文本报告可下载')
+    return
+  }
+  try {
+    const fileData = await downloadTaskReport(taskId.value)
+    const blobUrl = URL.createObjectURL(fileData.blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = fileData.fileName || `${taskId.value}_report.md`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(blobUrl)
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error))
+  }
+}
+
+/**
  * 清理请求控制器。
  */
 function clearActiveController() {
@@ -970,8 +999,14 @@ onBeforeUnmount(() => {
 
         <template v-if="isSuccess()">
           <el-divider />
-          <h4 style="margin: 8px 0">文本报告</h4>
-          <el-input :model-value="resultData?.result?.text_report || ''" type="textarea" :rows="12" readonly />
+          <div class="report-header">
+            <h4 style="margin: 8px 0">文本报告</h4>
+            <el-button type="primary" plain size="small" :icon="Download" @click="downloadReport">下载报告</el-button>
+          </div>
+          <div class="report-content">
+            <MessageContent v-if="resultData?.result?.text_report" :content="resultData.result.text_report" />
+            <el-empty v-else description="暂无文本报告" />
+          </div>
         </template>
       </div>
     </div>
@@ -1006,6 +1041,27 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.report-content {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid #dfe8f6;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.report-content :deep(.chat-markdown) {
+  line-height: 1.7;
+  color: #2a3f62;
+  word-break: break-word;
 }
 
 .ir-raman-card-grid {
