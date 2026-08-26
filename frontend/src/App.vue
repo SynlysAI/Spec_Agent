@@ -20,6 +20,7 @@ import {
 import { getAuthStatus, getApiErrorMessage, getCurrentUser } from './api/specAgentApi'
 import { acceptPortalToken, authState, clearAuthSession, setAuthEnabled, setAuthSession } from './auth/authState'
 import FeedbackButton from './components/FeedbackButton.vue'
+import GuideButton from './components/GuideButton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -458,6 +459,7 @@ onBeforeUnmount(() => {
           <span class="header-date">{{ currentDate }}</span>
           <el-tag v-if="authState.authEnabled" type="success" effect="plain">已启用登录保护</el-tag>
           <el-tag v-if="currentUserRoleLabel" effect="plain">{{ currentUserRoleLabel }}</el-tag>
+          <GuideButton />
           <FeedbackButton v-if="authState.authEnabled" />
           <el-avatar size="small">{{ currentUserAvatarText }}</el-avatar>
           <span>{{ currentUserDisplayName }}</span>
