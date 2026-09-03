@@ -111,18 +111,7 @@ class Settings:
         self.dialogue_llm_max_tokens: int = int(os.getenv("DIALOGUE_LLM_MAX_TOKENS", "4096"))
         self.dialogue_llm_timeout: int = int(os.getenv("DIALOGUE_LLM_TIMEOUT", "60"))
         self.dialogue_llm_max_retries: int = int(os.getenv("DIALOGUE_LLM_MAX_RETRIES", "1"))
-        self.dialogue_model_qwen_35b_a3b_base_url: str = os.getenv(
-            "DIALOGUE_MODEL_QWEN_35B_A3B_BASE_URL",
-            "",
-        ).strip()
-        self.dialogue_model_deepseek_v4_flash_w8a8_mtp_base_url: str = os.getenv(
-            "DIALOGUE_MODEL_DEEPSEEK_V4_FLASH_W8A8_MTP_BASE_URL",
-            "",
-        ).strip()
-        self.dialogue_model_glm_5_1_w8a8_a3_base_url: str = os.getenv(
-            "DIALOGUE_MODEL_GLM_5_1_W8A8_A3_BASE_URL",
-            "",
-        ).strip()
+        self.dialogue_llm_base_url: str = os.getenv("DIALOGUE_LLM_BASE_URL", "").strip()
 
         # GPC 兼容配置
         self.spectrum_files_root: Path = Path(
@@ -234,24 +223,24 @@ class Settings:
         """返回问答页面支持的模型目录。"""
         return [
             {
-                "model_key": "qwen_35b_a3b",
-                "label": "Qwen3.6-35B-A3B",
-                "model": "Qwen3.6-35B-A3B",
-                "base_url": self.dialogue_model_qwen_35b_a3b_base_url,
+                "model_key": "qwen3.8",
+                "label": "Qwen3.8",
+                "model": "qwen3.8",
+                "base_url": self.dialogue_llm_base_url,
                 "supports_thinking_toggle": True,
             },
             {
                 "model_key": "deepseek-v4-flash",
                 "label": "DeepSeek-V4-Flash",
                 "model": "deepseek-v4-flash",
-                "base_url": self.dialogue_model_deepseek_v4_flash_w8a8_mtp_base_url,
+                "base_url": self.dialogue_llm_base_url,
                 "supports_thinking_toggle": True,
             },
             {
-                "model_key": "glm_5_1_w8a8_a3",
+                "model_key": "glm-52",
                 "label": "GLM-5.2",
                 "model": "glm-52",
-                "base_url": self.dialogue_model_glm_5_1_w8a8_a3_base_url,
+                "base_url": self.dialogue_llm_base_url,
                 "supports_thinking_toggle": False,
             },
         ]
