@@ -175,6 +175,8 @@ class DialogueModelService:
             )
             raise DialogueModelUnavailableError("该模型暂不可用")
 
+        # 网关 SSE 响应头未带 charset，requests 对 text/* 默认按 ISO-8859-1 解码会导致中文乱码
+        response.encoding = "utf-8"
         for raw_line in response.iter_lines(decode_unicode=True):
             if not raw_line or not raw_line.startswith("data: "):
                 continue

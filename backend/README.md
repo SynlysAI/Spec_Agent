@@ -160,13 +160,11 @@ analysis/            # 算法分析层（独立于 app）
 | --- | --- | --- |
 | `DIALOGUE_MODEL_DEFAULT_KEY` | 问答默认模型键 | `deepseek-v4-flash` |
 | `DIALOGUE_LLM_API_KEY` | 问答模型共享 API Key | 空 |
+| `DIALOGUE_LLM_BASE_URL` | 问答模型共享网关地址（glm-52 / deepseek-v4-flash / qwen3.8） | 空 |
 | `DIALOGUE_LLM_TEMPERATURE` | 问答生成温度 | `0.3` |
 | `DIALOGUE_LLM_MAX_TOKENS` | 问答最大 token | `4096` |
 | `DIALOGUE_LLM_TIMEOUT` | 问答超时（秒） | `60` |
 | `DIALOGUE_LLM_MAX_RETRIES` | 问答最大重试次数 | `1` |
-| `DIALOGUE_MODEL_QWEN_35B_A3B_BASE_URL` | Qwen3.6-35B-A3B 接口地址 | 空 |
-| `DIALOGUE_MODEL_DEEPSEEK_V4_FLASH_W8A8_MTP_BASE_URL` | DeepSeek-V4-Flash 接口地址 | 空 |
-| `DIALOGUE_MODEL_GLM_5_1_W8A8_A3_BASE_URL` | GLM-5.2 接口地址 | 空 |
 
 ### 路径
 
